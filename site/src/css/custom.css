@@ -23,4 +23,17 @@
   --ifm-footer-background-color: #f8ebff;
   --ifm-navbar-link-color: #fff;
   --ifm-line-height-base: 1.3;
+  --ifm-color-secondary: #ccc;
+}
+
+.tabs__item {
+  border-bottom: 2px solid var(--ifm-color-secondary);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.tabs__item--active {
+  border-bottom-color: var(--ifm-tabs-color-active-border);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  color: var(--ifm-tabs-color-active);
 }
