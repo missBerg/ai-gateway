@@ -60,6 +60,18 @@ const config: Config = {
     ],
   ],
 
+  plugins: [
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'design',
+        path: 'design',
+        routeBasePath: 'design',
+        sidebarPath: './sidebarsDesign.ts',
+      },
+    ],
+  ],
+
   themeConfig: {
     colorMode:{
       disableSwitch:true,
@@ -104,8 +116,8 @@ const config: Config = {
         {
           label: 'Docs',
            to: '/docs', // Path to your Overview page
-           position: 'left',
-         },
+          position: 'left',
+        },
         {
           href: 'https://github.com/envoyproxy/ai-gateway',
           label: 'GitHub',
