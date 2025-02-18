@@ -24,13 +24,10 @@ spec:
       openAPIV3Schema:
         description: |-
           AIServiceBackend is a resource that represents a single backend for AIGatewayRoute.
-          A backend is a service that handles traffic with a concrete API specification.
 
-          A AIServiceBackend is "attached" to a Backend which is either a k8s Service or a Backend resource of the Envoy Gateway.
+          A AIServiceBackend is "attached" to a Backend which is either a k8s Service or a Envoy Gateway Backend resource.
 
-          When a backend with an attached AIServiceBackend is used as a routing target in the AIGatewayRoute (more precisely, the
-          HTTPRouteSpec defined in the AIGatewayRoute), the ai-gateway will generate the necessary configuration to do
-          the backend specific logic in the final HTTPRoute.
+          When a backend with an attached AIServiceBackend is used as a routing target in the AIGatewayRoute (more precisely, the HTTPRouteSpec defined in the AIGatewayRoute), the ai-gateway will generate the necessary configuration to do the backend specific logic in the final HTTPRoute.
         properties:
           apiVersion:
             description: |-
@@ -54,11 +51,8 @@ spec:
             properties:
               backendRef:
                 description: |-
-                  BackendRef is the reference to the Backend resource that this AIServiceBackend corresponds to.
-
+                  BackendRef is the reference to the Backend resource that this AIServiceBackend corresponds to.\n\n
                   A backend can be of either k8s Service or Backend resource of Envoy Gateway.
-
-                  This is required to be set.
                 properties:
                   group:
                     default: ""
@@ -128,9 +122,8 @@ spec:
                   rule: '(size(self.group) == 0 && self.kind == ''Service'') ? has(self.port)
                     : true'
               backendSecurityPolicyRef:
-                description: |-
-                  BackendSecurityPolicyRef is the name of the BackendSecurityPolicy resources this backend
-                  is being attached to.
+                description: BackendSecurityPolicyRef is the name of the BackendSecurityPolicy
+                  resources this backend is being attached to.
                 properties:
                   group:
                     description: |-
@@ -158,12 +151,8 @@ spec:
                 type: object
               schema:
                 description: |-
-                  APISchema specifies the API schema of the output format of requests from
-                  Envoy that this AIServiceBackend can accept as incoming requests.
-                  Based on this schema, the ai-gateway will perform the necessary transformation for
-                  the pair of AIGatewayRouteSpec.APISchema and AIServiceBackendSpec.APISchema.
-
-                  This is required to be set.
+                  APISchema specifies the API schema of the output format of requests from Envoy that this AIServiceBackend can accept as incoming requests.\n\n
+                  Based on this schema, the ai-gateway will perform the necessary transformation for the pair of `AIGatewayRouteSpec.APISchema` and `AIServiceBackendSpec.APISchema`.
                 properties:
                   name:
                     description: Name is the name of the API schema of the AIGatewayRoute

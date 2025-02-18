@@ -12,8 +12,11 @@ interface ApiFieldProps {
 
 // Helper function to convert code content to HTML while preserving existing HTML
 const processDescription = (description: string): string => {
-  // First handle triple backtick code blocks with optional language
-  let processed = description.replace(/```(\w+)?\s*([\s\S]*?)```/g, (match, lang, codeContent) => {
+  // First convert double newlines to <br/>
+  let processed = description.replace(/\n\n/g, '<br/>');
+
+  // Then handle triple backtick code blocks with optional language
+  processed = processed.replace(/```(\w+)?\s*([\s\S]*?)```/g, (match, lang, codeContent) => {
     const language = lang || '';
     const languageClass = language ? ` language-${language}` : '';
     return `<pre class="prism-code${languageClass}"><code class="codeBlock${languageClass}">${codeContent.trim()}</code></pre>`;
@@ -26,14 +29,18 @@ const processDescription = (description: string): string => {
 };
 
 const ApiField: React.FC<ApiFieldProps> = ({
-  name,
-  type,
-  required,
+  name = '',
+  type = '',
+  required = 'false',
   description,
   enumValues,
   defaultValue
 }) => {
   const isEnum = type === 'enum';
+
+  if (!name) {
+    return null;
+  }
 
   return (
     <div className="api-field" data-type={isEnum ? 'enum' : undefined}>

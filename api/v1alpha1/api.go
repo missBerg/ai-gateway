@@ -15,31 +15,32 @@ import (
 
 // +kubebuilder:object:root=true
 
-// AIGatewayRoute combines multiple AIServiceBackends and attaching them to Gateway(s) resources.
+// AIGatewayRoute combines multiple AIServiceBackends and attaches them to Gateway resources.
 //
-// This serves as a way to define a "unified" AI API for a Gateway which allows downstream
-// clients to use a single schema API to interact with multiple AI backends.
+// It provides a unified AI API interface for your Gateway, allowing downstream clients
+// to interact with multiple AI backends using a consistent schema. Key features:
 //
-// The schema field is used to determine the structure of the requests that the Gateway will
-// receive. And then the Gateway will route the traffic to the appropriate AIServiceBackend based
-// on the output schema of the AIServiceBackend while doing the other necessary jobs like
-// upstream authentication, rate limit, etc.
+// - Defines a unified API schema for client requests
+// - Routes traffic to appropriate AI backends
+// - Handles schema transformations between client and backend
+// - Manages upstream authentication
+// - Manages rate limiting
 //
-// For Advanced Users: Envoy AI Gateway will generate the following k8s resources corresponding to the AIGatewayRoute:
+// **The AI Gateway controller generates these Kubernetes resources:**
 //
-//   - Deployment, Service, and ConfigMap of the k8s API for the AI Gateway filter.
-//     The name of these resources are `ai-eg-route-extproc-${name}`.
-//   - HTTPRoute of the Gateway API as a top-level resource to bind all backends.
-//     The name of the HTTPRoute is the same as the AIGatewayRoute.
-//   - EnvoyExtensionPolicy of the Envoy Gateway API to attach the AI Gateway filter into the HTTPRoute.
-//     The name of the EnvoyExtensionPolicy is `ai-eg-route-extproc-${name}` which is the same as the Deployment, etc.
-//   - HTTPRouteFilter of the Envoy Gateway API per namespace for automatic hostname rewrite.
-//     The name of the HTTPRouteFilter is `ai-eg-host-rewrite`.
+// For API Processing:
+//   - Deployment, Service, and ConfigMap (named: ai-eg-route-extproc-${name})
 //
-// All of these resources are created in the same namespace as the AIGatewayRoute. Note that this is the implementation
-// detail subject to change. If you want to customize the default behavior of the Envoy AI Gateway, you can use these
-// resources as a reference and create your own resources. Alternatively, you can use EnvoyPatchPolicy API of the Envoy
-// Gateway to patch the generated resources. For example, you can insert a custom filter into the filter chain.
+// For Routing:
+//   - HTTPRoute (named same as AIGatewayRoute)
+//   - EnvoyExtensionPolicy (named: ai-eg-route-extproc-${name})
+//   - HTTPRouteFilter for hostname rewrites (named: ai-eg-host-rewrite)
+//
+// All resources are created in the same namespace as the AIGatewayRoute.
+//
+// While these implementation details may change, you can:
+// - Use these resources as reference for custom configurations
+// - Use EnvoyPatchPolicy to modify the generated resources (e.g., adding custom filters)
 type AIGatewayRoute struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -56,177 +57,98 @@ type AIGatewayRouteList struct {
 	Items           []AIGatewayRoute `json:"items"`
 }
 
-// AIGatewayRouteSpec details the AIGatewayRoute configuration.
+// AIGatewayRouteSpec defines the desired state of an AIGatewayRoute.
 type AIGatewayRouteSpec struct {
-	// TargetRefs are the names of the Gateway resources this AIGatewayRoute is being attached to.
+	// TargetRefs specifies which Gateway resources this AIGatewayRoute should attach to.
+	// These references determine which Gateways will handle the AI traffic routing defined here.
 	//
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=128
 	TargetRefs []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName `json:"targetRefs"`
-	// APISchema specifies the API schema of the input that the target Gateway(s) will receive.
-	// Based on this schema, the ai-gateway will perform the necessary transformation to the
-	// output schema specified in the selected AIServiceBackend during the routing process.
+
+	// APISchema defines the API schema that client requests must follow when sending requests to the Gateway. The AI Gateway will automatically transform these requests to match the schema required by the selected backend service.
 	//
-	// Currently, the only supported schema is OpenAI as the input schema.
+	// Currently supports OpenAI schema only.
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="self.name == 'OpenAI'"
 	APISchema VersionedAPISchema `json:"schema"`
-	// Rules is the list of AIGatewayRouteRule that this AIGatewayRoute will match the traffic to.
-	// Each rule is a subset of the HTTPRoute in the Gateway API (https://gateway-api.sigs.k8s.io/api-types/httproute/).
-	//
-	// AI Gateway controller will generate a HTTPRoute based on the configuration given here with the additional
-	// modifications to achieve the necessary jobs, notably inserting the AI Gateway filter responsible for
-	// the transformation of the request and response, etc.
-	//
-	// In the matching conditions in the AIGatewayRouteRule, `x-ai-eg-model` header is available
-	// if we want to describe the routing behavior based on the model name. The model name is extracted
-	// from the request content before the routing decision.
-	//
-	// How multiple rules are matched is the same as the Gateway API. See for the details:
-	// https://gateway-api.sigs.k8s.io/reference/spec/#gateway.networking.k8s.io%2fv1.HTTPRoute
+
+	// Rules defines how incoming requests are matched and routed to AI backends. Each rule extends the Gateway API's HTTPRoute concept with AI-specific features.\n\n
+	// The AI Gateway controller generates an HTTPRoute based on these rules and adds, AI Gateway filter for request/response transformation, Model-based routing using the `x-ai-eg-model` header, and other AI-specific processing.\n\n
+	// Rules are matched according to Gateway API HTTPRoute specifications.
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MaxItems=128
 	Rules []AIGatewayRouteRule `json:"rules"`
 
-	// FilterConfig is the configuration for the AI Gateway filter inserted in the generated HTTPRoute.
+	// Configures how the AI Gateway processes and transforms requests/responses.\n\n
+	// The filter handles:
+	// - Request/response transformations between different AI API schemas
+	// - Model information extraction for routing
+	// - Request validation and preprocessing\n\n
 	//
-	// An AI Gateway filter is responsible for the transformation of the request and response
-	// as well as the routing behavior based on the model name extracted from the request content, etc.
-	//
-	// Currently, the filter is only implemented as an external process filter, which might be
-	// extended to other types of filters in the future. See https://github.com/envoyproxy/ai-gateway/issues/90
+	// <sub>Currently implemented as an external process filter, with potential future extensions to other filter types (see: https://github.com/envoyproxy/ai-gateway/issues/90)</sub>
 	FilterConfig *AIGatewayFilterConfig `json:"filterConfig,omitempty"`
 
-	// LLMRequestCosts specifies how to capture the cost of the LLM-related request, notably the token usage.
-	// The AI Gateway filter will capture each specified number and store it in the Envoy's dynamic
-	// metadata per HTTP request. The namespaced key is "io.envoy.ai_gateway",
+	// LLMRequestCosts configures token usage tracking for LLM requests.
+	// Each metric is stored in Envoy's dynamic metadata under "io.envoy.ai_gateway".
 	//
-	// For example, let's say we have the following LLMRequestCosts configuration:
+	// Example Configuration:
 	// ```yaml
-	//	llmRequestCosts:
-	//	- metadataKey: llm_input_token
-	//	  type: InputToken
-	//	- metadataKey: llm_output_token
-	//	  type: OutputToken
-	//	- metadataKey: llm_total_token
-	//	  type: TotalToken
+	// llmRequestCosts:
+	// - metadataKey: llm_input_token
+	//   type: InputToken
+	// - metadataKey: llm_output_token
+	//   type: OutputToken
+	// - metadataKey: llm_total_token
+	//   type: TotalToken
 	// ```
-	// Then, with the following BackendTrafficPolicy of Envoy Gateway, you can have three
-	// rate limit buckets for each unique x-user-id header value. One bucket is for the input token,
-	// the other is for the output token, and the last one is for the total token.
-	// Each bucket will be reduced by the corresponding token usage captured by the AI Gateway filter.
 	//
-	// ```yaml
-	//	apiVersion: gateway.envoyproxy.io/v1alpha1
-	//	kind: BackendTrafficPolicy
-	//	metadata:
-	//	  name: some-example-token-rate-limit
-	//	  namespace: default
-	//	spec:
-	//	  targetRefs:
-	//	  - group: gateway.networking.k8s.io
-	//	     kind: HTTPRoute
-	//	     name: usage-rate-limit
-	//	  rateLimit:
-	//	    type: Global
-	//	    global:
-	//	      rules:
-	//	        - clientSelectors:
-	//	            # Do the rate limiting based on the x-user-id header.
-	//	            - headers:
-	//	                - name: x-user-id
-	//	                  type: Distinct
-	//	          limit:
-	//	            # Configures the number of "tokens" allowed per hour.
-	//	            requests: 10000
-	//	            unit: Hour
-	//	          cost:
-	//	            request:
-	//	              from: Number
-	//	              # Setting the request cost to zero allows to only check the rate limit budget,
-	//	              # and not consume the budget on the request path.
-	//	              number: 0
-	//	            # This specifies the cost of the response retrieved from the dynamic metadata set by the AI Gateway filter.
-	//	            # The extracted value will be used to consume the rate limit budget, and subsequent requests will be rate limited
-	//	            # if the budget is exhausted.
-	//	            response:
-	//	              from: Metadata
-	//	              metadata:
-	//	                namespace: io.envoy.ai_gateway
-	//	                key: llm_input_token
-	//	        - clientSelectors:
-	//	            - headers:
-	//	                - name: x-user-id
-	//	                  type: Distinct
-	//	          limit:
-	//	            requests: 10000
-	//	            unit: Hour
-	//	          cost:
-	//	            request:
-	//	              from: Number
-	//	              number: 0
-	//	            response:
-	//	              from: Metadata
-	//	              metadata:
-	//	                namespace: io.envoy.ai_gateway
-	//	                key: llm_output_token
-	//	        - clientSelectors:
-	//	            - headers:
-	//	                - name: x-user-id
-	//	                  type: Distinct
-	//	          limit:
-	//	            requests: 10000
-	//	            unit: Hour
-	//	          cost:
-	//	            request:
-	//	              from: Number
-	//	              number: 0
-	//	            response:
-	//	              from: Metadata
-	//	              metadata:
-	//	                namespace: io.envoy.ai_gateway
-	//	                key: llm_total_token
-	// ```
+	// Rate Limiting Integration:
+	// The captured metrics can be used with Envoy Gateway's `BackendTrafficPolicy` for token-based rate limiting.<br/>
+	// <b>For example, you can:</b>
+	// - Set separate limits for input, output, and total tokens
+	// - Apply limits per user using request headers
+	// - Track token usage across multiple requests
+	//
+	// <hr><sub>See full rate limiting examples in our documentation: https://aigateway.envoyproxy.io/docs/capabilities/usage-based-ratelimiting</sub>
+	//
 	// +optional
 	// +kubebuilder:validation:MaxItems=36
 	LLMRequestCosts []LLMRequestCost `json:"llmRequestCosts,omitempty"`
 }
 
-// AIGatewayRouteRule is a rule that defines the routing behavior of the AIGatewayRoute.
+// AIGatewayRouteRule defines how to match and route incoming requests to AI backends.
 type AIGatewayRouteRule struct {
-	// BackendRefs is the list of AIServiceBackend that this rule will route the traffic to.
-	// Each backend can have a weight that determines the traffic distribution.
-	//
-	// The namespace of each backend is "local", i.e. the same namespace as the AIGatewayRoute.
+	// BackendRefs specifies the AI service backends to route traffic to.\n\n
+	// Each backend can have a weight for traffic distribution (load balancing).\n\n
+	// <b>Note:</b> Backends must be in the same namespace as the AIGatewayRoute.\n\n
 	//
 	// +optional
 	// +kubebuilder:validation:MaxItems=128
 	BackendRefs []AIGatewayRouteRuleBackendRef `json:"backendRefs,omitempty"`
 
-	// Matches is the list of AIGatewayRouteMatch that this rule will match the traffic to.
-	// This is a subset of the HTTPRouteMatch in the Gateway API. See for the details:
-	// https://gateway-api.sigs.k8s.io/reference/spec/#gateway.networking.k8s.io%2fv1.HTTPRouteMatch
+	// Matches defines conditions for when this rule applies.\n\n
+	// Based on Gateway API's HTTPRouteMatch with AI-specific extensions.\n\n
+	// There is a special header for routing: `x-ai-eg-model`. It is used for model-based routing. The model name is automatically extracted from the request content.
 	//
 	// +optional
 	// +kubebuilder:validation:MaxItems=128
 	Matches []AIGatewayRouteRuleMatch `json:"matches,omitempty"`
 }
 
-// AIGatewayRouteRuleBackendRef is a reference to a AIServiceBackend with a weight.
+// AIGatewayRouteRuleBackendRef references an AIServiceBackend with an optional weight.
 type AIGatewayRouteRuleBackendRef struct {
-	// Name is the name of the AIServiceBackend.
+	// Name of the AIServiceBackend to route to.
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
-	// Weight is the weight of the AIServiceBackend. This is exactly the same as the weight in
-	// the BackendRef in the Gateway API. See for the details:
-	// https://gateway-api.sigs.k8s.io/reference/spec/#gateway.networking.k8s.io%2fv1.BackendRef
-	//
-	// Default is 1.
+	// Weight determines the proportion of traffic to route to this backend.\n\n
+	// Higher weights receive more traffic relative to other backends.\n\n
+	// For details on weight-based routing, see the Gateway API documentation.
 	//
 	// +optional
 	// +kubebuilder:validation:Minimum=0
@@ -235,11 +157,18 @@ type AIGatewayRouteRuleBackendRef struct {
 }
 
 type AIGatewayRouteRuleMatch struct {
-	// Headers specifies HTTP request header matchers. See HeaderMatch in the Gateway API for the details:
-	// https://gateway-api.sigs.k8s.io/reference/spec/#gateway.networking.k8s.io%2fv1.HTTPHeaderMatch
-	//
-	// Currently, only the exact header matching is supported.
-	//
+	// Headers defines HTTP request header matching rules.
+	// Based on Gateway API's HTTPHeaderMatch specification.
+	// \n\n
+	// <b>Matching Types:</b>
+	// - Currently only exact header matching is supported
+	// - RegularExpression matching is planned for future releases
+	// \n\n
+	// <b>Common Use Cases:</b>
+	// - Route based on API versions
+	// - Route based on client identifiers
+	// - Route based on model preferences
+	// \n\n
 	// +listType=map
 	// +listMapKey=name
 	// +optional
@@ -249,23 +178,22 @@ type AIGatewayRouteRuleMatch struct {
 }
 
 type AIGatewayFilterConfig struct {
-	// Type specifies the type of the filter configuration.
-	//
+	// Type specifies the filter implementation to use. Currently supports "ExtProc" (External Processing) only.\n\n
 	// Currently, only ExternalProcess is supported, and default is ExternalProcess.
 	//
 	// +kubebuilder:default=ExternalProcess
 	Type AIGatewayFilterConfigType `json:"type"`
 
-	// ExternalProcess is the configuration for the external process filter.
+	// ExternalProcess is the configuration for the external process filter.\n\n
 	// This is optional, and if not set, the default values of Deployment spec will be used.
 	//
 	// +optional
 	ExternalProcess *AIGatewayFilterConfigExternalProcess `json:"externalProcess,omitempty"`
 }
 
-// AIGatewayFilterConfigType specifies the type of the filter configuration.
+// AIGatewayFilterConfigType defines the available filter implementations.
 //
-// +kubebuilder:validation:Enum=ExternalProcess;DynamicModule
+// +kubebuilder:validation:Enum=ExtProc
 type AIGatewayFilterConfigType string
 
 const (
@@ -278,8 +206,7 @@ type AIGatewayFilterConfigExternalProcess struct {
 	//
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty"`
-	// Resources required by the external process container.
-	// More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+	// Kubernetes resource requirements for the external process container.
 	//
 	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
@@ -290,13 +217,10 @@ type AIGatewayFilterConfigExternalProcess struct {
 // +kubebuilder:object:root=true
 
 // AIServiceBackend is a resource that represents a single backend for AIGatewayRoute.
-// A backend is a service that handles traffic with a concrete API specification.
 //
-// A AIServiceBackend is "attached" to a Backend which is either a k8s Service or a Backend resource of the Envoy Gateway.
+// A AIServiceBackend is "attached" to a Backend which is either a k8s Service or a Envoy Gateway Backend resource.
 //
-// When a backend with an attached AIServiceBackend is used as a routing target in the AIGatewayRoute (more precisely, the
-// HTTPRouteSpec defined in the AIGatewayRoute), the ai-gateway will generate the necessary configuration to do
-// the backend specific logic in the final HTTPRoute.
+// When a backend with an attached AIServiceBackend is used as a routing target in the AIGatewayRoute (more precisely, the HTTPRouteSpec defined in the AIGatewayRoute), the ai-gateway will generate the necessary configuration to do the backend specific logic in the final HTTPRoute.
 type AIServiceBackend struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -315,26 +239,18 @@ type AIServiceBackendList struct {
 
 // AIServiceBackendSpec details the AIServiceBackend configuration.
 type AIServiceBackendSpec struct {
-	// APISchema specifies the API schema of the output format of requests from
-	// Envoy that this AIServiceBackend can accept as incoming requests.
-	// Based on this schema, the ai-gateway will perform the necessary transformation for
-	// the pair of AIGatewayRouteSpec.APISchema and AIServiceBackendSpec.APISchema.
-	//
-	// This is required to be set.
+	// APISchema specifies the API schema of the output format of requests from Envoy that this AIServiceBackend can accept as incoming requests.\n\n
+	// Based on this schema, the ai-gateway will perform the necessary transformation for the pair of `AIGatewayRouteSpec.APISchema` and `AIServiceBackendSpec.APISchema`.
 	//
 	// +kubebuilder:validation:Required
 	APISchema VersionedAPISchema `json:"schema"`
-	// BackendRef is the reference to the Backend resource that this AIServiceBackend corresponds to.
-	//
+	// BackendRef is the reference to the Backend resource that this AIServiceBackend corresponds to.\n\n
 	// A backend can be of either k8s Service or Backend resource of Envoy Gateway.
-	//
-	// This is required to be set.
 	//
 	// +kubebuilder:validation:Required
 	BackendRef gwapiv1.BackendObjectReference `json:"backendRef"`
 
-	// BackendSecurityPolicyRef is the name of the BackendSecurityPolicy resources this backend
-	// is being attached to.
+	// BackendSecurityPolicyRef is the name of the BackendSecurityPolicy resources this backend is being attached to.
 	//
 	// +optional
 	BackendSecurityPolicyRef *gwapiv1.LocalObjectReference `json:"backendSecurityPolicyRef,omitempty"`
@@ -344,12 +260,9 @@ type AIServiceBackendSpec struct {
 }
 
 // VersionedAPISchema defines the API schema of either AIGatewayRoute (the input) or AIServiceBackend (the output).
+// This allows the ai-gateway to understand the input and perform the necessary transformation depending on the API schema pair (input, output).
 //
-// This allows the ai-gateway to understand the input and perform the necessary transformation
-// depending on the API schema pair (input, output).
-//
-// Note that this is vendor specific, and the stability of the API schema is not guaranteed by
-// the ai-gateway, but by the vendor via proper versioning.
+// Note that this is vendor specific, and the stability of the API schema is not guaranteed by the ai-gateway, but by the vendor via proper versioning.
 type VersionedAPISchema struct {
 	// Name is the name of the API schema of the AIGatewayRoute or AIServiceBackend.
 	//
@@ -376,6 +289,7 @@ const (
 
 const (
 	// AIModelHeaderKey is the header key whose value is extracted from the request by the ai-gateway.
+
 	// This can be used to describe the routing behavior in HTTPRoute referenced by AIGatewayRoute.
 	AIModelHeaderKey = "x-ai-eg-model"
 )
@@ -390,21 +304,20 @@ const (
 
 // +kubebuilder:object:root=true
 
-// BackendSecurityPolicy specifies configuration for authentication and authorization rules on the traffic
-// exiting the gateway to the backend.
+// BackendSecurityPolicy specifies configuration for authentication and authorization rules on the traffic exiting the gateway to the backend.
 type BackendSecurityPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec              BackendSecurityPolicySpec `json:"spec,omitempty"`
 }
 
-// BackendSecurityPolicySpec specifies authentication rules on access the provider from the Gateway.
+// BackendSecurityPolicySpec specifies authentication rules on access the provider from the Gateway.\n\n
 // Only one mechanism to access a backend(s) can be specified.
 //
-// Only one type of BackendSecurityPolicy can be defined.
+// Only one type of `BackendSecurityPolicy` can be defined.
 // +kubebuilder:validation:MaxProperties=2
 type BackendSecurityPolicySpec struct {
-	// Type specifies the auth mechanism used to access the provider. Currently, only "APIKey", AND "AWSCredentials" are supported.
+	// Type specifies the auth mechanism used to access the provider. Currently, only `APIKey`, AND `AWSCredentials` are supported.
 	//
 	// +kubebuilder:validation:Enum=APIKey;AWSCredentials
 	Type BackendSecurityPolicyType `json:"type"`
@@ -431,8 +344,7 @@ type BackendSecurityPolicyList struct {
 
 // BackendSecurityPolicyAPIKey specifies the API key.
 type BackendSecurityPolicyAPIKey struct {
-	// SecretRef is the reference to the secret containing the API key.
-	// ai-gateway must be given the permission to read this secret.
+	// SecretRef is the reference to the secret containing the API key. ai-gateway must be given the permission to read this secret.\n\n
 	// The key of the secret should be "apiKey".
 	SecretRef *gwapiv1.SecretObjectReference `json:"secretRef"`
 }
@@ -449,15 +361,14 @@ type BackendSecurityPolicyAWSCredentials struct {
 	// +optional
 	CredentialsFile *AWSCredentialsFile `json:"credentialsFile,omitempty"`
 
-	// OIDCExchangeToken specifies the oidc configurations used to obtain an oidc token. The oidc token will be
-	// used to obtain temporary credentials to access AWS.
+	// OIDCExchangeToken specifies the oidc configurations used to obtain an oidc token. The oidc token will be used to obtain temporary credentials to access AWS.
 	//
 	// +optional
 	OIDCExchangeToken *AWSOIDCExchangeToken `json:"oidcExchangeToken,omitempty"`
 }
 
-// AWSCredentialsFile specifies the credentials file to use for the AWS provider.
-// Envoy reads the secret file, and the profile to use is specified by the Profile field.
+// `AWSCredentialsFile` specifies the credentials file to use for the AWS provider.\n\n
+// Envoy reads the secret file, and the profile to use is specified by the `Profile` field.\n\n
 type AWSCredentialsFile struct {
 	// SecretRef is the reference to the credential file.
 	//
@@ -470,14 +381,13 @@ type AWSCredentialsFile struct {
 	Profile string `json:"profile,omitempty"`
 }
 
-// AWSOIDCExchangeToken specifies credentials to obtain oidc token from a sso server.
-// For AWS, the controller will query STS to obtain AWS AccessKeyId, SecretAccessKey, and SessionToken,
-// and store them in a temporary credentials file.
+// `AWSOIDCExchangeToken` specifies credentials to obtain oidc token from a sso server.\n\n
+// For AWS, the controller will query STS to obtain AWS AccessKeyId, SecretAccessKey, and SessionToken, and store them in a temporary credentials file.\n\n
 type AWSOIDCExchangeToken struct {
-	// OIDC is used to obtain oidc tokens via an SSO server which will be used to exchange for temporary AWS credentials.
+	// OIDC is used to obtain oidc tokens via an SSO server which will be used to exchange for temporary AWS credentials.\n\n
 	OIDC egv1a1.OIDC `json:"oidc"`
 
-	// GrantType is the method application gets access token.
+	// GrantType is the method application gets access token.\n\n
 	//
 	// +optional
 	GrantType string `json:"grantType,omitempty"`
@@ -487,47 +397,53 @@ type AWSOIDCExchangeToken struct {
 	// +optional
 	Aud string `json:"aud,omitempty"`
 
-	// AwsRoleArn is the AWS IAM Role with the permission to use specific resources in AWS account
-	// which maps to the temporary AWS security credentials exchanged using the authentication token issued by OIDC provider.
+	// AwsRoleArn is the AWS IAM Role with the permission to use specific resources in AWS account which maps to the temporary AWS security credentials exchanged using the authentication token issued by OIDC provider.
 	AwsRoleArn string `json:"awsRoleArn"`
 }
 
-// LLMRequestCost configures each request cost.
+// `LLMRequestCost` defines how to capture and track token usage metrics for Large Language Model requests.
 type LLMRequestCost struct {
-	// MetadataKey is the key of the metadata to store this cost of the request.
+	// MetadataKey is the key under which the token usage metric will be stored
+	// in Envoy's dynamic metadata (namespace: io.envoy.ai_gateway).\n\n
+	// <b>Example keys:</b>
+	// - `llm_input_token`
+	// - `llm_output_token`
+	// - `llm_total_token`
 	//
 	// +kubebuilder:validation:Required
 	MetadataKey string `json:"metadataKey"`
-	// Type specifies the type of the request cost. The default is "OutputToken",
-	// and it uses "output token" as the cost. The other types are "InputToken", "TotalToken",
-	// and "CEL".
+
+	// Type specifies which token metric to capture.
+	// See `LLMRequestCostType` for available options.
 	//
 	// +kubebuilder:validation:Enum=OutputToken;InputToken;TotalToken;CEL
 	Type LLMRequestCostType `json:"type"`
-	// CELExpression is the CEL expression to calculate the cost of the request.
-	// The CEL expression must return a signed or unsigned integer. If the
-	// return value is negative, it will be error.
+	// `CELExpression` is the CEL expression to calculate the cost of the request.\n\n
+	// The CEL expression must return a signed or unsigned integer. If the return value is negative, it will be error.\n\n
+	// The expression can use the following variables:\n\n
+	// <b>model</b>: the model name extracted from the request content. Type: string.
+	// <b>backend</b>: the backend name in the form of "name.namespace". Type: string.
+	// <b>input_tokens</b>: the number of input tokens. Type: unsigned integer.
+	// <b>output_tokens</b>: the number of output tokens. Type: unsigned integer.
+	// <b>total_tokens</b>: the total number of tokens. Type: unsigned integer.
+	// \n\n
+	// For example, the following expressions are valid:\n\n
+	// ```
+	// model == 'llama' ?  input_tokens + output_token * 0.5 : total_tokens
 	//
-	// The expression can use the following variables:
+	// backend == 'foo.default' ?  input_tokens + output_tokens : total_tokens
 	//
-	//	* model: the model name extracted from the request content. Type: string.
-	//	* backend: the backend name in the form of "name.namespace". Type: string.
-	//	* input_tokens: the number of input tokens. Type: unsigned integer.
-	//	* output_tokens: the number of output tokens. Type: unsigned integer.
-	//	* total_tokens: the total number of tokens. Type: unsigned integer.
+	// input_tokens + output_tokens + total_tokens
 	//
-	// For example, the following expressions are valid:
-	//
-	// 	* "model == 'llama' ?  input_tokens + output_token * 0.5 : total_tokens"
-	//	* "backend == 'foo.default' ?  input_tokens + output_tokens : total_tokens"
-	//	* "input_tokens + output_tokens + total_tokens"
-	//	* "input_tokens * output_tokens"
+	// input_tokens * output_tokens
+	// ```
 	//
 	// +optional
 	CELExpression *string `json:"celExpression,omitempty"`
 }
 
-// LLMRequestCostType specifies the type of the LLMRequestCost.
+// LLMRequestCostType defines the types of token metrics that can be captured.
+// +kubebuilder:validation:Enum=InputToken;OutputToken;TotalToken
 type LLMRequestCostType string
 
 const (

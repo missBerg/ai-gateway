@@ -37,6 +37,9 @@ render:
     - name: OIDC
       package: github.com/envoyproxy/gateway/api/v1alpha1
       link: https://gateway.envoyproxy.io/docs/api/extension_types/#oidc
+    - name: HTTPHeaderMatch
+      package: sigs.k8s.io/gateway-api/apis/v1
+      link: https://gateway-api.sigs.k8s.io/reference/spec/#gateway.networking.k8s.io/v1.HTTPHeaderMatch
 
 navigation:
   includeTOC: true

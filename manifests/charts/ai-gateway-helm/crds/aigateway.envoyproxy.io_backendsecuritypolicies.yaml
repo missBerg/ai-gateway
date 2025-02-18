@@ -22,9 +22,8 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: |-
-          BackendSecurityPolicy specifies configuration for authentication and authorization rules on the traffic
-          exiting the gateway to the backend.
+        description: BackendSecurityPolicy specifies configuration for authentication
+          and authorization rules on the traffic exiting the gateway to the backend.
         properties:
           apiVersion:
             description: |-
@@ -45,10 +44,10 @@ spec:
             type: object
           spec:
             description: |-
-              BackendSecurityPolicySpec specifies authentication rules on access the provider from the Gateway.
+              BackendSecurityPolicySpec specifies authentication rules on access the provider from the Gateway.\n\n
               Only one mechanism to access a backend(s) can be specified.
 
-              Only one type of BackendSecurityPolicy can be defined.
+              Only one type of `BackendSecurityPolicy` can be defined.
             maxProperties: 2
             properties:
               apiKey:
@@ -57,8 +56,7 @@ spec:
                 properties:
                   secretRef:
                     description: |-
-                      SecretRef is the reference to the secret containing the API key.
-                      ai-gateway must be given the permission to read this secret.
+                      SecretRef is the reference to the secret containing the API key. ai-gateway must be given the permission to read this secret.\n\n
                       The key of the secret should be "apiKey".
                     properties:
                       group:
@@ -164,27 +162,28 @@ spec:
                     - secretRef
                     type: object
                   oidcExchangeToken:
-                    description: |-
-                      OIDCExchangeToken specifies the oidc configurations used to obtain an oidc token. The oidc token will be
-                      used to obtain temporary credentials to access AWS.
+                    description: OIDCExchangeToken specifies the oidc configurations
+                      used to obtain an oidc token. The oidc token will be used to
+                      obtain temporary credentials to access AWS.
                     properties:
                       aud:
                         description: Aud defines the audience that this ID Token is
                           intended for.
                         type: string
                       awsRoleArn:
-                        description: |-
-                          AwsRoleArn is the AWS IAM Role with the permission to use specific resources in AWS account
-                          which maps to the temporary AWS security credentials exchanged using the authentication token issued by OIDC provider.
+                        description: AwsRoleArn is the AWS IAM Role with the permission
+                          to use specific resources in AWS account which maps to the
+                          temporary AWS security credentials exchanged using the authentication
+                          token issued by OIDC provider.
                         type: string
                       grantType:
                         description: GrantType is the method application gets access
-                          token.
+                          token.\n\n
                         type: string
                       oidc:
                         description: OIDC is used to obtain oidc tokens via an SSO
                           server which will be used to exchange for temporary AWS
-                          credentials.
+                          credentials.\n\n
                         properties:
                           clientID:
                             description: |-
@@ -1250,7 +1249,7 @@ spec:
                 type: object
               type:
                 description: Type specifies the auth mechanism used to access the
-                  provider. Currently, only "APIKey", AND "AWSCredentials" are supported.
+                  provider. Currently, only `APIKey`, AND `AWSCredentials` are supported.
                 enum:
                 - APIKey
                 - AWSCredentials
