@@ -52,3 +52,11 @@ mathetake:
   socials:
     github: https://github.com/mathetake
     linkedin: https://www.linkedin.com/in/mathetake/
+yanavlasov:
+  name: Yan Avlasov
+  title: Senior Envoy Proxy Maintainer - Google
+  url: https://github.com/yanavlasov
+  image_url: https://github.com/yanavlasov.png
+  page: true
+  socials:
+    github: https://github.com/yanavlasov
