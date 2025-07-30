@@ -43,7 +43,7 @@ Envoy AI Gateway's new EPP support addresses these challenges by providing users
 
 ![An overview of Endpoint Picker together with Envoy AI Gateway](./images/epp-blog-step-by-step.png)
 
-### 1\. **Intelligent Endpoint Selection**
+### 1\. Intelligent Endpoint Selection
 
 The Endpoint Picker (EPP) automatically routes requests to the most suitable backend by analyzing real-time metrics from your inference endpoints, such as:
 
@@ -52,15 +52,15 @@ The Endpoint Picker (EPP) automatically routes requests to the most suitable bac
 - LoRA adapter information
 - Endpoint health and performance metrics
 
-### 2\. **Dynamic Load Balancing**
+### 2\. Dynamic Load Balancing
 
 Unlike static load balancers, the EPP continuously receives endpoint status, which affects routing decisions in real-time. This dynamic decision ensures optimal resource utilization across your entire inference infrastructure.
 
-### 3\. **Automatic Failover**
+### 3\. Automatic Failover
 
 When an endpoint becomes unavailable or performance degrades, the EPP automatically routes traffic to healthy alternatives, ensuring high availability for your AI services.
 
-### 4\. **Extensible Architecture**
+### 4\. Extensible Architecture
 
 The EPP architecture supports custom endpoint picker providers, allowing you to implement domain-specific routing logic tailored to your unique requirements.
 
