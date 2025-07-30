@@ -1,6 +1,6 @@
-<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36" version="28.0.7" pages="4">
+<mxfile host="Electron" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/28.0.6 Chrome/138.0.7204.100 Electron/37.2.3 Safari/537.36" version="28.0.6" pages="4">
   <diagram name="step-by-step" id="Rd7AsvJDtnxFJLOsBlVG">
-    <mxGraphModel dx="-82" dy="462" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="0" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="828" dy="1011" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="0" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="akwmaDAdcuWCsk3jGBrk-0" />
         <mxCell id="akwmaDAdcuWCsk3jGBrk-1" parent="akwmaDAdcuWCsk3jGBrk-0" />
@@ -13,9 +13,9 @@
         <mxCell id="q0XRxBFANma4I5ZSVUxv-108" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;curved=0;dashed=1;dashPattern=8 8;startArrow=classic;startFill=1;" parent="akwmaDAdcuWCsk3jGBrk-1" source="q0XRxBFANma4I5ZSVUxv-2" target="q0XRxBFANma4I5ZSVUxv-101" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="q0XRxBFANma4I5ZSVUxv-110" value="&lt;font style=&quot;font-size: 12px; background-color: light-dark(rgb(219, 232, 252), rgb(237, 237, 237));&quot;&gt;Model server load report&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="q0XRxBFANma4I5ZSVUxv-108" vertex="1" connectable="0">
+        <mxCell id="q0XRxBFANma4I5ZSVUxv-110" value="&lt;font style=&quot;font-size: 12px; background-color: light-dark(rgb(219, 232, 252), rgb(237, 237, 237));&quot;&gt;Fetch model server metrics&amp;nbsp;&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="q0XRxBFANma4I5ZSVUxv-108" vertex="1" connectable="0">
           <mxGeometry x="0.0601" y="-2" relative="1" as="geometry">
-            <mxPoint y="-2" as="offset" />
+            <mxPoint x="-71" y="-2" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="q0XRxBFANma4I5ZSVUxv-2" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#A9C4EB;strokeColor=#6c8ebf;arcSize=8;dashed=1;dashPattern=8 8;" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
@@ -60,7 +60,7 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="q0XRxBFANma4I5ZSVUxv-7" value="&lt;font style=&quot;font-size: 16px; color: light-dark(rgb(0, 0, 0), rgb(25, 0, 50));&quot;&gt;LLM Inference Gateway&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;opacity=50;fontStyle=1" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
-          <mxGeometry x="1284.0999999999997" y="455.4000000000001" width="317.27" height="60" as="geometry" />
+          <mxGeometry x="1284.0999999999997" y="461.4000000000001" width="317.27" height="60" as="geometry" />
         </mxCell>
         <mxCell id="q0XRxBFANma4I5ZSVUxv-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;endArrow=none;endFill=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="akwmaDAdcuWCsk3jGBrk-1" source="q0XRxBFANma4I5ZSVUxv-33" target="q0XRxBFANma4I5ZSVUxv-40" edge="1">
           <mxGeometry relative="1" as="geometry">
@@ -141,7 +141,7 @@
         <mxCell id="q0XRxBFANma4I5ZSVUxv-70" value="" style="group" parent="q0XRxBFANma4I5ZSVUxv-76" vertex="1" connectable="0">
           <mxGeometry x="18.714823935045644" y="-10" width="318.1682102065426" height="71" as="geometry" />
         </mxCell>
-        <mxCell id="q0XRxBFANma4I5ZSVUxv-31" value="Model Server &amp;amp; Models" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;verticalAlign=top;spacingTop=8;" parent="q0XRxBFANma4I5ZSVUxv-70" vertex="1">
+        <mxCell id="q0XRxBFANma4I5ZSVUxv-31" value="Model Server &amp;amp; LoRA Adapter" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;verticalAlign=top;spacingTop=8;" parent="q0XRxBFANma4I5ZSVUxv-70" vertex="1">
           <mxGeometry width="318.1682102065426" height="67.5" as="geometry" />
         </mxCell>
         <mxCell id="q0XRxBFANma4I5ZSVUxv-48" value="" style="group" parent="q0XRxBFANma4I5ZSVUxv-70" vertex="1" connectable="0">
@@ -183,23 +183,23 @@
         <mxCell id="q0XRxBFANma4I5ZSVUxv-92" value="&lt;b&gt;3&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#d80073;fontColor=#ffffff;strokeColor=#A50040;" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
           <mxGeometry x="1730" y="546" width="30" height="30" as="geometry" />
         </mxCell>
-        <mxCell id="q0XRxBFANma4I5ZSVUxv-93" value="&lt;b&gt;Client Request&lt;/b&gt;&lt;div&gt;&lt;font face=&quot;Courier New&quot;&gt;GET /completions&lt;/font&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
+        <mxCell id="q0XRxBFANma4I5ZSVUxv-93" value="&lt;b&gt;Client Request&lt;/b&gt;&lt;div&gt;&lt;font face=&quot;Courier New&quot;&gt;GET /v1/chat/completions&lt;/font&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
           <mxGeometry x="1502.73" y="160" width="175" height="30" as="geometry" />
         </mxCell>
         <mxCell id="q0XRxBFANma4I5ZSVUxv-97" value="&lt;b&gt;&lt;font style=&quot;color: rgb(51, 0, 102);&quot;&gt;Body Based Routing&lt;/font&gt;&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=default;strokeColor=default;opacity=70;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontColor=default;fontStyle=1;dashed=1;dashPattern=8 8;" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
           <mxGeometry x="1980" y="350.9999999999998" width="200" height="82" as="geometry" />
         </mxCell>
-        <mxCell id="q0XRxBFANma4I5ZSVUxv-101" value="&lt;b&gt;&lt;font style=&quot;color: rgb(51, 0, 102);&quot;&gt;Endpoint Selection&lt;/font&gt;&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=default;strokeColor=default;opacity=70;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontColor=default;fontStyle=1;dashed=1;dashPattern=8 8;" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
+        <mxCell id="q0XRxBFANma4I5ZSVUxv-101" value="&lt;b&gt;&lt;font style=&quot;color: rgb(51, 0, 102);&quot;&gt;Endpoint Picker&lt;/font&gt;&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=default;strokeColor=default;opacity=70;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontColor=default;fontStyle=1;dashed=1;dashPattern=8 8;" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
           <mxGeometry x="1980" y="545.9999999999998" width="200" height="82" as="geometry" />
         </mxCell>
-        <mxCell id="q0XRxBFANma4I5ZSVUxv-105" value="Select &lt;i&gt;InferencePool&lt;/i&gt; as Kubernetes service using the Model name from request Body" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
+        <mxCell id="q0XRxBFANma4I5ZSVUxv-105" value="Select &lt;b style=&quot;&quot;&gt;InferencePool&lt;/b&gt;&amp;nbsp;based on the model name from request body" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
           <mxGeometry x="1770" y="382" width="170" height="64" as="geometry" />
         </mxCell>
-        <mxCell id="q0XRxBFANma4I5ZSVUxv-106" value="Pick least-loaded model replica, with in-memory LoRA adapter" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
+        <mxCell id="q0XRxBFANma4I5ZSVUxv-106" value="Pick endpoint with intelligent &lt;b&gt;algorithm&lt;/b&gt; like KVCache usage, prefix cache matches, etc.&amp;nbsp;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
           <mxGeometry x="1770" y="530" width="140" height="64" as="geometry" />
         </mxCell>
-        <mxCell id="q0XRxBFANma4I5ZSVUxv-107" value="Route to InferencePool &amp;amp; optimal model replica per priority" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
-          <mxGeometry x="1490.0000000000002" y="576" width="140" height="64" as="geometry" />
+        <mxCell id="q0XRxBFANma4I5ZSVUxv-107" value="Route to best matched pod decided by endpoint picker" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="akwmaDAdcuWCsk3jGBrk-1" vertex="1">
+          <mxGeometry x="1490" y="576" width="150" height="64" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
