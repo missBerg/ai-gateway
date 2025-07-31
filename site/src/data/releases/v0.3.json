@@ -143,7 +143,6 @@
     }
   ],
   "navigation": {
-    "previous": { "version": "v0.2.x Series", "path": "/release-notes/v0.2" },
-    "next": { "version": "v0.4.x Series", "path": "/release-notes/v0.4" }
+    "previous": { "version": "v0.2.x Series", "path": "/release-notes/v0.2" }
   }
 }
