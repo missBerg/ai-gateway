@@ -107,10 +107,6 @@
       ],
       "bugFixes": [
         {
-          "title": "Inference Pool Content-Length",
-          "description": "Fixed content-length metadata handling with InferencePool to ensure proper request processing for all payload sizes."
-        },
-        {
           "title": "External Processor Message Handling",
           "description": "Fixed OpenAI assistant message type handling in external processor for improved chat completion processing."
         },
@@ -121,10 +117,6 @@
         {
           "title": "EPP Configuration in Direct Response",
           "description": "Fixed issue where per-route endpoint picker external processor configuration was incorrectly enabled in direct response scenarios."
-        },
-        {
-          "title": "Inference Pool E2E Testing",
-          "description": "Resolved inference pool end-to-end test reliability issues, improving development and CI/CD pipeline stability."
         }
       ],
       "breakingChanges": [
