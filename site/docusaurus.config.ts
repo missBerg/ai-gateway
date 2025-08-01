@@ -158,6 +158,10 @@ const config: Config = {
               label: 'GitHub Discussions',
               href: 'https://github.com/envoyproxy/ai-gateway/issues?q=is%3Aissue+label%3Adiscussion',
             },
+            {
+              label: 'Support the Project',
+              to: '/support',
+            },
           ],
         },
         {
