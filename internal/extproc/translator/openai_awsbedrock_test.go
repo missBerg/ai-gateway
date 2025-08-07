@@ -90,7 +90,7 @@ func TestOpenAIToAWSBedrockTranslatorV1ChatCompletion_RequestBody(t *testing.T) 
 							},
 							ToolCalls: []openai.ChatCompletionMessageToolCallParam{
 								{
-									ID: "call_6g7a",
+									ID: ptr.To("call_6g7a"),
 									Function: openai.ChatCompletionMessageToolCallFunctionParam{
 										Arguments: "{\"code_block\":\"from playwright.sync_api import sync_playwright\\n\"}",
 										Name:      "exec_python_code",
@@ -726,7 +726,7 @@ func TestOpenAIToAWSBedrockTranslatorV1ChatCompletion_RequestBody(t *testing.T) 
 							Role: openai.ChatMessageRoleAssistant,
 							ToolCalls: []openai.ChatCompletionMessageToolCallParam{
 								{
-									ID: "tool-1",
+									ID: ptr.To("tool-1"),
 									Function: openai.ChatCompletionMessageToolCallFunctionParam{
 										Name:      "get_current_weather",
 										Arguments: "{\"city\": \"Dallas\", \"state\": \"TX\", \"unit\": \"fahrenheit\"}",
@@ -734,7 +734,7 @@ func TestOpenAIToAWSBedrockTranslatorV1ChatCompletion_RequestBody(t *testing.T) 
 									Type: openai.ChatCompletionMessageToolCallType(openai.ToolTypeFunction),
 								},
 								{
-									ID: "tool-2",
+									ID: ptr.To("tool-2"),
 									Function: openai.ChatCompletionMessageToolCallFunctionParam{
 										Name:      "get_current_weather",
 										Arguments: "{\"city\": \"Orlando\", \"state\": \"FL\", \"unit\": \"fahrenheit\"}",
@@ -915,49 +915,49 @@ func TestOpenAIToAWSBedrockTranslatorV1ChatCompletion_Streaming_ResponseBody(t *
 		result := strings.Join(results, "")
 
 		require.Equal(t,
-			`data: {"choices":[{"delta":{"content":"","role":"assistant"}}],"object":"chat.completion.chunk"}
+			`data: {"choices":[{"index":0,"delta":{"content":"","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":"To","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":"To","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" calculate the cosine","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" calculate the cosine","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" of 7,","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" of 7,","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" we can use the","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" we can use the","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" \"","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" \"","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":"cosine\" function","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":"cosine\" function","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" that","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" that","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" is","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" is","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" available to","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" available to","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" us.","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" us.","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" Let","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" Let","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":"'s use","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":"'s use","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" this","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" this","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" function to","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" function to","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" get","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" get","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" the result","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" the result","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":".","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":".","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"id":"tooluse_QklrEHKjRu6Oc4BQUfy7ZQ","function":{"arguments":"","name":"cosine"},"type":"function"}]}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"id":"tooluse_QklrEHKjRu6Oc4BQUfy7ZQ","function":{"arguments":"","name":"cosine"},"type":"function"}]}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"id":"","function":{"arguments":"","name":""},"type":"function"}]}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"id":null,"function":{"arguments":"","name":""},"type":"function"}]}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"id":"","function":{"arguments":"{\"x\": 7}","name":""},"type":"function"}]}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"id":null,"function":{"arguments":"{\"x\": 7}","name":""},"type":"function"}]}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":"","role":"assistant"},"finish_reason":"tool_calls"}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":"","role":"assistant"},"finish_reason":"tool_calls"}],"object":"chat.completion.chunk"}
 
 data: {"object":"chat.completion.chunk","usage":{"completion_tokens":75,"prompt_tokens":386,"total_tokens":461}}
 
@@ -1156,7 +1156,7 @@ func TestOpenAIToAWSBedrockTranslatorV1ChatCompletion_ResponseBody(t *testing.T)
 							Role:    awsbedrock.ConversationRoleAssistant,
 							ToolCalls: []openai.ChatCompletionMessageToolCallParam{
 								{
-									ID: "call_6g7a",
+									ID: ptr.To("call_6g7a"),
 									Function: openai.ChatCompletionMessageToolCallFunctionParam{
 										Name:      "exec_python_code",
 										Arguments: "{\"code_block\":\"from playwright.sync_api import sync_playwright\\n\"}",
@@ -1206,7 +1206,7 @@ func TestOpenAIToAWSBedrockTranslatorV1ChatCompletion_ResponseBody(t *testing.T)
 							Role:    awsbedrock.ConversationRoleAssistant,
 							ToolCalls: []openai.ChatCompletionMessageToolCallParam{
 								{
-									ID: "call_6g7a",
+									ID: ptr.To("call_6g7a"),
 									Function: openai.ChatCompletionMessageToolCallFunctionParam{
 										Name:      "exec_python_code",
 										Arguments: "{\"code_block\":\"from playwright.sync_api import sync_playwright\\n\"}",

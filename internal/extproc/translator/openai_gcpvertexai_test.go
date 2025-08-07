@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genai"
+	"k8s.io/utils/ptr"
 
 	"github.com/envoyproxy/ai-gateway/internal/apischema/openai"
 )
@@ -92,6 +93,44 @@ func TestOpenAIToGCPVertexAITranslatorV1ChatCompletion_RequestBody(t *testing.T)
 }
 `)
 
+	wantBdyWithVendorFields := []byte(`{
+    "contents": [
+        {
+            "parts": [
+                {
+                    "text": "Test with standard fields"
+                }
+            ],
+            "role": "user"
+        }
+    ],
+    "tools": [
+        {
+            "functionDeclarations": [
+                {
+                    "name": "test_function",
+                    "description": "A test function",
+                    "parametersJsonSchema": {
+                        "type": "object",
+                        "properties": {
+                            "param1": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    ],
+    "generation_config": {
+        "maxOutputTokens": 1024,
+        "temperature": 0.7,
+          "thinkingConfig": {
+            "includeThoughts": true,
+            "thinkingBudget":  1000
+        }
+    }
+}`)
 	tests := []struct {
 		name              string
 		modelNameOverride string
@@ -320,6 +359,71 @@ func TestOpenAIToGCPVertexAITranslatorV1ChatCompletion_RequestBody(t *testing.T)
 				},
 			},
 		},
+		{
+			name: "Request with gcp vendor specific fields",
+			input: openai.ChatCompletionRequest{
+				Model:       "gemini-1.5-pro",
+				Temperature: ptr.To(0.7),
+				MaxTokens:   ptr.To(int64(1024)),
+				Messages: []openai.ChatCompletionMessageParamUnion{
+					{
+						Type: openai.ChatMessageRoleUser,
+						Value: openai.ChatCompletionUserMessageParam{
+							Role:    openai.ChatMessageRoleUser,
+							Content: openai.StringOrUserRoleContentUnion{Value: "Test with standard fields"},
+						},
+					},
+				},
+				Tools: []openai.Tool{
+					{
+						Type: openai.ToolTypeFunction,
+						Function: &openai.FunctionDefinition{
+							Name:        "test_function",
+							Description: "A test function",
+							Parameters: map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"param1": map[string]interface{}{
+										"type": "string",
+									},
+								},
+							},
+						},
+					},
+				},
+				GCPVertexAIVendorFields: &openai.GCPVertexAIVendorFields{
+					GenerationConfig: &openai.GCPVertexAIGenerationConfig{
+						ThinkingConfig: &genai.GenerationConfigThinkingConfig{
+							IncludeThoughts: true,
+							ThinkingBudget:  ptr.To(int32(1000)),
+						},
+					},
+				},
+			},
+			onRetry:   false,
+			wantError: false,
+			wantHeaderMut: &extprocv3.HeaderMutation{
+				SetHeaders: []*corev3.HeaderValueOption{
+					{
+						Header: &corev3.HeaderValue{
+							Key:      ":path",
+							RawValue: []byte("publishers/google/models/gemini-1.5-pro:generateContent"),
+						},
+					},
+					{
+						Header: &corev3.HeaderValue{
+							Key:      "Content-Length",
+							RawValue: []byte("381"),
+						},
+					},
+				},
+			},
+			wantBody: &extprocv3.BodyMutation{
+				Mutation: &extprocv3.BodyMutation_Body{
+					Body: wantBdyWithVendorFields,
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -425,7 +529,7 @@ func TestOpenAIToGCPVertexAITranslatorV1ChatCompletion_ResponseBody(t *testing.T
 			wantError:   false,
 			wantHeaderMut: &extprocv3.HeaderMutation{
 				SetHeaders: []*corev3.HeaderValueOption{{
-					Header: &corev3.HeaderValue{Key: "Content-Length", RawValue: []byte("270")},
+					Header: &corev3.HeaderValue{Key: "Content-Length", RawValue: []byte("256")},
 				}},
 			},
 			wantBodyMut: &extprocv3.BodyMutation{
@@ -435,7 +539,6 @@ func TestOpenAIToGCPVertexAITranslatorV1ChatCompletion_ResponseBody(t *testing.T
         {
             "finish_reason": "stop",
             "index": 0,
-            "logprobs": {},
             "message": {
                 "content": "AI Gateways act as intermediaries between clients and LLM services.",
                 "role": "assistant"
@@ -468,13 +571,13 @@ func TestOpenAIToGCPVertexAITranslatorV1ChatCompletion_ResponseBody(t *testing.T
 			wantHeaderMut: &extprocv3.HeaderMutation{
 				SetHeaders: []*corev3.HeaderValueOption{
 					{
-						Header: &corev3.HeaderValue{Key: "Content-Length", RawValue: []byte("39")},
+						Header: &corev3.HeaderValue{Key: "Content-Length", RawValue: []byte("28")},
 					},
 				},
 			},
 			wantBodyMut: &extprocv3.BodyMutation{
 				Mutation: &extprocv3.BodyMutation_Body{
-					Body: []byte(`{"object":"chat.completion","usage":{}}`),
+					Body: []byte(`{"object":"chat.completion"}`),
 				},
 			},
 			wantTokenUsage: LLMTokenUsage{},
@@ -493,7 +596,7 @@ func TestOpenAIToGCPVertexAITranslatorV1ChatCompletion_ResponseBody(t *testing.T
 			wantHeaderMut: nil,
 			wantBodyMut: &extprocv3.BodyMutation{
 				Mutation: &extprocv3.BodyMutation_Body{
-					Body: []byte(`data: {"choices":[{"delta":{"content":"Hello","role":"assistant"}}],"object":"chat.completion.chunk","usage":{"completion_tokens":3,"prompt_tokens":5,"total_tokens":8}}
+					Body: []byte(`data: {"choices":[{"index":0,"delta":{"content":"Hello","role":"assistant"}}],"object":"chat.completion.chunk","usage":{"completion_tokens":3,"prompt_tokens":5,"total_tokens":8}}
 
 data: [DONE]
 `),

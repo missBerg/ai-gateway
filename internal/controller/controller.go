@@ -11,8 +11,11 @@ import (
 
 	egv1a1 "github.com/envoyproxy/gateway/api/v1alpha1"
 	"github.com/go-logr/logr"
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -62,12 +65,12 @@ type Options struct {
 	// EnableLeaderElection enables leader election for the controller manager.
 	// Enabling this ensures there is only one active controller manager.
 	EnableLeaderElection bool
-	// EnvoyGatewayNamespace is the namespace where the Envoy Gateway system resources are deployed.
-	EnvoyGatewayNamespace string
 	// UDSPath is the path to the UDS socket for the external processor.
 	UDSPath string
 	// DisableMutatingWebhook disables the mutating webhook for the Gateway for testing purposes.
 	DisableMutatingWebhook bool
+	// MetricsRequestHeaderLabels is the comma-separated key-value pairs for mapping HTTP request headers to Prometheus metric labels.
+	MetricsRequestHeaderLabels string
 }
 
 // StartControllers starts the controllers for the AI Gateway.
@@ -83,10 +86,8 @@ func StartControllers(ctx context.Context, mgr manager.Manager, config *rest.Con
 
 	gatewayEventChan := make(chan event.GenericEvent, 100)
 	gatewayC := NewGatewayController(c, kubernetes.NewForConfigOrDie(config),
-		logger.WithName("gateway"), options.EnvoyGatewayNamespace, options.UDSPath, options.ExtProcImage)
+		logger.WithName("gateway"), options.UDSPath, options.ExtProcImage, false, uuid.NewString)
 	if err = TypedControllerBuilderForCRD(mgr, &gwapiv1.Gateway{}).
-		// We need the annotation change event to reconcile the Gateway referenced by AIGatewayRoutes.
-		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
 		WatchesRawSource(source.Channel(
 			gatewayEventChan,
 			&handler.EnqueueRequestForObject{},
@@ -100,8 +101,8 @@ func StartControllers(ctx context.Context, mgr manager.Manager, config *rest.Con
 		gatewayEventChan,
 	)
 	if err = TypedControllerBuilderForCRD(mgr, &aigv1a1.AIGatewayRoute{}).
-		Owns(&egv1a1.EnvoyExtensionPolicy{}).
 		Owns(&gwapiv1.HTTPRoute{}).
+		Owns(&egv1a1.HTTPRouteFilter{}).
 		WatchesRawSource(source.Channel(
 			aiGatewayRouteEventChan,
 			&handler.EnqueueRequestForObject{},
@@ -135,6 +136,32 @@ func StartControllers(ctx context.Context, mgr manager.Manager, config *rest.Con
 		return fmt.Errorf("failed to create controller for BackendSecurityPolicy: %w", err)
 	}
 
+	// Check if InferencePool CRD exists before creating the controller.
+	crdClient, err := apiextensionsclientset.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("failed to create CRD client for inference extension: %w", err)
+	}
+	const inferencePoolCRD = "inferencepools.inference.networking.x-k8s.io"
+	if _, crdErr := crdClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, inferencePoolCRD, metav1.GetOptions{}); crdErr != nil {
+		if apierrors.IsNotFound(crdErr) {
+			logger.Info("InferencePool CRD not found, skipping InferencePool controller. " +
+				"If you need it, please install the Gateway API Inference Extension CRDs.")
+		} else {
+			return fmt.Errorf("failed to query InferencePool CRD: %w", crdErr)
+		}
+	} else {
+		// CRD exists, create the controller.
+		inferencePoolC := NewInferencePoolController(c, kubernetes.NewForConfigOrDie(config), logger.
+			WithName("inference-pool"))
+		if err = TypedControllerBuilderForCRD(mgr, &gwaiev1a2.InferencePool{}).
+			Watches(&gwapiv1.Gateway{}, handler.EnqueueRequestsFromMapFunc(inferencePoolC.gatewayEventHandler)).
+			Watches(&aigv1a1.AIGatewayRoute{}, handler.EnqueueRequestsFromMapFunc(inferencePoolC.aiGatewayRouteEventHandler)).
+			Watches(&gwapiv1.HTTPRoute{}, handler.EnqueueRequestsFromMapFunc(inferencePoolC.httpRouteEventHandler)).
+			Complete(inferencePoolC); err != nil {
+			return fmt.Errorf("failed to create controller for InferencePool: %w", err)
+		}
+	}
+
 	secretC := NewSecretController(c, kubernetes.NewForConfigOrDie(config), logger.
 		WithName("secret"), backendSecurityPolicyEventChan)
 	// Do not use TypedControllerBuilderForCRD for secret, as changing a secret content doesn't change the generation.
@@ -150,8 +177,8 @@ func StartControllers(ctx context.Context, mgr manager.Manager, config *rest.Con
 			options.ExtProcImage,
 			options.ExtProcImagePullPolicy,
 			options.ExtProcLogLevel,
-			options.EnvoyGatewayNamespace,
 			options.UDSPath,
+			options.MetricsRequestHeaderLabels,
 		))
 		mgr.GetWebhookServer().Register("/mutate", &webhook.Admission{Handler: h})
 	}

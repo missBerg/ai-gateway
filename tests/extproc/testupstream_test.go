@@ -39,7 +39,6 @@ func TestWithTestUpstream(t *testing.T) {
 		LLMRequestCosts: []filterapi.LLMRequestCost{
 			{MetadataKey: "used_token", Type: filterapi.LLMRequestCostTypeInputToken},
 		},
-		Schema:             openAISchema,
 		ModelNameHeaderKey: "x-model-name",
 		Backends: []filterapi.Backend{
 			alwaysFailingBackend,
@@ -130,7 +129,7 @@ func TestWithTestUpstream(t *testing.T) {
 			responseBody:    `{"output":{"message":{"content":[{"text":"response"},{"text":"from"},{"text":"assistant"}],"role":"assistant"}},"stopReason":null,"usage":{"inputTokens":10,"outputTokens":20,"totalTokens":30}}`,
 			expRequestBody:  `{"inferenceConfig":{},"messages":[],"system":[{"text":"You are a chatbot."}]}`,
 			expStatus:       http.StatusOK,
-			expResponseBody: `{"choices":[{"finish_reason":"stop","index":0,"logprobs":{},"message":{"content":"response","role":"assistant"}}],"object":"chat.completion","usage":{"completion_tokens":20,"prompt_tokens":10,"total_tokens":30}}`,
+			expResponseBody: `{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"response","role":"assistant"}}],"object":"chat.completion","usage":{"completion_tokens":20,"prompt_tokens":10,"total_tokens":30}}`,
 		},
 		{
 			name:            "openai - /v1/chat/completions",
@@ -179,7 +178,7 @@ func TestWithTestUpstream(t *testing.T) {
 			responseStatus:  strconv.Itoa(http.StatusOK),
 			responseBody:    `{"candidates":[{"content":{"parts":[{"text":"This is a test response from Gemini."}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":15,"candidatesTokenCount":10,"totalTokenCount":25}}`,
 			expStatus:       http.StatusOK,
-			expResponseBody: `{"choices":[{"finish_reason":"stop","index":0,"logprobs":{},"message":{"content":"This is a test response from Gemini.","role":"assistant"}}],"object":"chat.completion","usage":{"completion_tokens":10,"prompt_tokens":15,"total_tokens":25}}`,
+			expResponseBody: `{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"This is a test response from Gemini.","role":"assistant"}}],"object":"chat.completion","usage":{"completion_tokens":10,"prompt_tokens":15,"total_tokens":25}}`,
 		},
 		{
 			name:            "gcp-vertexai - /v1/chat/completions - tool use",
@@ -194,7 +193,7 @@ func TestWithTestUpstream(t *testing.T) {
 			responseStatus:  strconv.Itoa(http.StatusOK),
 			responseBody:    `{"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"get_delivery_date","args":{"order_id":"123"}}}]},"finishReason":"STOP","avgLogprobs":0.000001220789272338152}],"usageMetadata":{"promptTokenCount":50,"candidatesTokenCount":11,"totalTokenCount":61,"trafficType":"ON_DEMAND","promptTokensDetails":[{"modality":"TEXT","tokenCount":50}],"candidatesTokensDetails":[{"modality":"TEXT","tokenCount":11}]},"modelVersion":"gemini-2.0-flash-001","createTime":"2025-07-11T22:15:44.956335Z","responseId":"EI5xaK-vOtqJm22IPmuCR14AI"}`,
 			expStatus:       http.StatusOK,
-			expResponseBody: `{"choices":[{"finish_reason":"stop","index":0,"logprobs":{},"message":{"role":"assistant","tool_calls":[{"id":"703482f8-2e5b-4dcc-a872-d74bd66c3866","function":{"arguments":"{\"order_id\":\"123\"}","name":"get_delivery_date"},"type":"function"}]}}],"object":"chat.completion","usage":{"completion_tokens":11,"prompt_tokens":50,"total_tokens":61}}`,
+			expResponseBody: `{"choices":[{"finish_reason":"stop","index":0,"message":{"role":"assistant","tool_calls":[{"id":"703482f8-2e5b-4dcc-a872-d74bd66c3866","function":{"arguments":"{\"order_id\":\"123\"}","name":"get_delivery_date"},"type":"function"}]}}],"object":"chat.completion","usage":{"completion_tokens":11,"prompt_tokens":50,"total_tokens":61}}`,
 		},
 		{
 			name:            "gcp-anthropicai - /v1/chat/completions",
@@ -209,7 +208,7 @@ func TestWithTestUpstream(t *testing.T) {
 			responseStatus:  strconv.Itoa(http.StatusOK),
 			responseBody:    `{"id":"msg_123","type":"message","role":"assistant","stop_reason": "end_turn", "content":[{"type":"text","text":"Hello from Anthropic!"}],"usage":{"input_tokens":10,"output_tokens":25}}`,
 			expStatus:       http.StatusOK,
-			expResponseBody: `{"choices":[{"finish_reason":"stop","index":0,"logprobs":{},"message":{"content":"Hello from Anthropic!","role":"assistant"}}],"object":"chat.completion","usage":{"completion_tokens":25,"prompt_tokens":10,"total_tokens":35}}`,
+			expResponseBody: `{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"Hello from Anthropic!","role":"assistant"}}],"object":"chat.completion","usage":{"completion_tokens":25,"prompt_tokens":10,"total_tokens":35}}`,
 		},
 		{
 			name:            "modelname-override - /v1/chat/completions",
@@ -241,17 +240,17 @@ func TestWithTestUpstream(t *testing.T) {
 {"usage":{"inputTokens":41, "outputTokens":36, "totalTokens":77}}
 `,
 			expStatus: http.StatusOK,
-			expResponseBody: `data: {"choices":[{"delta":{"content":"","role":"assistant"}}],"object":"chat.completion.chunk"}
+			expResponseBody: `data: {"choices":[{"index":0,"delta":{"content":"","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"id":"tooluse_QklrEHKjRu6Oc4BQUfy7ZQ","function":{"arguments":"","name":"cosine"},"type":"function"}]}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"id":"tooluse_QklrEHKjRu6Oc4BQUfy7ZQ","function":{"arguments":"","name":"cosine"},"type":"function"}]}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":"Don","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":"Don","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":"'t worry,  I'm here to help. It","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":"'t worry,  I'm here to help. It","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" seems like you're testing my ability to respond appropriately","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" seems like you're testing my ability to respond appropriately","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":"","role":"assistant"},"finish_reason":"tool_calls"}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":"","role":"assistant"},"finish_reason":"tool_calls"}],"object":"chat.completion.chunk"}
 
 data: {"object":"chat.completion.chunk","usage":{"completion_tokens":36,"prompt_tokens":41,"total_tokens":77}}
 
@@ -347,21 +346,132 @@ data: [DONE]
 {"candidates":[{"content":{"parts":[{"text":" today"}],"role":"model"}}]}
 {"candidates":[{"content":{"parts":[{"text":"?"}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":7,"totalTokenCount":17}}`,
 			expStatus: http.StatusOK,
-			expResponseBody: `data: {"choices":[{"delta":{"content":"Hello","role":"assistant"}}],"object":"chat.completion.chunk"}
+			expResponseBody: `data: {"choices":[{"index":0,"delta":{"content":"Hello","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":"! How","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":"! How","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" can I","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" can I","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" help","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" help","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" you","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" you","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":" today","role":"assistant"}}],"object":"chat.completion.chunk"}
+data: {"choices":[{"index":0,"delta":{"content":" today","role":"assistant"}}],"object":"chat.completion.chunk"}
 
-data: {"choices":[{"delta":{"content":"?","role":"assistant"},"finish_reason":"stop"}],"object":"chat.completion.chunk","usage":{"completion_tokens":7,"prompt_tokens":10,"total_tokens":17}}
+data: {"choices":[{"index":0,"delta":{"content":"?","role":"assistant"},"finish_reason":"stop"}],"object":"chat.completion.chunk","usage":{"completion_tokens":7,"prompt_tokens":10,"total_tokens":17}}
 
 data: [DONE]
+`,
+		},
+		{
+			name:           "gcp-anthropicai - /v1/chat/completions - streaming",
+			backend:        "gcp-anthropicai",
+			path:           "/v1/chat/completions",
+			method:         http.MethodPost,
+			responseType:   "sse",
+			requestBody:    `{"model":"claude-3-sonnet","max_completion_tokens":1024, "messages":[{"role":"user","content":"Why is the sky blue?"}], "stream": true}`,
+			expRequestBody: `{"max_tokens":1024,"messages":[{"content":[{"text":"Why is the sky blue?","type":"text"}],"role":"user"}],"anthropic_version":"vertex-2023-10-16"}`,
+			expHost:        "gcp-region-aiplatform.googleapis.com",
+			expPath:        "/v1/projects/gcp-project-name/locations/gcp-region/publishers/anthropic/models/claude-3-sonnet:streamRawPredict",
+			expHeaders:     map[string]string{"Authorization": "Bearer " + fakeGCPAuthToken},
+			responseStatus: strconv.Itoa(http.StatusOK),
+			responseBody: `event: message_start
+data: {"type": "message_start", "message": {"id": "msg_123", "usage": {"input_tokens": 15}}}
+
+event: content_block_start
+data: {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}
+
+event: content_block_delta
+data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "The sky appears blue"}}
+
+event: content_block_delta
+data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text":" due to Rayleigh scattering."}}
+
+event: content_block_stop
+data: {"type": "content_block_stop", "index": 0}
+
+event: message_delta
+data: {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 12}}
+
+event: message_stop
+data: {"type": "message_stop"}
+`,
+			expStatus: http.StatusOK,
+			expResponseBody: `data: {"choices":[{"index":0,"delta":{"content":"The sky appears blue","role":"assistant"}}],"object":"chat.completion.chunk"}
+
+data: {"choices":[{"index":0,"delta":{"content":" due to Rayleigh scattering."}}],"object":"chat.completion.chunk"}
+
+data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"object":"chat.completion.chunk"}
+
+data: {"object":"chat.completion.chunk","usage":{"completion_tokens":12,"prompt_tokens":15,"total_tokens":27}}
+
+data: [DONE]
+
+`,
+		},
+		{
+			name:         "gcp-anthropicai - /v1/chat/completions - streaming tool use",
+			backend:      "gcp-anthropicai",
+			path:         "/v1/chat/completions",
+			method:       http.MethodPost,
+			responseType: "sse",
+			requestBody: `{
+		"model": "claude-3-sonnet",
+		"max_tokens": 1024,
+		"messages": [{"role": "user", "content": "What is the weather in Boston?"}],
+		"stream": true,
+		"tools": [{
+			"type": "function",
+			"function": {
+				"name": "get_weather",
+				"description": "Get the current weather in a given location",
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"location": {"type": "string", "description": "The city and state, e.g. San Francisco, CA"}
+					},
+					"required": ["location"]
+				}
+			}
+		}]
+	}`,
+			expHost:        "gcp-region-aiplatform.googleapis.com",
+			expPath:        "/v1/projects/gcp-project-name/locations/gcp-region/publishers/anthropic/models/claude-3-sonnet:streamRawPredict",
+			expHeaders:     map[string]string{"Authorization": "Bearer " + fakeGCPAuthToken},
+			responseStatus: strconv.Itoa(http.StatusOK),
+			responseBody: `event: message_start
+data: {"type": "message_start", "message": {"id": "msg_123", "usage": {"input_tokens": 50}}}
+
+event: content_block_start
+data: {"type": "content_block_start", "index": 0, "content_block": {"type": "tool_use", "id": "toolu_abc123", "name": "get_weather", "input": {}}}
+
+event: content_block_delta
+data: {"type": "content_block_delta", "index": 0, "delta": {"type": "input_json_delta", "partial_json": "{\"location\":\"Bosto"}}
+
+event: content_block_delta
+data: {"type": "content_block_delta", "index": 0, "delta": {"type": "input_json_delta", "partial_json": "n, MA\"}"}}
+
+event: content_block_stop
+data: {"type": "content_block_stop", "index": 0}
+
+event: message_delta
+data: {"type": "message_delta", "delta": {"stop_reason": "tool_use"}, "usage": {"output_tokens": 20}}
+
+event: message_stop
+data: {"type": "message_stop"}`,
+			expStatus: http.StatusOK,
+			expResponseBody: `data: {"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"toolu_abc123","function":{"arguments":"","name":"get_weather"},"type":"function"}]}}],"object":"chat.completion.chunk"}
+
+data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":null,"function":{"arguments":"{\"location\":\"Bosto","name":""}}]}}],"object":"chat.completion.chunk"}
+
+data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":null,"function":{"arguments":"n, MA\"}","name":""}}]}}],"object":"chat.completion.chunk"}
+
+data: {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"object":"chat.completion.chunk"}
+
+data: {"object":"chat.completion.chunk","usage":{"completion_tokens":20,"prompt_tokens":50,"total_tokens":70}}
+
+data: [DONE]
+
 `,
 		},
 		{

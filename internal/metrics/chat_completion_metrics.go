@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/envoyproxy/ai-gateway/filterapi/x"
+	"github.com/envoyproxy/ai-gateway/filterapi"
 )
 
 // chatCompletion is the implementation for the chat completion AI Gateway metrics.
@@ -24,18 +24,32 @@ type chatCompletion struct {
 	interTokenLatency float64
 }
 
-// NewChatCompletion creates a new x.ChatCompletionMetrics instance.
-func NewChatCompletion(meter metric.Meter, newCustomFn x.NewCustomChatCompletionMetricsFn) x.ChatCompletionMetrics {
-	if newCustomFn != nil {
-		return newCustomFn(meter)
-	}
-	return DefaultChatCompletion(meter)
+// ChatCompletionMetrics is the interface for the chat completion AI Gateway metrics.
+type ChatCompletionMetrics interface {
+	// StartRequest initializes timing for a new request.
+	StartRequest(headers map[string]string)
+	// SetModel sets the model the request. This is usually called after parsing the request body .
+	SetModel(model string)
+	// SetBackend sets the selected backend when the routing decision has been made. This is usually called
+	// after parsing the request body to determine the model and invoke the routing logic.
+	SetBackend(backend *filterapi.Backend)
+
+	// RecordTokenUsage records token usage metrics.
+	RecordTokenUsage(ctx context.Context, inputTokens, outputTokens, totalTokens uint32, requestHeaderLabelMapping map[string]string, extraAttrs ...attribute.KeyValue)
+	// RecordRequestCompletion records latency metrics for the entire request.
+	RecordRequestCompletion(ctx context.Context, success bool, requestHeaderLabelMapping map[string]string, extraAttrs ...attribute.KeyValue)
+	// RecordTokenLatency records latency metrics for token generation.
+	RecordTokenLatency(ctx context.Context, tokens uint32, requestHeaderLabelMapping map[string]string, extraAttrs ...attribute.KeyValue)
+	// GetTimeToFirstTokenMs returns the time to first token in stream mode in milliseconds.
+	GetTimeToFirstTokenMs() float64
+	// GetInterTokenLatencyMs returns the inter token latency in stream mode in milliseconds.
+	GetInterTokenLatencyMs() float64
 }
 
-// DefaultChatCompletion creates a new default x.ChatCompletionMetrics instance.
-func DefaultChatCompletion(meter metric.Meter) x.ChatCompletionMetrics {
+// NewChatCompletion creates a new x.ChatCompletionMetrics instance.
+func NewChatCompletion(meter metric.Meter, requestHeaderLabelMapping map[string]string) ChatCompletionMetrics {
 	return &chatCompletion{
-		baseMetrics: newBaseMetrics(meter, genaiOperationChat),
+		baseMetrics: newBaseMetrics(meter, genaiOperationChat, requestHeaderLabelMapping),
 	}
 }
 
@@ -46,8 +60,8 @@ func (c *chatCompletion) StartRequest(headers map[string]string) {
 }
 
 // RecordTokenUsage implements [ChatCompletion.RecordTokenUsage].
-func (c *chatCompletion) RecordTokenUsage(ctx context.Context, inputTokens, outputTokens, totalTokens uint32, extraAttrs ...attribute.KeyValue) {
-	attrs := c.buildBaseAttributes(extraAttrs...)
+func (c *chatCompletion) RecordTokenUsage(ctx context.Context, inputTokens, outputTokens, totalTokens uint32, requestHeaders map[string]string, extraAttrs ...attribute.KeyValue) {
+	attrs := c.buildBaseAttributes(requestHeaders, extraAttrs...)
 
 	c.metrics.tokenUsage.Record(ctx, float64(inputTokens),
 		metric.WithAttributes(attrs...),
@@ -64,8 +78,8 @@ func (c *chatCompletion) RecordTokenUsage(ctx context.Context, inputTokens, outp
 }
 
 // RecordTokenLatency implements [ChatCompletion.RecordTokenLatency].
-func (c *chatCompletion) RecordTokenLatency(ctx context.Context, tokens uint32, extraAttrs ...attribute.KeyValue) {
-	attrs := c.buildBaseAttributes(extraAttrs...)
+func (c *chatCompletion) RecordTokenLatency(ctx context.Context, tokens uint32, requestHeaders map[string]string, extraAttrs ...attribute.KeyValue) {
+	attrs := c.buildBaseAttributes(requestHeaders, extraAttrs...)
 
 	if !c.firstTokenSent {
 		c.firstTokenSent = true

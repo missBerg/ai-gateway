@@ -68,6 +68,7 @@ metadata:
   namespace: default
   annotations:
     gateway.envoyproxy.io/backend-ref-priority: 0:envoy-ai-gateway-basic-openai:0,1:envoy-ai-gateway-basic-aws:0,2:envoy-ai-gateway-basic-testupstream:0
+    gateway.envoyproxy.io/ai-gateway-generated: "true"
   ownerReferences:
     - apiVersion: aigateway.envoyproxy.io/v1alpha1
       blockOwnerDeletion: true
@@ -143,37 +144,6 @@ spec:
           type: ExtensionRef
 ---
 apiVersion: gateway.envoyproxy.io/v1alpha1
-kind: EnvoyExtensionPolicy
-metadata:
-  name: ai-eg-eep-envoy-ai-gateway-basic
-  namespace: default
-spec:
-  extProc:
-    - backendRefs:
-        - group: gateway.envoyproxy.io
-          kind: Backend
-          name: envoy-ai-gateway-extproc-backend
-          namespace: default
-      backendSettings:
-        connection:
-          bufferLimit: 50Mi
-      metadata:
-        writableNamespaces:
-          - io.envoy.ai_gateway
-      processingMode:
-        allowModeOverride: true
-        request:
-          body: Buffered
-        response:
-          body: Buffered
-  targetRefs:
-    - group: gateway.networking.k8s.io
-      kind: Gateway
-      name: envoy-ai-gateway-basic
-status:
-  ancestors: null
----
-apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: HTTPRouteFilter
 metadata:
   name: ai-eg-host-rewrite-envoy-ai-gateway-basic
@@ -214,7 +184,6 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: envoy-ai-gateway-basic-default
-  namespace: envoy-gateway-system
 stringData:
   filter-config.yaml: |
     backends:
@@ -254,10 +223,7 @@ stringData:
     - CreatedAt: "2025-05-23T00:00:00Z"
       Name: some-cool-self-hosted-model
       OwnedBy: Envoy AI Gateway
-    schema:
-      name: OpenAI
-      version: v1
-    uuid: envoy-ai-gateway-basic
+    uuid: aigw-translate
 ---
 apiVersion: v1
 kind: Secret
@@ -291,14 +257,4 @@ spec:
     - name: http
       port: 8888
       protocol: HTTP
----
-apiVersion: gateway.envoyproxy.io/v1alpha1
-kind: Backend
-metadata:
-  name: envoy-ai-gateway-extproc-backend
-  namespace: default
-spec:
-  endpoints:
-    - unix:
-        path: /var/run/translate.sock
 

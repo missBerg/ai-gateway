@@ -15,6 +15,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -24,6 +25,7 @@ import (
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	aigv1a1 "github.com/envoyproxy/ai-gateway/api/v1alpha1"
+	"github.com/envoyproxy/ai-gateway/internal/internalapi"
 )
 
 const (
@@ -31,12 +33,14 @@ const (
 	hostRewriteHTTPFilterName           = "ai-eg-host-rewrite"
 	routeNotFoundResponseHTTPFilterName = "ai-eg-route-not-found-response"
 	aigatewayUUIDAnnotationKey          = "aigateway.envoyproxy.io/uuid"
+	egAnnotationPrefix                  = "gateway.envoyproxy.io/"
 	// We use this annotation to ensure that Envoy Gateway reconciles the HTTPRoute when the backend refs change.
 	// This will result in metadata being added to the underling Envoy route
 	// @see https://gateway.envoyproxy.io/contributions/design/metadata/
-	httpRouteBackendRefPriorityAnnotationKey = "gateway.envoyproxy.io/backend-ref-priority"
-	egOwningGatewayNameLabel                 = "gateway.envoyproxy.io/owning-gateway-name"
-	egOwningGatewayNamespaceLabel            = "gateway.envoyproxy.io/owning-gateway-namespace"
+	httpRouteBackendRefPriorityAnnotationKey           = egAnnotationPrefix + "backend-ref-priority"
+	httpRouteAnnotationForAIGatewayGeneratedIndication = egAnnotationPrefix + internalapi.AIGatewayGeneratedHTTPRouteAnnotation
+	egOwningGatewayNameLabel                           = egAnnotationPrefix + "owning-gateway-name"
+	egOwningGatewayNamespaceLabel                      = egAnnotationPrefix + "owning-gateway-namespace"
 	// apiKeyInSecret is the key to store OpenAI API key.
 	apiKeyInSecret = "apiKey"
 )
@@ -288,11 +292,12 @@ func (c *AIGatewayRouteController) newHTTPRoute(ctx context.Context, dst *gwapiv
 
 	dst.Spec.Rules = rules
 
-	if dst.ObjectMeta.Annotations == nil {
-		dst.ObjectMeta.Annotations = make(map[string]string)
+	if dst.Annotations == nil {
+		dst.Annotations = make(map[string]string)
 	}
 	// HACK: We need to set an annotation so that Envoy Gateway reconciles the HTTPRoute when the backend refs change.
-	dst.ObjectMeta.Annotations[httpRouteBackendRefPriorityAnnotationKey] = buildPriorityAnnotation(aiGatewayRoute.Spec.Rules)
+	dst.Annotations[httpRouteBackendRefPriorityAnnotationKey] = buildPriorityAnnotation(aiGatewayRoute.Spec.Rules)
+	dst.Annotations[httpRouteAnnotationForAIGatewayGeneratedIndication] = "true"
 
 	egNs := gwapiv1.Namespace(aiGatewayRoute.Namespace)
 	parentRefs := aiGatewayRoute.Spec.ParentRefs
@@ -307,7 +312,7 @@ func (c *AIGatewayRouteController) newHTTPRoute(ctx context.Context, dst *gwapiv
 			Namespace: namespace,
 		})
 	}
-	dst.Spec.CommonRouteSpec.ParentRefs = parentRefs
+	dst.Spec.ParentRefs = parentRefs
 	return nil
 }
 
@@ -347,8 +352,18 @@ func (c *AIGatewayRouteController) backend(ctx context.Context, namespace, name 
 
 // updateAIGatewayRouteStatus updates the status of the AIGatewayRoute.
 func (c *AIGatewayRouteController) updateAIGatewayRouteStatus(ctx context.Context, route *aigv1a1.AIGatewayRoute, conditionType string, message string) {
-	route.Status.Conditions = newConditions(conditionType, message)
-	if err := c.client.Status().Update(ctx, route); err != nil {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := c.client.Get(ctx, client.ObjectKey{Name: route.Name, Namespace: route.Namespace}, route); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
+
+		route.Status.Conditions = newConditions(conditionType, message)
+		return c.client.Status().Update(ctx, route)
+	})
+	if err != nil {
 		c.logger.Error(err, "failed to update AIGatewayRoute status")
 	}
 }

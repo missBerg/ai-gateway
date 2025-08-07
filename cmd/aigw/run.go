@@ -150,7 +150,7 @@ func run(ctx context.Context, c cmdRun, stdout, stderr io.Writer) error {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
 	s := grpc.NewServer()
-	extSrv := extensionserver.New(fakeCleint, ctrl.Log, udsPath)
+	extSrv := extensionserver.New(fakeCleint, ctrl.Log, udsPath, true)
 	egextension.RegisterEnvoyGatewayExtensionServer(s, extSrv)
 	grpc_health_v1.RegisterHealthServer(s, extSrv)
 	go func() {
@@ -246,7 +246,7 @@ func (runCtx *runCmdContext) writeEnvoyResourcesAndRunExtProc(ctx context.Contex
 	}
 
 	filterConfigSecret, err := runCtx.fakeClientSet.CoreV1().
-		Secrets(envoyGatewayNamespace).Get(ctx,
+		Secrets("").Get(ctx,
 		controller.FilterConfigSecretPerGatewayName(gw.Name, gw.Namespace), metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get filter config secret: %w", err)

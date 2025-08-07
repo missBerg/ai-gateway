@@ -21,20 +21,17 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/envoyproxy/ai-gateway/filterapi"
-	"github.com/envoyproxy/ai-gateway/filterapi/x"
 	"github.com/envoyproxy/ai-gateway/internal/apischema/openai"
 	"github.com/envoyproxy/ai-gateway/internal/extproc/backendauth"
 	"github.com/envoyproxy/ai-gateway/internal/extproc/translator"
 	"github.com/envoyproxy/ai-gateway/internal/internalapi"
 	"github.com/envoyproxy/ai-gateway/internal/llmcostcel"
+	"github.com/envoyproxy/ai-gateway/internal/metrics"
 )
 
 // ChatCompletionProcessorFactory returns a factory method to instantiate the chat completion processor.
-func ChatCompletionProcessorFactory(ccm x.ChatCompletionMetrics) ProcessorFactory {
+func ChatCompletionProcessorFactory(ccm metrics.ChatCompletionMetrics) ProcessorFactory {
 	return func(config *processorConfig, requestHeaders map[string]string, logger *slog.Logger, isUpstreamFilter bool) (Processor, error) {
-		if config.schema.Name != filterapi.APISchemaOpenAI {
-			return nil, fmt.Errorf("unsupported API schema: %s", config.schema.Name)
-		}
 		logger = logger.With("processor", "chat-completion", "isUpstreamFilter", fmt.Sprintf("%v", isUpstreamFilter))
 		if !isUpstreamFilter {
 			return &chatCompletionProcessorRouterFilter{
@@ -168,7 +165,7 @@ type chatCompletionProcessorUpstreamFilter struct {
 	// cost is the cost of the request that is accumulated during the processing of the response.
 	costs translator.LLMTokenUsage
 	// metrics tracking.
-	metrics x.ChatCompletionMetrics
+	metrics metrics.ChatCompletionMetrics
 	// stream is set to true if the request is a streaming request.
 	stream bool
 	// See the comment on the `forcedStreamOptionIncludeUsage` field in the router filter.
@@ -203,7 +200,7 @@ func (c *chatCompletionProcessorUpstreamFilter) selectTranslator(out filterapi.V
 func (c *chatCompletionProcessorUpstreamFilter) ProcessRequestHeaders(ctx context.Context, _ *corev3.HeaderMap) (res *extprocv3.ProcessingResponse, err error) {
 	defer func() {
 		if err != nil {
-			c.metrics.RecordRequestCompletion(ctx, false)
+			c.metrics.RecordRequestCompletion(ctx, false, c.requestHeaders)
 		}
 	}()
 
@@ -259,7 +256,7 @@ func (c *chatCompletionProcessorUpstreamFilter) ProcessRequestBody(context.Conte
 func (c *chatCompletionProcessorUpstreamFilter) ProcessResponseHeaders(ctx context.Context, headers *corev3.HeaderMap) (res *extprocv3.ProcessingResponse, err error) {
 	defer func() {
 		if err != nil {
-			c.metrics.RecordRequestCompletion(ctx, false)
+			c.metrics.RecordRequestCompletion(ctx, false, c.requestHeaders)
 		}
 	}()
 
@@ -286,7 +283,7 @@ func (c *chatCompletionProcessorUpstreamFilter) ProcessResponseHeaders(ctx conte
 // ProcessResponseBody implements [Processor.ProcessResponseBody].
 func (c *chatCompletionProcessorUpstreamFilter) ProcessResponseBody(ctx context.Context, body *extprocv3.HttpBody) (res *extprocv3.ProcessingResponse, err error) {
 	defer func() {
-		c.metrics.RecordRequestCompletion(ctx, err == nil)
+		c.metrics.RecordRequestCompletion(ctx, err == nil, c.requestHeaders)
 	}()
 	var br io.Reader
 	var isGzip bool
@@ -335,11 +332,11 @@ func (c *chatCompletionProcessorUpstreamFilter) ProcessResponseBody(ctx context.
 	c.costs.TotalTokens += tokenUsage.TotalTokens
 
 	// Update metrics with token usage.
-	c.metrics.RecordTokenUsage(ctx, tokenUsage.InputTokens, tokenUsage.OutputTokens, tokenUsage.TotalTokens)
+	c.metrics.RecordTokenUsage(ctx, tokenUsage.InputTokens, tokenUsage.OutputTokens, tokenUsage.TotalTokens, c.requestHeaders)
 	if c.stream {
 		// Token latency is only recorded for streaming responses, otherwise it doesn't make sense since
 		// these metrics are defined as a difference between the two output events.
-		c.metrics.RecordTokenLatency(ctx, tokenUsage.OutputTokens)
+		c.metrics.RecordTokenLatency(ctx, tokenUsage.OutputTokens, c.requestHeaders)
 
 		// TODO: if c.forcedStreamOptionIncludeUsage is true, we should not include usage in the response body since
 		// that's what the clients would expect. However, it is a little bit tricky as we simply just reading the streaming
@@ -364,7 +361,7 @@ func (c *chatCompletionProcessorUpstreamFilter) ProcessResponseBody(ctx context.
 // SetBackend implements [Processor.SetBackend].
 func (c *chatCompletionProcessorUpstreamFilter) SetBackend(ctx context.Context, b *filterapi.Backend, backendHandler backendauth.Handler, routeProcessor Processor) (err error) {
 	defer func() {
-		c.metrics.RecordRequestCompletion(ctx, err == nil)
+		c.metrics.RecordRequestCompletion(ctx, err == nil, c.requestHeaders)
 	}()
 	pickedEndpoint, isEndpointPicker := c.requestHeaders[internalapi.EndpointPickerHeaderKey]
 	rp, ok := routeProcessor.(*chatCompletionProcessorRouterFilter)
