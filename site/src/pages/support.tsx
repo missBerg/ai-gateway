@@ -95,7 +95,7 @@ function SupportCard({ icon: IconComponent, title, description, action, items, h
 
       <CardContent className={styles.cardContentSection}>
         {items && (
-          <div className={styles.cardLinks}>
+          <div className={`${styles.cardLinks} button`}>
             {items.map((item: any, idx: number) => (
               <Link key={idx} href={item.href} className={styles.cardLink}>
                 {item.text}

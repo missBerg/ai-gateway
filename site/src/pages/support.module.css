@@ -182,20 +182,25 @@
 }
 
 .cardLink {
-  color: var(--ifm-color-primary);
+  color: var(--ifm-color-gray-900);
+  background-color: #ebedf0;
   text-decoration: none;
   font-weight: 500;
-  padding: 0.5rem 0;
-  border-radius: 4px;
+  padding: calc(0.1 * 1rem) calc(0.1 * 1rem);
+  border-radius: 6px;
   transition: all 0.2s ease;
   font-size: 0.875rem;
   position: relative;
 }
 
+.cardLink:last-child {
+  margin-bottom: 1.5rem;
+}
+
 .cardLink:hover {
-  background-color: hsl(210 40% 98%);
+  background-color: rgb(212, 213, 216);
   text-decoration: none;
-  color: var(--ifm-color-primary-dark);
+  color: var(--ifm-color-gray-900);
 }
 
 .sectionHeader {
