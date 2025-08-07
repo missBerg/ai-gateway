@@ -103,6 +103,14 @@
         {
           "title": "<code>backendSecurityPolicyRef</code> Pattern",
           "description": "The old pattern of AIServiceBackend referencing BackendSecurityPolicy is deprecated in favor of the new targetRefs approach. Existing configurations will continue to work but should be migrated."
+        },
+        {
+          "title": "<code>AIGatewayRoute</code>'s <code>targetRefs</code> Pattern",
+          "description": "The <code>targetRefs</code> pattern is no longer supported for <code>AIGatewayRoute</code>. Existing configurations will continue to work but should be migrated."
+        },
+        {
+          "title": "<code>controller.envoyGatewayNamespace</code> helm value is no longer necessary",
+          "description": "This value is no longer necessary and is redundant when configured."
         }
       ],
       "bugFixes": [
