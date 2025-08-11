@@ -62,10 +62,9 @@ export const patchReleases = releases.slice(1).reverse(); // Future patch releas
 
 For users upgrading from v0.2.x to v0.3.0:
 
-1. **Migrate BackendSecurityPolicy references** - Update from the deprecated `backendSecurityPolicyRef` pattern to the new `targetRefs` approach in BackendSecurityPolicy resources.
-1. **Review Endpoint Picker integration** - If using inference pools, consider enabling Endpoint Picker Provider for intelligent routing based on your AI workload requirements.
-1. **Update external processor configurations** - Review any custom external processor configurations for compatibility with new endpoint picker features.
-1. **Test streaming integrations** - Validate GCP Vertex AI streaming functionality if using Google Cloud AI services.
+1. **Migrate Gateway target references** - Update from the deprecated `AIGatewayRoute.targetRefs` pattern to the new `AIGatewayRoute.parentRefs` approach after the upgrade to v0.3.0.
+1. **Migrate backendSecurityPolicy references** - Update from the deprecated `AIGatewayRoute.backendSecurityPolicyRef` pattern to the new `BackendSecurityPolicy.targetRefs` approach  after the upgrade to v0.3.0.
+1. **Remove AIGatewayRoute.schema** - remove the `schema` field from `AIGatewayRoute` resources after the upgrade to v0.3.0, as it is no longer used.
 
 ## 📦 Dependencies Versions
 
