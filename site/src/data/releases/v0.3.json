@@ -111,7 +111,7 @@
       ],
       "bugFixes": [],
       "dependencies": [
-        { "title": "Go 1.24.5", "description": "Updated to latest Go version for improved performance and security." },
+        { "title": "Go 1.24.6", "description": "Updated to latest Go version for improved performance and security." },
         { "title": "Envoy Gateway v1.5", "description": "Built on Envoy Gateway for proven data plane capabilities." },
         { "title": "Envoy v1.35", "description": "Leveraging Envoy Proxy's battle-tested networking capabilities." },
         { "title": "Gateway API v1.3.1", "description": "Support for latest Gateway API specifications." },
