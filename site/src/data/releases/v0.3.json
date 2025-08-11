@@ -64,19 +64,15 @@
           ]
         },
         {
-          "title": "Architecture and Policy Management Improvements",
+          "title": "Others",
           "items": [
             {
-              "title": "Extension Server-Based Filter Injection",
-              "description": "Switched from EnvoyExtensionPolicy (EEP) to extension server implementation for inserting AI Gateway external processor filters. This resolves the limitation of only one EEP per Gateway, enabling users to attach their own policies alongside AI Gateway and supporting standard HTTPRoutes on the same gateway."
+              "title": "Model Name Virtualization",
+              "description": "Added a new <code>modelNameOverride</code> field in the backend reference in AIGateawayRoute, allowing for a flexible way to configure a 'virtual' model name for routing purposes.<a href=\"/docs/capabilities/traffic/model-name-virtualization\">View the documentation →</a> "
             },
             {
-              "title": "BackendSecurityPolicy TargetRef Support",
-              "description": "New <code>targetRefs</code> field in BackendSecurityPolicy enables direct targeting of AIServiceBackend resources, following Gateway API policy attachment patterns for improved resource management."
-            },
-            {
-              "title": "Backward Compatible Policy References",
-              "description": "Maintains support for both the legacy referencing pattern and the new targetRef approach, ensuring smooth migration path for existing deployments."
+              "title": "non-LLM HTTPRoute Support",
+              "description": "Now you can attach normal HTTPRoutes as well as AIGatewayRoutes to one Gateway object, allowing for a unified routing configuration that supports both AI and non-AI traffic."
             }
           ]
         }
@@ -88,11 +84,11 @@
         },
         {
           "title": "Gateway API Inference Extension",
-          "description": "Integration with Gateway API Inference Extension v0.5.1 APIs, including InferencePool and related resources for intelligent endpoint selection."
+          "description": "Allows InferencePool resource of Gateway API Inference Extension v0.5.1 to be specified as a backend ref in AIGatewayRoute intelligent endpoint selection."
         },
         {
-          "title": "Enhanced External Processor Configuration",
-          "description": "Improved external processor configuration for endpoint picker integration and per-route processing capabilities."
+          "title": "modelNameOverride in the backend reference of AIGatewayRoute",
+          "description": "Added <code>modelNameOverride</code> field in the backend reference of AIGatewayRoute, allowing for flexible model name rewrite for routing purposes."
         }
       ],
       "deprecations": [
@@ -113,20 +109,7 @@
           "description": "The <code>schema</code> field is no longer needed for <code>AIGatewayRoute</code>. Existing configurations will continue to work but should be removed before v0.4."
         }
       ],
-      "bugFixes": [
-        {
-          "title": "External Processor Message Handling",
-          "description": "Fixed OpenAI assistant message type handling in external processor for improved chat completion processing."
-        },
-        {
-          "title": "Embedding Response Processing",
-          "description": "Fixed fake response handling for embedding endpoints to ensure consistent API behavior during testing and development."
-        },
-        {
-          "title": "EPP Configuration in Direct Response",
-          "description": "Fixed issue where per-route endpoint picker external processor configuration was incorrectly enabled in direct response scenarios."
-        }
-      ],
+      "bugFixes": [],
       "dependencies": [
         { "title": "Go 1.24.5", "description": "Updated to latest Go version for improved performance and security." },
         { "title": "Envoy Gateway v1.5", "description": "Built on Envoy Gateway for proven data plane capabilities." },
