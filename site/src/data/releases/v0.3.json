@@ -77,10 +77,6 @@
             {
               "title": "Backward Compatible Policy References",
               "description": "Maintains support for both the legacy referencing pattern and the new targetRef approach, ensuring smooth migration path for existing deployments."
-            },
-            {
-              "title": "Improved Secret Management",
-              "description": "Enhanced cleanup of secrets when BackendSecurityPolicy resources are deleted, preventing resource leaks and improving security posture."
             }
           ]
         }
@@ -131,22 +127,8 @@
           "description": "Fixed issue where per-route endpoint picker external processor configuration was incorrectly enabled in direct response scenarios."
         }
       ],
-      "breakingChanges": [
-        {
-          "title": "EnvoyExtensionPolicy Generation Removed",
-          "description": "AI Gateway no longer generates EnvoyExtensionPolicy (EEP) resources and instead uses extension server implementation for filter injection. This is an internal breaking change that improves Gateway policy flexibility. Users should manually delete any previously generated EEPs after upgrading."
-        },
-        {
-          "title": "Deprecated BackendSecurityPolicyRef Cleanup",
-          "description": "The deprecated <code>backendSecurityPolicyRef</code> field has been removed from the codebase. Users should migrate to the new <code>targetRefs</code> pattern in BackendSecurityPolicy."
-        },
-        {
-          "title": "External Processor Configuration Changes",
-          "description": "Some external processor configuration patterns may require updates for endpoint picker integration. Review endpoint picker documentation for migration guidance."
-        }
-      ],
       "dependencies": [
-        { "title": "Go 1.24.4", "description": "Updated to latest Go version for improved performance and security." },
+        { "title": "Go 1.24.5", "description": "Updated to latest Go version for improved performance and security." },
         { "title": "Envoy Gateway v1.5", "description": "Built on Envoy Gateway for proven data plane capabilities." },
         { "title": "Envoy v1.35", "description": "Leveraging Envoy Proxy's battle-tested networking capabilities." },
         { "title": "Gateway API v1.3.1", "description": "Support for latest Gateway API specifications." },
