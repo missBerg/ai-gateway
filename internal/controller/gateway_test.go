@@ -37,7 +37,7 @@ func TestGatewayController_Reconcile(t *testing.T) {
 	fakeKube := fake2.NewClientset()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{Development: true, Level: zapcore.DebugLevel})))
 	c := NewGatewayController(fakeClient, fakeKube, ctrl.Log,
-		"/foo/bar/uds.sock", "docker.io/envoyproxy/ai-gateway-extproc:latest", false, nil)
+		"docker.io/envoyproxy/ai-gateway-extproc:latest", false, nil)
 
 	const namespace = "ns"
 	t.Run("not found must be non error", func(t *testing.T) {
@@ -80,7 +80,6 @@ func TestGatewayController_Reconcile(t *testing.T) {
 				Rules: []aigv1a1.AIGatewayRouteRule{
 					{BackendRefs: []aigv1a1.AIGatewayRouteRuleBackendRef{{Name: "apple"}}},
 				},
-				APISchema: aigv1a1.VersionedAPISchema{Name: aigv1a1.APISchemaOpenAI, Version: ptr.To("v1")},
 			},
 		},
 		{
@@ -90,7 +89,6 @@ func TestGatewayController_Reconcile(t *testing.T) {
 				Rules: []aigv1a1.AIGatewayRouteRule{
 					{BackendRefs: []aigv1a1.AIGatewayRouteRuleBackendRef{{Name: "orange"}}},
 				},
-				APISchema: aigv1a1.VersionedAPISchema{Name: aigv1a1.APISchemaOpenAI},
 			},
 		},
 	} {
@@ -167,7 +165,7 @@ func TestGatewayController_reconcileFilterConfigSecret(t *testing.T) {
 	kube := fake2.NewClientset()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{Development: true, Level: zapcore.DebugLevel})))
 	c := NewGatewayController(fakeClient, kube, ctrl.Log,
-		"/foo/bar/uds.sock",
+
 		"docker.io/envoyproxy/ai-gateway-extproc:latest", false, nil)
 
 	const gwNamespace = "ns"
@@ -190,7 +188,6 @@ func TestGatewayController_reconcileFilterConfigSecret(t *testing.T) {
 						},
 					},
 				},
-				APISchema: aigv1a1.VersionedAPISchema{Name: aigv1a1.APISchemaOpenAI, Version: ptr.To("v1")},
 				LLMRequestCosts: []aigv1a1.LLMRequestCost{
 					{MetadataKey: "foo", Type: aigv1a1.LLMRequestCostTypeInputToken},
 					{MetadataKey: "bar", Type: aigv1a1.LLMRequestCostTypeOutputToken},
@@ -204,7 +201,6 @@ func TestGatewayController_reconcileFilterConfigSecret(t *testing.T) {
 				Rules: []aigv1a1.AIGatewayRouteRule{
 					{BackendRefs: []aigv1a1.AIGatewayRouteRuleBackendRef{{Name: "orange"}}},
 				},
-				APISchema: aigv1a1.VersionedAPISchema{Name: aigv1a1.APISchemaOpenAI},
 				LLMRequestCosts: []aigv1a1.LLMRequestCost{
 					{MetadataKey: "foo", Type: aigv1a1.LLMRequestCostTypeInputToken}, // This should be ignored as it has the duplicate key.
 					{MetadataKey: "cat", Type: aigv1a1.LLMRequestCostTypeCEL, CEL: ptr.To(`backend == 'foo.default' ?  input_tokens + output_tokens : total_tokens`)},
@@ -259,7 +255,7 @@ func TestGatewayController_bspToFilterAPIBackendAuth(t *testing.T) {
 	kube := fake2.NewClientset()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{Development: true, Level: zapcore.DebugLevel})))
 	c := NewGatewayController(fakeClient, kube, ctrl.Log,
-		"/foo/bar/uds.sock",
+
 		"docker.io/envoyproxy/ai-gateway-extproc:latest", false, nil)
 
 	const namespace = "ns"
@@ -388,7 +384,7 @@ func TestGatewayController_bspToFilterAPIBackendAuth(t *testing.T) {
 func TestGatewayController_bspToFilterAPIBackendAuth_ErrorCases(t *testing.T) {
 	fakeClient := requireNewFakeClientWithIndexes(t)
 	c := NewGatewayController(fakeClient, fake2.NewClientset(), ctrl.Log,
-		"/foo/bar/uds.sock", "docker.io/envoyproxy/ai-gateway-extproc:latest", false, nil)
+		"docker.io/envoyproxy/ai-gateway-extproc:latest", false, nil)
 
 	ctx := context.Background()
 	namespace := "test-namespace"
@@ -449,7 +445,7 @@ func TestGatewayController_bspToFilterAPIBackendAuth_ErrorCases(t *testing.T) {
 func TestGatewayController_GetSecretData_ErrorCases(t *testing.T) {
 	fakeClient := requireNewFakeClientWithIndexes(t)
 	c := NewGatewayController(fakeClient, fake2.NewClientset(), ctrl.Log,
-		"/foo/bar/uds.sock", "docker.io/envoyproxy/ai-gateway-extproc:latest", false, nil)
+		"docker.io/envoyproxy/ai-gateway-extproc:latest", false, nil)
 
 	ctx := context.Background()
 	namespace := "test-namespace"
@@ -474,7 +470,7 @@ func TestGatewayController_annotateGatewayPods(t *testing.T) {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{Development: true, Level: zapcore.DebugLevel})))
 	const v2Container = "ai-gateway-extproc:v2"
 	c := NewGatewayController(fakeClient, kube, ctrl.Log,
-		"/foo/bar/uds.sock", v2Container, false, nil)
+		v2Container, false, nil)
 	t.Run("pod with extproc", func(t *testing.T) {
 		pod, err := kube.CoreV1().Pods(egNamespace).Create(t.Context(), &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -589,7 +585,7 @@ func TestGatewayController_annotateDaemonSetGatewayPods(t *testing.T) {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{Development: true, Level: zapcore.DebugLevel})))
 	const v2Container = "ai-gateway-extproc:v2"
 	c := NewGatewayController(fakeClient, kube, ctrl.Log,
-		"/foo/bar/uds.sock", v2Container, false, nil)
+		v2Container, false, nil)
 
 	t.Run("pod without extproc", func(t *testing.T) {
 		pod, err := kube.CoreV1().Pods(egNamespace).Create(t.Context(), &corev1.Pod{
@@ -704,7 +700,7 @@ func TestGatewayController_backendWithMaybeBSP(t *testing.T) {
 	kube := fake2.NewClientset()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{Development: true, Level: zapcore.DebugLevel})))
 	const v2Container = "ai-gateway-extproc:v2"
-	c := NewGatewayController(fakeClient, kube, ctrl.Log, "/foo/bar/uds.sock", v2Container, false, nil)
+	c := NewGatewayController(fakeClient, kube, ctrl.Log, v2Container, false, nil)
 
 	_, _, err := c.backendWithMaybeBSP(t.Context(), "foo", "bar")
 	require.ErrorContains(t, err, `aiservicebackends.aigateway.envoyproxy.io "bar" not found`)

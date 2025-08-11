@@ -17,19 +17,12 @@ import (
 // This serves as a way to define a "unified" AI API for a Gateway which allows downstream
 // clients to use a single schema API to interact with multiple AI backends.
 //
-// The schema field is used to determine the structure of the requests that the Gateway will
-// receive. And then the Gateway will route the traffic to the appropriate AIServiceBackend based
-// on the output schema of the AIServiceBackend while doing the other necessary jobs like
-// upstream authentication, rate limit, etc.
-//
 // Envoy AI Gateway will generate the following k8s resources corresponding to the AIGatewayRoute:
 //
 //   - HTTPRoute of the Gateway API as a top-level resource to bind all backends.
 //     The name of the HTTPRoute is the same as the AIGatewayRoute.
-//   - EnvoyExtensionPolicy of the Envoy Gateway API to attach the AI Gateway filter into the target Gateways.
-//     This will be created per Gateway, and its name is `ai-eg-eep-${gateway-name}`.
 //   - HTTPRouteFilter of the Envoy Gateway API per namespace for automatic hostname rewrite.
-//     The name of the HTTPRouteFilter is `ai-eg-host-rewrite`.
+//     The name of the HTTPRouteFilter is `ai-eg-host-rewrite-${AIGatewayRoute.Name}`.
 //
 // All of these resources are created in the same namespace as the AIGatewayRoute. Note that this is the implementation
 // detail subject to change. If you want to customize the default behavior of the Envoy AI Gateway, you can use these
@@ -67,6 +60,8 @@ type AIGatewayRouteSpec struct {
 	// Deprecated: use the ParentRefs field instead. This field will be dropped in Envoy AI Gateway v0.4.0.
 	//
 	// +kubebuilder:validation:MaxItems=128
+	//
+	// +optional
 	TargetRefs []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName `json:"targetRefs,omitempty"`
 
 	// ParentRefs are the names of the Gateway resources this AIGatewayRoute is being attached to.
@@ -75,6 +70,8 @@ type AIGatewayRouteSpec struct {
 	//
 	// +kubebuilder:validation:MaxItems=16
 	// +kubebuilder:validation:XValidation:rule="self.all(match, match.kind == 'Gateway')", message="only Gateway is supported"
+	//
+	// +optional
 	ParentRefs []gwapiv1.ParentReference `json:"parentRefs,omitempty"`
 
 	// APISchema specifies the API schema of the input that the target Gateway(s) will receive.
@@ -83,9 +80,11 @@ type AIGatewayRouteSpec struct {
 	//
 	// Currently, the only supported schema is OpenAI as the input schema.
 	//
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:XValidation:rule="self.name == 'OpenAI'"
-	APISchema VersionedAPISchema `json:"schema"`
+	// Deprecated: this field is no longer used. It will be dropped in Envoy AI Gateway v0.4.0.
+	//
+	// +optional
+	APISchema *VersionedAPISchema `json:"schema,omitempty"`
+
 	// Rules is the list of AIGatewayRouteRule that this AIGatewayRoute will match the traffic to.
 	// Each rule is a subset of the HTTPRoute in the Gateway API (https://gateway-api.sigs.k8s.io/api-types/httproute/).
 	//
@@ -111,6 +110,8 @@ type AIGatewayRouteSpec struct {
 	//
 	// Currently, the filter is only implemented as an external processor filter, which might be
 	// extended to other types of filters in the future. See https://github.com/envoyproxy/ai-gateway/issues/90
+	//
+	// +optional
 	FilterConfig *AIGatewayFilterConfig `json:"filterConfig,omitempty"`
 
 	// LLMRequestCosts specifies how to capture the cost of the LLM-related request, notably the token usage.
@@ -319,6 +320,8 @@ type AIGatewayRouteRuleBackendRef struct {
 
 	// Name of the model in the backend. If provided this will override the name provided in the request.
 	// This field is ignored when referencing InferencePool resources.
+	//
+	// +optional
 	ModelNameOverride string `json:"modelNameOverride,omitempty"`
 
 	// Weight is the weight of the backend. This is exactly the same as the weight in

@@ -13,7 +13,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fake2 "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	gwapiv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
@@ -27,7 +26,7 @@ func TestGatewayMutator_Default(t *testing.T) {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{Development: true, Level: zapcore.DebugLevel})))
 	g := newGatewayMutator(
 		fakeClient, fakeKube, ctrl.Log, "docker.io/envoyproxy/ai-gateway-extproc:latest", corev1.PullIfNotPresent,
-		"info", "/tmp/extproc.sock", "",
+		"info", "/tmp/extproc.sock", "", "/v1",
 	)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "test-namespace"},
@@ -50,7 +49,7 @@ func TestGatewayMutator_mutatePod(t *testing.T) {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{Development: true, Level: zapcore.DebugLevel})))
 	g := newGatewayMutator(
 		fakeClient, fakeKube, ctrl.Log, "docker.io/envoyproxy/ai-gateway-extproc:latest", corev1.PullIfNotPresent,
-		"info", "/tmp/extproc.sock", "",
+		"info", "/tmp/extproc.sock", "", "/v1",
 	)
 
 	const gwName, gwNamespace = "test-gateway", "test-namespace"
@@ -67,7 +66,6 @@ func TestGatewayMutator_mutatePod(t *testing.T) {
 			Rules: []aigv1a1.AIGatewayRouteRule{
 				{BackendRefs: []aigv1a1.AIGatewayRouteRuleBackendRef{{Name: "apple"}}},
 			},
-			APISchema:    aigv1a1.VersionedAPISchema{Name: aigv1a1.APISchemaOpenAI, Version: ptr.To("v1")},
 			FilterConfig: &aigv1a1.AIGatewayFilterConfig{},
 		},
 	})
@@ -79,6 +77,20 @@ func TestGatewayMutator_mutatePod(t *testing.T) {
 			Containers: []corev1.Container{{Name: "envoy"}},
 		},
 	}
+	// At this point, the config secret does not exist, so the pod should not be mutated.
 	err = g.mutatePod(t.Context(), pod, gwName, gwNamespace)
 	require.NoError(t, err)
+	require.Len(t, pod.Spec.Containers, 1)
+
+	// Create the config secret and mutate the pod again.
+	_, err = g.kube.CoreV1().Secrets("test-namespace").Create(t.Context(),
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: FilterConfigSecretPerGatewayName(
+				gwName, gwNamespace,
+			), Namespace: "test-namespace"},
+		}, metav1.CreateOptions{})
+	require.NoError(t, err)
+	err = g.mutatePod(t.Context(), pod, gwName, gwNamespace)
+	require.NoError(t, err)
+	require.Len(t, pod.Spec.Containers, 2)
 }
