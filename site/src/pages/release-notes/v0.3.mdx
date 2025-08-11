@@ -62,12 +62,6 @@ export const patchReleases = releases.slice(1).reverse(); // Future patch releas
 
 <ItemList items={mainRelease.bugFixes} />
 
-## ⚠️ Breaking Changes
-
-{mainRelease.breakingChanges.length > 0 && (
-  <ItemList items={mainRelease.breakingChanges} />
-)}
-
 ## 📖 Upgrade Guidance
 
 For users upgrading from v0.2.x to v0.3.0:
