@@ -105,12 +105,16 @@
           "description": "The <code>targetRefs</code> pattern is no longer supported for <code>AIGatewayRoute</code>. Existing configurations will continue to work but should be migrated to <code>parentRefs</code>."
         },
         {
+          "title": "<code>AIGatewayRoute</code>'s <code>schema</code> Field",
+          "description": "The <code>schema</code> field is no longer needed for <code>AIGatewayRoute</code>. Existing configurations will continue to work but should be removed before v0.4."
+        },
+        {
           "title": "<code>controller.envoyGatewayNamespace</code> helm value is no longer necessary",
           "description": "This value is no longer necessary and is redundant when configured."
         },
         {
-          "title": "<code>AIGatewayRoute</code>'s <code>schema</code> Field",
-          "description": "The <code>schema</code> field is no longer needed for <code>AIGatewayRoute</code>. Existing configurations will continue to work but should be removed before v0.4."
+          "title": "<code>controller.podEnv</code> helm value will be removed",
+          "description": "Use <code>controller.extraEnvVars</code> instead. The <code>controller.podEnv</code> value will be removed in v0.4."
         }
       ],
       "bugFixes": [],
