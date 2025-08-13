@@ -67,6 +67,10 @@
           "title": "Others",
           "items": [
             {
+              "title": "OpenInference Tracing Support",
+              "description": "Added support for OpenInference distributed tracing, enabling detailed request tracing and performance monitoring.<a href=\"/docs/capabilities/observability/tracing\">View the documentation →</a> "
+            },
+            {
               "title": "Model Name Virtualization",
               "description": "Added a new <code>modelNameOverride</code> field in the backend reference in AIGateawayRoute, allowing for a flexible way to configure a 'virtual' model name for routing purposes.<a href=\"/docs/capabilities/traffic/model-name-virtualization\">View the documentation →</a> "
             },
