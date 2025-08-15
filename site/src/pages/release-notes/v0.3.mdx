@@ -62,6 +62,30 @@ export const patchReleases = releases.slice(1).reverse(); // Future patch releas
 
 For users upgrading from v0.2.x to v0.3.0:
 
+1. **Upgrade Envoy Gateway to v1.5.0** - Ensure you are using Envoy Gateway v1.5.0 or later, as this is required for compatibility with the new AI Gateway features.
+1. **Update Envoy Gateway config** - Update your Envoy Gateway configuration to include the new settings as below. The full manifest is available in the manifests/envoy-gateway-config/config.yaml file as per the getting started guide.
+    ```diff
+    --- a/manifests/envoy-gateway-config/config.yaml
+    +++ b/manifests/envoy-gateway-config/config.yaml
+    @@ -43,9 +43,19 @@ data:
+    extensionManager:
+      hooks:
+        xdsTranslator:
+    +     translation:
+    +       listener:
+    +         includeAll: true
+    +       route:
+    +         includeAll: true
+    +       cluster:
+    +         includeAll: true
+    +       secret:
+    +         includeAll: true
+      post:
+    - - VirtualHost
+      - Translation
+    + - Cluster
+    + - Route
+    ```
 1. **Migrate Gateway target references** - Update from the deprecated `AIGatewayRoute.targetRefs` pattern to the new `AIGatewayRoute.parentRefs` approach after the upgrade to v0.3.0.
 1. **Migrate backendSecurityPolicy references** - Update from the deprecated `AIGatewayRoute.backendSecurityPolicyRef` pattern to the new `BackendSecurityPolicy.targetRefs` approach  after the upgrade to v0.3.0.
 1. **Remove AIGatewayRoute.schema** - remove the `schema` field from `AIGatewayRoute` resources after the upgrade to v0.3.0, as it is no longer used.
