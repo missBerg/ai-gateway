@@ -86,6 +86,7 @@ For users upgrading from v0.2.x to v0.3.0:
     + - Cluster
     + - Route
     ```
+1. **Upgrade Envoy AI Gateway to v0.3.0**
 1. **Migrate Gateway target references** - Update from the deprecated `AIGatewayRoute.targetRefs` pattern to the new `AIGatewayRoute.parentRefs` approach after the upgrade to v0.3.0.
 1. **Migrate backendSecurityPolicy references** - Update from the deprecated `AIServiceBackend.backendSecurityPolicyRef` pattern to the new `BackendSecurityPolicy.targetRefs` approach  after the upgrade to v0.3.0.
 1. **Remove AIGatewayRoute.schema** - remove the `schema` field from `AIGatewayRoute` resources after the upgrade to v0.3.0, as it is no longer used.
