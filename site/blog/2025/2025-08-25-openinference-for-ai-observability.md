@@ -32,21 +32,9 @@ However, these metrics alone can't tell you the full story or the root cause of 
 
 ## Specifications Made for AI: OpenInference Semantic Conventions
 
-To enable you to gain traffic insights in the best way, Envoy AI Gateway chooses to stay close to standards. Instead of creating custom trace formats, Envoy AI Gateway uses **[OpenInference](https://github.com/Arize-ai/openinference/blob/main/spec/semantic_conventions.md)**.
+To enable you to gain traffic insights in the best way, Envoy AI Gateway chooses to stay close to standards. Instead of creating custom trace formats, Envoy AI Gateway uses **[OpenInference.](https://github.com/Arize-ai/openinference/blob/main/spec/semantic_conventions.md)** This is a widely accepted standard for AI applications, compatible with OpenTelemetry. Many frameworks, like **[BeeAI](https://docs.beeai.dev/observability/custom-agent-traceability)** and **[HuggingFace SmolAgents,](https://huggingface.co/docs/smolagents/v1.21.1/en/tutorials/inspect_runs#inspecting-runs-with-opentelemetry)** support it. OpenInference sets rules for tracking how large language models work. It covers things like the prompt, model settings, tokens used, and the response. Key moments, such as the time to get the first token during streaming, are recorded as span events. These relate to the earlier discussed metrics.
 
-This is a widely accepted standard for AI applications, compatible with OpenTelemetry. Many frameworks support it, including:
-- **[BeeAI](https://docs.beeai.dev/observability/custom-agent-traceability)**
-- **[HuggingFace SmolAgents](https://huggingface.co/docs/smolagents/v1.21.1/en/tutorials/inspect_runs#inspecting-runs-with-opentelemetry)**
-
-**OpenInference sets rules for tracking how large language models work:**
-- The prompt and model settings
-- Tokens used and the response
-- Key moments, such as the time to get the first token during streaming, recorded as span events
-- These relate to the earlier discussed metrics
-
-This OpenTelemetry approach uses spans and works well with common tracing systems. These systems usually link traces, not logs.
-
-For example, you can set up Envoy AI Gateway to **[work with Jaeger](https://www.jaegertracing.io)**. This setup is similar to how LLM evaluation systems like **Arize Phoenix** handle OpenInference directly.
+This OpenTelemetry approach uses spans and works well with common tracing systems. These systems usually link traces, not logs. For example, you can set up Envoy AI Gateway to **[work with Jaeger.](https://www.jaegertracing.io)** This setup is similar to how LLM evaluation systems like Arize Phoenix handle OpenInference directly. Redaction controls are available from the start. They help you manage your trace data and balance it with your evaluation needs.
 
 **Redaction controls** are available from the start. They help you manage your trace data and balance it with your evaluation needs.
 
