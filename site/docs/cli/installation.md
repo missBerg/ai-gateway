@@ -10,6 +10,24 @@ Each release includes the binaries for the `aigw` CLI build for different platfo
 They can be downloaded directly from the corresponding release in the
 [GitHub releases page](https://github.com/envoyproxy/ai-gateway/releases).
 
+## Using the Docker image
+
+You can also use the official Docker images to run the CLI without installing it locally.
+The CLI images are available at: https://hub.docker.com/r/envoyproxy/ai-gateway-cli/tags
+
+To run the CLI using Docker, you only need to expose the port where the standalone `aigw` listens to
+and configure the environment variables for the credentials. If you want to use a custom configuration file,
+you can mount it as a volume.
+
+The following example runs the AI Gateway with the default configuration for the [OpenAI provider](../getting-started/connect-providers/openai.md):
+
+```shell
+$ docker run --rm -p 1975:1975 -e OPENAI_API_KEY=OPENAI_API_KEY envoyproxy/ai-gateway-cli run
+looking up the latest patch for Envoy version 1.35
+1.35.3 is already downloaded
+starting: /tmp/envoy-gateway/versions/1.35.3/bin/envoy in run directory /tmp/envoy-gateway/runs/1758086300246501521
+```
+
 ## Building the latest version
 
 To use the latest version, you can use the following commands to clone the repo and build the CLI:

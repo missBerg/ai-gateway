@@ -6,28 +6,28 @@
 // Package filterapi provides the configuration for the AI Gateway-implemented filter
 // which is currently an external processor (See https://github.com/envoyproxy/ai-gateway/issues/90).
 //
-// This is a public package so that the filter can be testable without
-// depending on the Envoy Gateway as well as it can be used outside the Envoy AI Gateway.
-//
 // This configuration must be decoupled from the Envoy Gateway types as well as its implementation
 // details. Also, the configuration must not be tied with k8s so it can be tested and iterated
 // without the need for the k8s cluster.
 package filterapi
 
 import (
+	"fmt"
 	"os"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/yaml"
+
+	"github.com/envoyproxy/ai-gateway/internal/internalapi"
 )
 
 // DefaultConfig is the default configuration that can be used as a
 // fallback when the configuration is not explicitly provided.
-const DefaultConfig = `
+var DefaultConfig = fmt.Sprintf(`
 schema:
   name: OpenAI
-modelNameHeaderKey: x-ai-eg-model
-`
+modelNameHeaderKey: %s
+`, internalapi.ModelNameHeaderKeyDefault)
 
 // Config is the configuration for the Envoy AI Gateway filter.
 type Config struct {
@@ -39,7 +39,7 @@ type Config struct {
 	// the "calculated" cost in the filter metadata at the end of the response body processing.
 	LLMRequestCosts []LLMRequestCost `json:"llmRequestCosts,omitempty"`
 	// ModelNameHeaderKey is the header key to be populated with the model name by the filter.
-	ModelNameHeaderKey string `json:"modelNameHeaderKey"`
+	ModelNameHeaderKey internalapi.ModelNameHeaderKey `json:"modelNameHeaderKey"`
 	// Backends is the list of backends that this listener can route to.
 	Backends []Backend `json:"backends,omitempty"`
 	// Models is the list of models that this route is aware of. Used to populate the "/models" endpoint in OpenAI-compatible APIs.
@@ -63,7 +63,7 @@ type Model struct {
 // This can be used to subtract the usage token from the usage quota in the rate limit filter when
 // the request completes combined with `apply_on_stream_done` and `hits_addend` fields of
 // the rate limit configuration https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route_components.proto#config-route-v3-ratelimit
-// which is introduced in Envoy 1.33 (to be released soon as of writing).
+// introduced in Envoy 1.33.
 type LLMRequestCost struct {
 	// MetadataKey is the key of the metadata storing the request cost.
 	MetadataKey string `json:"metadataKey"`
@@ -121,13 +121,14 @@ type RouteRuleName string
 // besides that this abstracts the concept of a backend at Envoy Gateway level to a simple name.
 type Backend struct {
 	// Name of the backend including the route name as well as the route rule index.
-	Name string `json:"name"`
-	// Name of the model in the backend. If provided this will override the name provided in the request.
-	ModelNameOverride string `json:"modelNameOverride"`
+	Name              string                        `json:"name"`
+	ModelNameOverride internalapi.ModelNameOverride `json:"modelNameOverride"`
 	// Schema specifies the API schema of the output format of requests from.
 	Schema VersionedAPISchema `json:"schema"`
 	// Auth is the authn/z configuration for the backend. Optional.
 	Auth *BackendAuth `json:"auth,omitempty"`
+	// Sensitive Headers to be removed from the request before sending to the backend. Optional.
+	HeaderMutation *HTTPHeaderMutation `json:"httpHeaderMutation,omitempty"`
 }
 
 // BackendAuth corresponds partially to BackendSecurityPolicy in api/v1alpha1/api.go.
@@ -176,6 +177,24 @@ type GCPAuth struct {
 	// This is used in URL path templates when making requests to GCP Vertex AI endpoints.
 	// This should be the project where Vertex AI APIs are enabled.
 	ProjectName string `json:"projectName"`
+}
+
+// HTTPHeaderMutation defines the mutation of HTTP headers that will be applied to the request
+type HTTPHeaderMutation struct {
+	// Set overwrites the request with the given header (name, value)
+	// before the action.
+	Set []HTTPHeader `json:"set,omitempty"`
+	// Remove the given header(s) from the HTTP request before the action. The
+	// value of Remove is a list of HTTP header names.
+	Remove []string `json:"remove,omitempty"`
+}
+
+// HTTPHeader represents an HTTP Header name and value as defined by RFC 7230.
+type HTTPHeader struct {
+	// Name is the name of the HTTP Header to be matched.
+	Name string `json:"name"`
+	// Value is the value of HTTP Header to be matched.
+	Value string `json:"value"`
 }
 
 // UnmarshalConfigYaml reads the file at the given path and unmarshals it into a Config struct.

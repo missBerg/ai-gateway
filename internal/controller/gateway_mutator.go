@@ -40,11 +40,12 @@ type gatewayMutator struct {
 	metricsRequestHeaderLabels string
 	rootPrefix                 string
 	extProcExtraEnvVars        []corev1.EnvVar
+	extProcMaxRecvMsgSize      int
 }
 
 func newGatewayMutator(c client.Client, kube kubernetes.Interface, logger logr.Logger,
 	extProcImage string, extProcImagePullPolicy corev1.PullPolicy, extProcLogLevel,
-	udsPath, metricsRequestHeaderLabels, rootPrefix, extProcExtraEnvVars string,
+	udsPath, metricsRequestHeaderLabels, rootPrefix, extProcExtraEnvVars string, extProcMaxRecvMsgSize int,
 ) *gatewayMutator {
 	var parsedEnvVars []corev1.EnvVar
 	if extProcExtraEnvVars != "" {
@@ -66,6 +67,7 @@ func newGatewayMutator(c client.Client, kube kubernetes.Interface, logger logr.L
 		metricsRequestHeaderLabels: metricsRequestHeaderLabels,
 		rootPrefix:                 rootPrefix,
 		extProcExtraEnvVars:        parsedEnvVars,
+		extProcMaxRecvMsgSize:      extProcMaxRecvMsgSize,
 	}
 }
 
@@ -97,6 +99,7 @@ func (g *gatewayMutator) buildExtProcArgs(filterConfigFullPath string, extProcMe
 		"-metricsPort", fmt.Sprintf("%d", extProcMetricsPort),
 		"-healthPort", fmt.Sprintf("%d", extProcHealthPort),
 		"-rootPrefix", g.rootPrefix,
+		"-maxRecvMsgSize", fmt.Sprintf("%d", g.extProcMaxRecvMsgSize),
 	}
 
 	// Add metrics header label mapping if configured.
