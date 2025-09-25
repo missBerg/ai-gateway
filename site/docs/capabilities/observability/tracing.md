@@ -107,6 +107,26 @@ extProc:
       value: "true"  # Hide output messages from the LLM
 ```
 
+### Secure Configuration
+
+For OTEL endpoints that require authentication, you can securely reference Kubernetes secrets:
+
+```yaml
+extProc:
+  extraEnvVars:
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: "https://phoenix:6006"
+    - name: OTEL_EXPORTER_OTLP_HEADERS
+      valueFrom:
+        secretKeyRef:
+          name: otel-auth-headers
+          key: headers
+```
+
+:::tip
+See [Environment Variable Configuration](/docs/capabilities/security/environment-configuration) for complete documentation on securely configuring environment variables with secrets.
+:::
+
 Note: Hiding inputs/outputs prevents human or LLM-as-a-Judge evaluation of your
 LLM requests, such as done with the [Phoenix Evals library][phoenix-evals].
 

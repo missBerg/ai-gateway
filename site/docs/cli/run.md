@@ -167,6 +167,24 @@ requests captured in OpenTelemetry spans.
     - `OPENINFERENCE_HIDE_INPUTS`: Hide input messages/prompts (default: `false`)
     - `OPENINFERENCE_HIDE_OUTPUTS`: Hide output messages/completions (default: `false`)
 
+### Secure Configuration with Kubernetes Secrets
+
+For sensitive configuration like API keys or authentication tokens, `aigw run` supports referencing Kubernetes secrets using a special `secretKeyRef` syntax:
+
+```shell
+# Reference a secret for OTEL headers containing authentication
+OTEL_EXPORTER_OTLP_HEADERS=secretKeyRef {"name":"otel-auth","key":"headers"} aigw run
+
+# Mix literal values with secret references
+OTEL_SERVICE_NAME=my-gateway;OTEL_EXPORTER_OTLP_HEADERS=secretKeyRef {"name":"otel-secret","key":"headers"}
+```
+
+The secret must exist in the same namespace and contain the specified key. This approach keeps sensitive data secure and out of command-line history.
+
+:::tip
+See [Environment Variable Configuration](/docs/capabilities/security/environment-configuration) for complete documentation on the `secretKeyRef` syntax and security best practices.
+:::
+
 See [docker-compose-otel.yaml][docker-compose-otel.yaml] for a complete example
 configuration.
 

@@ -38,6 +38,7 @@ Comprehensive traffic handling and routing capabilities:
 Robust security features for AI gateway deployments:
 
 - **[Upstream Authentication](./security/upstream-auth.mdx)**: Secure authentication to upstream AI services
+- **[Environment Variable Configuration](./security/environment-configuration.md)**: Securely configure environment variables using Kubernetes secrets
 
 ## Observability
 
