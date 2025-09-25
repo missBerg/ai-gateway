@@ -56,6 +56,28 @@ helm upgrade ai-eg oci://docker.io/envoyproxy/ai-gateway-helm \
 # OTEL_METRICS_EXPORTER=none because Phoenix only supports traces, not metrics
 ```
 
+**For authenticated collectors**, you can reference Kubernetes secrets instead of plain text values:
+
+```bash
+# Create secret with authentication token
+kubectl create secret generic otel-auth \
+  --from-literal=headers="Authorization=Bearer your-token" \
+  -n envoy-ai-gateway-system
+
+# Reference the secret in environment variables
+helm upgrade ai-eg oci://docker.io/envoyproxy/ai-gateway-helm \
+  --version v0.0.0-latest \
+  --namespace envoy-ai-gateway-system \
+  --set "extProc.extraEnvVars[0].name=OTEL_EXPORTER_OTLP_ENDPOINT" \
+  --set "extProc.extraEnvVars[0].value=https://your-collector:4318" \
+  --set "extProc.extraEnvVars[1].name=OTEL_EXPORTER_OTLP_HEADERS" \
+  --set 'extProc.extraEnvVars[1].value=secretKeyRef {"name":"otel-auth","key":"headers"}'
+```
+
+:::tip
+Learn more about [secret references in environment variables](/docs/capabilities/security/upstream-auth#environment-variable-secret-references) in the security documentation.
+:::
+
 Wait for the gateway pod to be ready:
 ```shell
 kubectl wait --for=condition=Ready -n envoy-gateway-system \
@@ -100,6 +122,11 @@ arguments, you can add the following to control redaction:
 extProc:
   extraEnvVars:
     # Base OTEL configuration...
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: "https://your-collector:4318"
+    # Reference secret for authentication headers
+    - name: OTEL_EXPORTER_OTLP_HEADERS
+      value: 'secretKeyRef {"name":"otel-auth","key":"headers"}'
     # Hide sensitive data (all default to false)
     - name: OPENINFERENCE_HIDE_INPUTS
       value: "true"  # Hide input messages to the LLM

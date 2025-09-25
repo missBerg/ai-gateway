@@ -69,6 +69,58 @@ For providers that support long lived access credentials, the Envoy AI Gateway c
 Learn more about connecting to [OpenAI](/docs/getting-started/connect-providers/openai) and adding your API key to the secret. You can use the same approach for other providers that support long lived credentials.
 :::
 
+### Environment Variable Secret References
+
+For external processor configuration (such as OpenTelemetry setup), you can reference Kubernetes secrets in environment variables instead of storing sensitive values directly in Helm values or configuration files.
+
+**Syntax:**
+```yaml
+EXAMPLE_VAR=secretKeyRef {"name":"SECRET_NAME","key":"SECRET_KEY"}
+```
+
+**Use cases:**
+- OpenTelemetry authentication headers with API keys or tokens
+- Database connection strings with credentials
+- Third-party service authentication tokens
+- Any sensitive configuration that shouldn't be stored in plain text
+
+**Example - OpenTelemetry with secret authentication:**
+
+First, create a secret containing your authentication token:
+```bash
+kubectl create secret generic otel-auth \
+  --from-literal=auth-token="Bearer your-secret-token" \
+  -n envoy-ai-gateway-system
+```
+
+Then reference it in your Helm configuration:
+```yaml
+extProc:
+  extraEnvVars:
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: "https://your-collector:4318"
+    - name: OTEL_EXPORTER_OTLP_HEADERS
+      value: 'secretKeyRef {"name":"otel-auth","key":"auth-token"}'
+```
+
+Or using Helm command line:
+```bash
+helm upgrade ai-eg oci://docker.io/envoyproxy/ai-gateway-helm \
+  --version v0.0.0-latest \
+  --namespace envoy-ai-gateway-system \
+  --set "extProc.extraEnvVars[0].name=OTEL_EXPORTER_OTLP_ENDPOINT" \
+  --set "extProc.extraEnvVars[0].value=https://your-collector:4318" \
+  --set "extProc.extraEnvVars[1].name=OTEL_EXPORTER_OTLP_HEADERS" \
+  --set 'extProc.extraEnvVars[1].value=secretKeyRef {"name":"otel-auth","key":"auth-token"}'
+```
+
+**Important notes:**
+- The JSON must be valid with quoted field names and values
+- Spaces around the JSON are allowed: `secretKeyRef {"name":"foo","key":"bar"}` and `secretKeyRef{"name":"foo","key":"bar"}` both work
+- The secret must exist in the same namespace as the AI Gateway
+- You can mix secret references with plain environment variables
+- Multiple environment variables can be separated by semicolons: `VAR1=value1;VAR2=secretKeyRef {"name":"secret","key":"key"}`
+
 ## Conclusion
 
 Upstream Authentication is a key component of the Envoy AI Gateway's security architecture. It ensures secure communication between the Gateway and upstream AI service providers while supporting modern authentication methods and enterprise security requirements. Leverage Envoy AI Gateway's Upstream Authentication to maintain a secure and compliant AI infrastructure in your enterprise environments.

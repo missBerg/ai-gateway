@@ -39,8 +39,16 @@ Robust security features for AI gateway deployments:
 
 - **[Upstream Authentication](./security/upstream-auth.mdx)**: Secure authentication to upstream AI services
 
+## Configuration
+
+Advanced configuration options for customizing AI Gateway behavior:
+
+- **[External Processor Configuration](./configuration/external-processor.md)**: Configure the external processor with environment variables and secret references
+
 ## Observability
 
 Monitoring and observability tools for AI workloads:
 
 - **[Metrics](./observability/metrics.md)**: Comprehensive metrics collection and monitoring
+- **[Tracing](./observability/tracing.md)**: OpenTelemetry integration for distributed tracing
+- **[Access Logs](./observability/accesslogs.md)**: Enhanced access logs with AI/LLM metadata
