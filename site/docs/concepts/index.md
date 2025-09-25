@@ -17,3 +17,7 @@ Welcome to the Concepts section of Envoy AI Gateway documentation. This section 
 ## Resources
 
 - [Resources Overview](./resources.md) - Understanding the AI Gateway resources and their relationships
+
+## Configuration
+
+- [ExtProc Configuration](./extproc-configuration.md) - Configuring environment variables and secrets for the External Processor
