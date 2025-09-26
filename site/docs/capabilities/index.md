@@ -8,6 +8,12 @@ sidebar_position: 3
 
 Welcome to the Envoy AI Gateway capabilities documentation! This section provides detailed information about the various features and capabilities that Envoy AI Gateway offers to help you manage and optimize your AI/LLM traffic.
 
+## Configuration
+
+Core configuration options for Envoy AI Gateway:
+
+- **[Environment Variables](./configuration/environment-variables.md)**: Configure AI Gateway components through environment variables and Kubernetes secrets
+
 ## LLM Providers Integrations
 
 Support for various Large Language Model providers:

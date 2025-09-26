@@ -88,6 +88,83 @@ kubectl port-forward -n envoy-ai-gateway-system svc/phoenix 6006:6006
 
 Then open http://localhost:6006 in your browser to explore the traces.
 
+## Using Kubernetes Secrets for Configuration
+
+When configuring OpenTelemetry, you may need to provide sensitive information such as API keys or authentication headers. AI Gateway supports referencing Kubernetes secrets in environment variables using the `secretKeyRef` syntax.
+
+### Creating Kubernetes Secrets
+
+First, create a Kubernetes secret with your sensitive data:
+```shell
+kubectl create secret generic otel-headers \
+  --namespace envoy-ai-gateway-system \
+  --from-literal=auth-header="Bearer your-api-token"
+```
+
+### Method 1: Using Helm Values File (Recommended)
+
+Reference the secret in your Helm values file:
+```yaml
+extProc:
+  extraEnvVars:
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: "http://collector:4317"
+    - name: OTEL_EXPORTER_OTLP_HEADERS
+      # Reference the secret created above
+      valueFrom:
+        secretKeyRef:
+          name: otel-headers
+          key: auth-header
+```
+
+Then apply it:
+```shell
+helm upgrade ai-eg oci://docker.io/envoyproxy/ai-gateway-helm \
+  --version v0.0.0-latest \
+  --namespace envoy-ai-gateway-system \
+  -f values.yaml
+```
+
+### Method 2: Using --set Command with secretKeyRef
+
+Alternatively, use the `--set` command with the special `secretKeyRef` syntax:
+```shell
+helm upgrade ai-eg oci://docker.io/envoyproxy/ai-gateway-helm \
+  --version v0.0.0-latest \
+  --namespace envoy-ai-gateway-system \
+  --set "extProc.extraEnvVars[0].name=OTEL_EXPORTER_OTLP_ENDPOINT" \
+  --set "extProc.extraEnvVars[0].value=http://collector:4317" \
+  --set "extProc.extraEnvVars[1].name=OTEL_EXPORTER_OTLP_HEADERS" \
+  --set "extProc.extraEnvVars[1].value=secretKeyRef {\"name\":\"otel-headers\",\"key\":\"auth-header\"}"
+```
+
+### Format Requirements
+
+When using the `secretKeyRef` syntax in a `--set` command:
+
+* The value must be prefixed with `secretKeyRef` followed by a JSON object
+* The JSON object must contain both `name` and `key` properties
+* Valid formats include:
+  * `secretKeyRef {"name":"secret-name","key":"secret-key"}`
+  * `secretKeyRef{"name":"secret-name","key":"secret-key"}`
+
+### Common Use Cases
+
+* **Authentication Headers for OpenTelemetry Collectors**:
+  ```
+  OTEL_EXPORTER_OTLP_HEADERS=secretKeyRef {"name":"otel-auth","key":"headers"}
+  ```
+
+* **API Keys for External Services**:
+  ```
+  EXTERNAL_SERVICE_API_KEY=secretKeyRef {"name":"api-keys","key":"external-service"}
+  ```
+
+* **Connection Strings with Credentials**:
+  ```
+  DATABASE_URL=secretKeyRef {"name":"db-creds","key":"connection-string"}
+  ```
+
 ## Privacy Configuration
 
 Control sensitive data in traces by adding
@@ -128,6 +205,7 @@ helm upgrade ai-eg oci://docker.io/envoyproxy/ai-gateway-helm \
 
 ## See Also
 
+- [Environment Variables Configuration](../configuration/environment-variables.md) - Comprehensive guide to environment variables and secret management
 - [OpenInference Specification][openinference] - GenAI Semantic conventions for traces
 - [OpenTelemetry Configuration][otel-config] - Environment variable reference
 - [Arize Phoenix Documentation][phoenix] - LLM observability platform
