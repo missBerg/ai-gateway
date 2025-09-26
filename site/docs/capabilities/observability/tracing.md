@@ -56,6 +56,10 @@ helm upgrade ai-eg oci://docker.io/envoyproxy/ai-gateway-helm \
 # OTEL_METRICS_EXPORTER=none because Phoenix only supports traces, not metrics
 ```
 
+:::tip Secret Management
+For secure environments, you can store authentication headers in Kubernetes secrets and reference them using the `secretKeyRef` syntax. See [Environment Variable Secrets](../security/secret-management.md) for detailed configuration examples.
+:::
+
 Wait for the gateway pod to be ready:
 ```shell
 kubectl wait --for=condition=Ready -n envoy-gateway-system \
@@ -99,7 +103,14 @@ arguments, you can add the following to control redaction:
 ```yaml
 extProc:
   extraEnvVars:
-    # Base OTEL configuration...
+    # Base OTEL configuration
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: "http://phoenix-svc:6006"
+    - name: OTEL_METRICS_EXPORTER
+      value: "none"
+    # Authentication using secrets (optional)
+    - name: OTEL_EXPORTER_OTLP_HEADERS
+      value: 'secretKeyRef {"name":"otel-auth","key":"authorization"}'
     # Hide sensitive data (all default to false)
     - name: OPENINFERENCE_HIDE_INPUTS
       value: "true"  # Hide input messages to the LLM

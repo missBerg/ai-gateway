@@ -25,6 +25,10 @@ Each metric comes with some default labels such as `gen_ai_request_model` that c
 
 Before you begin, you'll need to complete the basic setup from the [Basic Usage](/docs/getting-started/basic-usage) guide.
 
+:::tip Secure Configuration
+For production environments, consider using [Environment Variable Secrets](../security/secret-management.md) to securely manage authentication credentials for your monitoring infrastructure.
+:::
+
 Then, you can install the prometheus using the following commands:
 
 ```shell

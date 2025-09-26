@@ -25,6 +25,9 @@ Below are a list of common security configurations that can be useful when secur
 - [Require API Key](https://gateway.envoyproxy.io/docs/tasks/security/apikey-auth/)
 - [IP Allowlist/Denylist](https://gateway.envoyproxy.io/docs/tasks/security/restrict-ip-access/)
 
+### Secret Management
+- [Environment Variable Secrets](./secret-management/) - _Reference Kubernetes secrets in environment variables_
+
 ### TLS
 - [Setup TLS Certificate](https://gateway.envoyproxy.io/docs/tasks/security/secure-gateways/)
 - [Using TLS cert-manager](https://gateway.envoyproxy.io/docs/tasks/security/tls-cert-manager/)
