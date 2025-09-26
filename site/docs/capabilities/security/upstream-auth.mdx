@@ -69,6 +69,82 @@ For providers that support long lived access credentials, the Envoy AI Gateway c
 Learn more about connecting to [OpenAI](/docs/getting-started/connect-providers/openai) and adding your API key to the secret. You can use the same approach for other providers that support long lived credentials.
 :::
 
+## Environment Variable Security
+
+For additional security when configuring the AI Gateway, you can reference secrets stored in Kubernetes for sensitive environment variables instead of storing them as plain text values.
+
+### Using secretKeyRef for Environment Variables
+
+When configuring the AI Gateway's external processor (ExtProc) with environment variables that contain sensitive data, you can use `secretKeyRef` to reference values from Kubernetes secrets:
+
+```yaml
+extProc:
+  extraEnvVars:
+    - name: OTEL_EXPORTER_OTLP_HEADERS
+      valueFrom:
+        secretKeyRef:
+          name: otel-headers-secret
+          key: authorization-header
+    - name: CUSTOM_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: api-credentials
+          key: custom-key
+```
+
+### Creating the Required Secrets
+
+First, create the Kubernetes secrets containing your sensitive values:
+
+```bash
+# Create secret for OTEL headers
+kubectl create secret generic otel-headers-secret \
+  --from-literal=authorization-header="Bearer your-token-here" \
+  -n envoy-ai-gateway-system
+
+# Create secret for API credentials
+kubectl create secret generic api-credentials \
+  --from-literal=custom-key="your-api-key-here" \
+  -n envoy-ai-gateway-system
+```
+
+### Alternative: Inline secretKeyRef Syntax
+
+For convenience, the AI Gateway also supports an inline `secretKeyRef` syntax when using the `extraEnvVars` string format:
+
+```bash
+helm upgrade ai-eg oci://docker.io/envoyproxy/ai-gateway-helm \
+  --version v0.0.0-latest \
+  --namespace envoy-ai-gateway-system \
+  --set 'extProc.extraEnvVars=OTEL_EXPORTER_OTLP_HEADERS=secretKeyRef {"name":"otel-headers-secret","key":"authorization-header"}'
+```
+
+This inline format supports various JSON formatting styles:
+- `secretKeyRef {"name":"SECRET_NAME","key":"KEY"}`
+- `secretKeyRef{"name":"SECRET_NAME","key":"KEY"}`
+- `secretKeyRef { "name": "SECRET_NAME", "key": "KEY" }`
+
+### Mixed Environment Variables
+
+You can combine regular environment variables with secret references:
+
+```bash
+helm upgrade ai-eg oci://docker.io/envoyproxy/ai-gateway-helm \
+  --version v0.0.0-latest \
+  --namespace envoy-ai-gateway-system \
+  --set 'extProc.extraEnvVars=OTEL_SERVICE_NAME=ai-gateway;OTEL_EXPORTER_OTLP_HEADERS=secretKeyRef {"name":"otel-secret","key":"headers"}'
+```
+
+### Security Best Practices
+
+1. **Use secrets for sensitive data**: Always store API keys, tokens, and other credentials in Kubernetes secrets rather than as plain text values.
+
+2. **Apply principle of least privilege**: Ensure the AI Gateway service account has only the minimum permissions needed to read the required secrets.
+
+3. **Rotate credentials regularly**: Implement a rotation strategy for your secrets and update the Kubernetes secrets accordingly.
+
+4. **Monitor secret access**: Use Kubernetes audit logs to monitor access to sensitive secrets.
+
 ## Conclusion
 
-Upstream Authentication is a key component of the Envoy AI Gateway's security architecture. It ensures secure communication between the Gateway and upstream AI service providers while supporting modern authentication methods and enterprise security requirements. Leverage Envoy AI Gateway's Upstream Authentication to maintain a secure and compliant AI infrastructure in your enterprise environments.
+Upstream Authentication is a key component of the Envoy AI Gateway's security architecture. It ensures secure communication between the Gateway and upstream AI service providers while supporting modern authentication methods and enterprise security requirements. Combined with proper secret management for environment variables, you can maintain a secure and compliant AI infrastructure in your enterprise environments.

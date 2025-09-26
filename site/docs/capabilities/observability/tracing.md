@@ -56,6 +56,23 @@ helm upgrade ai-eg oci://docker.io/envoyproxy/ai-gateway-helm \
 # OTEL_METRICS_EXPORTER=none because Phoenix only supports traces, not metrics
 ```
 
+#### Alternative: Using Secrets for Authentication Headers
+
+If your OpenTelemetry collector requires authentication, you can use Kubernetes secrets to store sensitive headers:
+
+```bash
+# Create a secret with your OTEL authentication headers
+kubectl create secret generic otel-auth-secret \
+  --from-literal=headers="Authorization=Bearer your-otel-token" \
+  -n envoy-ai-gateway-system
+
+# Configure AI Gateway to use the secret
+helm upgrade ai-eg oci://docker.io/envoyproxy/ai-gateway-helm \
+  --version v0.0.0-latest \
+  --namespace envoy-ai-gateway-system \
+  --set 'extProc.extraEnvVars=OTEL_EXPORTER_OTLP_ENDPOINT=http://phoenix-svc:6006;OTEL_EXPORTER_OTLP_HEADERS=secretKeyRef {"name":"otel-auth-secret","key":"headers"};OTEL_METRICS_EXPORTER=none'
+```
+
 Wait for the gateway pod to be ready:
 ```shell
 kubectl wait --for=condition=Ready -n envoy-gateway-system \
@@ -99,7 +116,17 @@ arguments, you can add the following to control redaction:
 ```yaml
 extProc:
   extraEnvVars:
-    # Base OTEL configuration...
+    # Base OTEL configuration
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: "http://phoenix-svc:6006"
+    - name: OTEL_METRICS_EXPORTER
+      value: "none"
+    # Optional: Use secrets for authentication headers
+    - name: OTEL_EXPORTER_OTLP_HEADERS
+      valueFrom:
+        secretKeyRef:
+          name: otel-auth-secret
+          key: headers
     # Hide sensitive data (all default to false)
     - name: OPENINFERENCE_HIDE_INPUTS
       value: "true"  # Hide input messages to the LLM

@@ -167,6 +167,15 @@ requests captured in OpenTelemetry spans.
     - `OPENINFERENCE_HIDE_INPUTS`: Hide input messages/prompts (default: `false`)
     - `OPENINFERENCE_HIDE_OUTPUTS`: Hide output messages/completions (default: `false`)
 
+- **Secret References**: For sensitive environment variables, you can reference
+  Kubernetes secrets using the `secretKeyRef` syntax:
+    ```bash
+    OTEL_EXPORTER_OTLP_HEADERS=secretKeyRef {"name":"otel-secret","key":"headers"}
+    ```
+    This allows you to store sensitive values like authentication tokens in Kubernetes
+    secrets instead of plain text. See [Secure Environment Variables](/docs/capabilities/security/environment-variables)
+    for detailed usage instructions.
+
 See [docker-compose-otel.yaml][docker-compose-otel.yaml] for a complete example
 configuration.
 

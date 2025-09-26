@@ -28,3 +28,8 @@ Below are a list of common security configurations that can be useful when secur
 ### TLS
 - [Setup TLS Certificate](https://gateway.envoyproxy.io/docs/tasks/security/secure-gateways/)
 - [Using TLS cert-manager](https://gateway.envoyproxy.io/docs/tasks/security/tls-cert-manager/)
+
+### AI Gateway Specific Security
+
+- [Upstream Authentication](./upstream-auth) - _Secure communication with AI providers_
+- [Secure Environment Variables](./environment-variables) - _Use Kubernetes secrets for sensitive configuration_
