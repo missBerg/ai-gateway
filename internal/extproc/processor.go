@@ -13,8 +13,9 @@ import (
 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/google/cel-go/cel"
 
-	"github.com/envoyproxy/ai-gateway/filterapi"
 	"github.com/envoyproxy/ai-gateway/internal/extproc/backendauth"
+	"github.com/envoyproxy/ai-gateway/internal/filterapi"
+	"github.com/envoyproxy/ai-gateway/internal/internalapi"
 	tracing "github.com/envoyproxy/ai-gateway/internal/tracing/api"
 )
 
@@ -22,7 +23,7 @@ import (
 // This will be created by the server and passed to the processor when it detects a new configuration.
 type processorConfig struct {
 	uuid               string
-	modelNameHeaderKey string
+	modelNameHeaderKey internalapi.ModelNameHeaderKey
 	metadataNamespace  string
 	requestCosts       []processorConfigRequestCost
 	declaredModels     []filterapi.Model

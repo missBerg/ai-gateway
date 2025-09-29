@@ -6,7 +6,7 @@
 package extproc
 
 import (
-	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -17,10 +17,11 @@ import (
 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	"github.com/envoyproxy/ai-gateway/filterapi"
 	"github.com/envoyproxy/ai-gateway/internal/apischema/anthropic"
 	"github.com/envoyproxy/ai-gateway/internal/extproc/backendauth"
+	"github.com/envoyproxy/ai-gateway/internal/extproc/headermutator"
 	"github.com/envoyproxy/ai-gateway/internal/extproc/translator"
+	"github.com/envoyproxy/ai-gateway/internal/filterapi"
 	"github.com/envoyproxy/ai-gateway/internal/internalapi"
 	"github.com/envoyproxy/ai-gateway/internal/metrics"
 	tracing "github.com/envoyproxy/ai-gateway/internal/tracing/api"
@@ -71,18 +72,18 @@ func (c *messagesProcessorRouterFilter) ProcessRequestHeaders(_ context.Context,
 // ProcessRequestBody implements [Processor.ProcessRequestBody].
 func (c *messagesProcessorRouterFilter) ProcessRequestBody(_ context.Context, rawBody *extprocv3.HttpBody) (*extprocv3.ProcessingResponse, error) {
 	// Parse Anthropic request - natural validation.
-	model, body, err := parseAnthropicMessagesBody(rawBody)
+	originalModel, body, err := parseAnthropicMessagesBody(rawBody)
 	if err != nil {
 		return nil, fmt.Errorf("/v1/messages endpoint requires Anthropic format: %w", err)
 	}
 
-	c.requestHeaders[c.config.modelNameHeaderKey] = model
+	c.requestHeaders[c.config.modelNameHeaderKey] = originalModel
 	c.originalRequestBody = body
 
 	var additionalHeaders []*corev3.HeaderValueOption
 	additionalHeaders = append(additionalHeaders, &corev3.HeaderValueOption{
 		// Set the model name to the request header with the key `x-ai-eg-model`.
-		Header: &corev3.HeaderValue{Key: c.config.modelNameHeaderKey, RawValue: []byte(model)},
+		Header: &corev3.HeaderValue{Key: c.config.modelNameHeaderKey, RawValue: []byte(originalModel)},
 	}, &corev3.HeaderValueOption{
 		Header: &corev3.HeaderValue{Key: originalPathHeader, RawValue: []byte(c.requestHeaders[":path"])},
 	})
@@ -134,9 +135,11 @@ type messagesProcessorUpstreamFilter struct {
 	config                 *processorConfig
 	requestHeaders         map[string]string
 	responseHeaders        map[string]string
-	modelNameOverride      string
+	responseEncoding       string
+	modelNameOverride      internalapi.ModelNameOverride
 	backendName            string
 	handler                backendauth.Handler
+	headerMutator          *headermutator.HeaderMutator
 	originalRequestBody    *anthropic.MessagesRequest
 	originalRequestBodyRaw []byte
 	translator             translator.AnthropicMessagesTranslator
@@ -170,20 +173,30 @@ func (c *messagesProcessorUpstreamFilter) ProcessRequestHeaders(ctx context.Cont
 
 	// Start tracking metrics for this request.
 	c.metrics.StartRequest(c.requestHeaders)
-	c.metrics.SetModel(c.requestHeaders[c.config.modelNameHeaderKey])
-
 	// Force body mutation for retry requests as the body mutation might have happened in previous iteration.
 	forceBodyMutation := c.onRetry
 	headerMutation, bodyMutation, err := c.translator.RequestBody(c.originalRequestBodyRaw, c.originalRequestBody, forceBodyMutation)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform request: %w", err)
 	}
+
+	// Set the request model for metrics from the original model or override if applied.
+	reqModel := cmp.Or(c.requestHeaders[c.config.modelNameHeaderKey], c.originalRequestBody.GetModel())
+	c.metrics.SetRequestModel(reqModel)
 	if headerMutation == nil {
 		headerMutation = &extprocv3.HeaderMutation{}
-	} else {
-		for _, h := range headerMutation.SetHeaders {
-			c.requestHeaders[h.Header.Key] = string(h.Header.RawValue)
+	}
+
+	// Apply header mutations from the route and also restore original headers on retry.
+	if h := c.headerMutator; h != nil {
+		if hm := c.headerMutator.Mutate(c.requestHeaders, c.onRetry); hm != nil {
+			headerMutation.RemoveHeaders = append(headerMutation.RemoveHeaders, hm.RemoveHeaders...)
+			headerMutation.SetHeaders = append(headerMutation.SetHeaders, hm.SetHeaders...)
 		}
+	}
+
+	for _, h := range headerMutation.SetHeaders {
+		c.requestHeaders[h.Header.Key] = string(h.Header.RawValue)
 	}
 	if h := c.handler; h != nil {
 		if err = h.Do(ctx, c.requestHeaders, headerMutation, bodyMutation); err != nil {
@@ -222,6 +235,9 @@ func (c *messagesProcessorUpstreamFilter) ProcessResponseHeaders(ctx context.Con
 	}()
 
 	c.responseHeaders = headersToMap(headers)
+	if enc := c.responseHeaders["content-encoding"]; enc != "" {
+		c.responseEncoding = enc
+	}
 	headerMutation, err := c.translator.ResponseHeaders(c.responseHeaders)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform response headers: %w", err)
@@ -241,16 +257,31 @@ func (c *messagesProcessorUpstreamFilter) ProcessResponseHeaders(ctx context.Con
 // ProcessResponseBody implements [Processor.ProcessResponseBody].
 func (c *messagesProcessorUpstreamFilter) ProcessResponseBody(ctx context.Context, body *extprocv3.HttpBody) (res *extprocv3.ProcessingResponse, err error) {
 	defer func() {
-		c.metrics.RecordRequestCompletion(ctx, err == nil, c.requestHeaders)
+		if err != nil {
+			c.metrics.RecordRequestCompletion(ctx, false, c.requestHeaders)
+			return
+		}
+		if body.EndOfStream {
+			c.metrics.RecordRequestCompletion(ctx, true, c.requestHeaders)
+		}
 	}()
 
-	// Simple passthrough: just pass the body as-is without any complex handling.
-	br := bytes.NewReader(body.Body)
+	// Decompress the body if needed using common utility.
+	decodingResult, err := decodeContentIfNeeded(body.Body, c.responseEncoding)
+	if err != nil {
+		return nil, err
+	}
 
-	headerMutation, bodyMutation, tokenUsage, err := c.translator.ResponseBody(c.responseHeaders, br, body.EndOfStream)
+	// headerMutation, bodyMutation, tokenUsage, err := c.translator.ResponseBody(c.responseHeaders, br, body.EndOfStream).
+	headerMutation, bodyMutation, tokenUsage, responseModel, err := c.translator.ResponseBody(c.responseHeaders, decodingResult.reader, body.EndOfStream)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform response: %w", err)
 	}
+
+	c.metrics.SetResponseModel(responseModel)
+
+	// Remove content-encoding header if original body encoded but was mutated in the processor.
+	headerMutation = removeContentEncodingIfNeeded(headerMutation, bodyMutation, decodingResult.isEncoded)
 
 	resp := &extprocv3.ProcessingResponse{
 		Response: &extprocv3.ProcessingResponse_ResponseBody{
@@ -268,13 +299,13 @@ func (c *messagesProcessorUpstreamFilter) ProcessResponseBody(ctx context.Contex
 	c.costs.TotalTokens += tokenUsage.TotalTokens
 
 	// Update metrics with token usage.
-	c.metrics.RecordTokenUsage(ctx, tokenUsage.InputTokens, tokenUsage.OutputTokens, tokenUsage.TotalTokens, c.requestHeaders)
+	c.metrics.RecordTokenUsage(ctx, tokenUsage.InputTokens, tokenUsage.OutputTokens, c.requestHeaders)
 	if c.stream {
-		c.metrics.RecordTokenLatency(ctx, tokenUsage.OutputTokens, c.requestHeaders)
+		c.metrics.RecordTokenLatency(ctx, tokenUsage.OutputTokens, body.EndOfStream, c.requestHeaders)
 	}
 
 	if body.EndOfStream && len(c.config.requestCosts) > 0 {
-		metadata, err := buildDynamicMetadata(c.config, &c.costs, c.requestHeaders, c.modelNameOverride, c.backendName)
+		metadata, err := buildDynamicMetadata(c.config, &c.costs, c.requestHeaders, c.backendName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build dynamic metadata: %w", err)
 		}
@@ -291,7 +322,9 @@ func (c *messagesProcessorUpstreamFilter) ProcessResponseBody(ctx context.Contex
 // SetBackend implements [Processor.SetBackend].
 func (c *messagesProcessorUpstreamFilter) SetBackend(ctx context.Context, b *filterapi.Backend, backendHandler backendauth.Handler, routeProcessor Processor) (err error) {
 	defer func() {
-		c.metrics.RecordRequestCompletion(ctx, err == nil, c.requestHeaders)
+		if err != nil {
+			c.metrics.RecordRequestCompletion(ctx, false, c.requestHeaders)
+		}
 	}()
 	pickedEndpoint, isEndpointPicker := c.requestHeaders[internalapi.EndpointPickerHeaderKey]
 	rp, ok := routeProcessor.(*messagesProcessorRouterFilter)
@@ -306,9 +339,12 @@ func (c *messagesProcessorUpstreamFilter) SetBackend(ctx context.Context, b *fil
 		return fmt.Errorf("failed to select translator: %w", err)
 	}
 	c.handler = backendHandler
-	// Sync header with backend model so header-derived labels/CEL use the actual model.
+	c.headerMutator = headermutator.NewHeaderMutator(b.HeaderMutation, rp.requestHeaders)
+	// Header-derived labels/CEL must be able to see the overridden request model.
 	if c.modelNameOverride != "" {
 		c.requestHeaders[c.config.modelNameHeaderKey] = c.modelNameOverride
+		// Update metrics with the overridden model
+		c.metrics.SetRequestModel(c.modelNameOverride)
 	}
 	c.originalRequestBody = rp.originalRequestBody
 	c.originalRequestBodyRaw = rp.originalRequestBodyRaw

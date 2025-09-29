@@ -36,6 +36,7 @@ import (
 
 	aigv1a1 "github.com/envoyproxy/ai-gateway/api/v1alpha1"
 	"github.com/envoyproxy/ai-gateway/internal/controller"
+	"github.com/envoyproxy/ai-gateway/internal/internalapi"
 	internaltesting "github.com/envoyproxy/ai-gateway/internal/testing"
 	testsinternal "github.com/envoyproxy/ai-gateway/tests/internal"
 )
@@ -54,6 +55,7 @@ func TestStartControllers(t *testing.T) {
 		EnableLeaderElection:   false,
 		DisableMutatingWebhook: true,
 		RootPrefix:             "/root-prefix",
+		ExtProcMaxRecvMsgSize:  512 * 1024 * 1024, // 512MB
 	}
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
@@ -94,24 +96,13 @@ func TestStartControllers(t *testing.T) {
 		},
 	}
 	t.Run("setup routes", func(t *testing.T) {
-		for i, route := range []string{"route1", "route2"} {
-			var targetRefs []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName
-			var parentRefs []gwapiv1a2.ParentReference
-			if i == 0 {
-				targetRefs = []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName{
-					{
-						LocalPolicyTargetReference: gwapiv1a2.LocalPolicyTargetReference{Name: "gtw", Kind: "Gateway", Group: "gateway.networking.k8s.io"},
-					},
-				}
-			} else {
-				parentRefs = []gwapiv1a2.ParentReference{{Name: "gtw"}}
-			}
+		for _, route := range []string{"route1", "route2"} {
+			parentRefs := []gwapiv1a2.ParentReference{{Name: "gtw"}}
 			err := c.Create(ctx, &aigv1a1.AIGatewayRoute{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: route, Namespace: "default",
 				},
 				Spec: aigv1a1.AIGatewayRouteSpec{
-					TargetRefs: targetRefs,
 					ParentRefs: parentRefs,
 					Rules: []aigv1a1.AIGatewayRouteRule{
 						{
@@ -119,7 +110,7 @@ func TestStartControllers(t *testing.T) {
 								{
 									Headers: []gwapiv1.HTTPHeaderMatch{
 										{
-											Name:  "x-ai-eg-model",
+											Name:  internalapi.ModelNameHeaderKeyDefault,
 											Value: "foo",
 										},
 									},
@@ -191,7 +182,7 @@ func TestStartControllers(t *testing.T) {
 				require.Len(t, httpRoute.Spec.Rules, 2) // 1 for rule, 1 for the default rule.
 				require.Len(t, httpRoute.Spec.Rules[0].Matches, 1)
 				require.Len(t, httpRoute.Spec.Rules[0].Matches[0].Headers, 1)
-				require.Equal(t, "x-ai-eg-model", string(httpRoute.Spec.Rules[0].Matches[0].Headers[0].Name))
+				require.Equal(t, internalapi.ModelNameHeaderKeyDefault, string(httpRoute.Spec.Rules[0].Matches[0].Headers[0].Name))
 				require.Equal(t, "foo", httpRoute.Spec.Rules[0].Matches[0].Headers[0].Value)
 
 				// Check all rule has the host rewrite filter except for the last rule.
@@ -252,11 +243,11 @@ func TestAIGatewayRouteController(t *testing.T) {
 	origin := &aigv1a1.AIGatewayRoute{
 		ObjectMeta: metav1.ObjectMeta{Name: "myroute", Namespace: "default"},
 		Spec: aigv1a1.AIGatewayRouteSpec{
-			TargetRefs: []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName{
+			ParentRefs: []gwapiv1a2.ParentReference{
 				{
-					LocalPolicyTargetReference: gwapiv1a2.LocalPolicyTargetReference{
-						Name: gatewayName, Kind: "Gateway", Group: "gateway.networking.k8s.io",
-					},
+					Name:  gatewayName,
+					Kind:  ptr.To(gwapiv1a2.Kind("Gateway")),
+					Group: ptr.To(gwapiv1a2.Group("gateway.networking.k8s.io")),
 				},
 			},
 			Rules: []aigv1a1.AIGatewayRouteRule{
@@ -416,11 +407,6 @@ func TestBackendSecurityPolicyController(t *testing.T) {
 					Name: gwapiv1.ObjectName("mybackend"),
 					Port: ptr.To[gwapiv1.PortNumber](8080),
 				},
-				BackendSecurityPolicyRef: &gwapiv1.LocalObjectReference{
-					Kind:  "BackendSecurityPolicy",
-					Group: "aigateway.envoyproxy.io",
-					Name:  gwapiv1.ObjectName(backendSecurityPolicyName),
-				},
 			},
 		},
 		{
@@ -430,11 +416,6 @@ func TestBackendSecurityPolicyController(t *testing.T) {
 				BackendRef: gwapiv1.BackendObjectReference{
 					Name: gwapiv1.ObjectName("mybackend"),
 					Port: ptr.To[gwapiv1.PortNumber](8080),
-				},
-				BackendSecurityPolicyRef: &gwapiv1.LocalObjectReference{
-					Kind:  "BackendSecurityPolicy",
-					Group: "aigateway.envoyproxy.io",
-					Name:  gwapiv1.ObjectName(backendSecurityPolicyName),
 				},
 			},
 		},
@@ -458,6 +439,18 @@ func TestBackendSecurityPolicyController(t *testing.T) {
 				APIKey: &aigv1a1.BackendSecurityPolicyAPIKey{
 					SecretRef: &gwapiv1.SecretObjectReference{
 						Name: "secret",
+					},
+				},
+				TargetRefs: []gwapiv1a2.LocalPolicyTargetReference{
+					{
+						Name:  "backend1",
+						Kind:  gwapiv1a2.Kind("AIServiceBackend"),
+						Group: "aigateway.envoyproxy.io",
+					},
+					{
+						Name:  "backend2",
+						Kind:  gwapiv1a2.Kind("AIServiceBackend"),
+						Group: "aigateway.envoyproxy.io",
 					},
 				},
 			},
@@ -569,11 +562,11 @@ func TestAIServiceBackendController(t *testing.T) {
 		{
 			ObjectMeta: metav1.ObjectMeta{Name: "myroute", Namespace: aiServiceBackendNamespace},
 			Spec: aigv1a1.AIGatewayRouteSpec{
-				TargetRefs: []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName{
+				ParentRefs: []gwapiv1a2.ParentReference{
 					{
-						LocalPolicyTargetReference: gwapiv1a2.LocalPolicyTargetReference{
-							Name: "gtw", Kind: "Gateway", Group: "gateway.networking.k8s.io",
-						},
+						Name:  "gtw",
+						Kind:  ptr.To(gwapiv1a2.Kind("Gateway")),
+						Group: ptr.To(gwapiv1a2.Group("gateway.networking.k8s.io")),
 					},
 				},
 				Rules: []aigv1a1.AIGatewayRouteRule{
@@ -587,11 +580,11 @@ func TestAIServiceBackendController(t *testing.T) {
 		{
 			ObjectMeta: metav1.ObjectMeta{Name: "myroute2", Namespace: aiServiceBackendNamespace},
 			Spec: aigv1a1.AIGatewayRouteSpec{
-				TargetRefs: []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName{
+				ParentRefs: []gwapiv1a2.ParentReference{
 					{
-						LocalPolicyTargetReference: gwapiv1a2.LocalPolicyTargetReference{
-							Name: "gtw", Kind: "Gateway", Group: "gateway.networking.k8s.io",
-						},
+						Name:  "gtw",
+						Kind:  ptr.To(gwapiv1a2.Kind("Gateway")),
+						Group: ptr.To(gwapiv1a2.Group("gateway.networking.k8s.io")),
 					},
 				},
 				Rules: []aigv1a1.AIGatewayRouteRule{

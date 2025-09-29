@@ -47,9 +47,7 @@ func TestAIGatewayRouteController_Reconcile(t *testing.T) {
 	// Make sure the finalizer is added.
 	require.NoError(t, err)
 	require.Contains(t, current.Finalizers, aiGatewayControllerFinalizer, "Finalizer should be added")
-	current.Spec.TargetRefs = []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName{
-		{LocalPolicyTargetReference: gwapiv1a2.LocalPolicyTargetReference{Name: "mytarget"}},
-	}
+	current.Spec.ParentRefs = []gwapiv1a2.ParentReference{{Name: "mytarget"}}
 	err = fakeClient.Update(t.Context(), &current)
 	require.NoError(t, err)
 	_, err = c.Reconcile(t.Context(), reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: "myroute"}})
@@ -61,8 +59,8 @@ func TestAIGatewayRouteController_Reconcile(t *testing.T) {
 
 	require.Equal(t, "myroute", updated.Name)
 	require.Equal(t, "default", updated.Namespace)
-	require.Len(t, updated.Spec.TargetRefs, 1)
-	require.Equal(t, "mytarget", string(updated.Spec.TargetRefs[0].Name))
+	require.Len(t, updated.Spec.ParentRefs, 1)
+	require.Equal(t, "mytarget", string(updated.Spec.ParentRefs[0].Name))
 
 	// Test the case where the AIGatewayRoute is being deleted.
 	err = fakeClient.Delete(t.Context(), &aigv1a1.AIGatewayRoute{ObjectMeta: metav1.ObjectMeta{Name: "myroute", Namespace: "default"}})
@@ -213,11 +211,11 @@ func Test_newHTTPRoute(t *testing.T) {
 			aiGatewayRoute := &aigv1a1.AIGatewayRoute{
 				ObjectMeta: metav1.ObjectMeta{Name: "myroute", Namespace: ns},
 				Spec: aigv1a1.AIGatewayRouteSpec{
-					TargetRefs: []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName{
+					ParentRefs: []gwapiv1a2.ParentReference{
 						{
-							LocalPolicyTargetReference: gwapiv1a2.LocalPolicyTargetReference{
-								Name: "gtw", Kind: "Gateway", Group: "gateway.networking.k8s.io",
-							},
+							Name:  "gtw",
+							Kind:  ptr.To(gwapiv1a2.Kind("Gateway")),
+							Group: ptr.To(gwapiv1a2.Group("gateway.networking.k8s.io")),
 						},
 					},
 					Rules: []aigv1a1.AIGatewayRouteRule{
@@ -554,4 +552,66 @@ func Test_newHTTPRoute_LabelAndAnnotationPropagation(t *testing.T) {
 	// Verify old labels and annotations are still present.
 	require.Equal(t, "value-2", httpRoute.Labels["custom-label-2"])
 	require.Equal(t, "ann-value-2", httpRoute.Annotations["custom-annotation-2"])
+}
+
+func TestAIGatewayRouteController_syncGateways_NamespaceDetermination(t *testing.T) {
+	fakeClient := requireNewFakeClientWithIndexes(t)
+	eventCh := internaltesting.NewControllerEventChan[*gwapiv1.Gateway]()
+
+	// Create test gateways in different namespaces.
+	gateway1 := &gwapiv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{Name: "gateway1", Namespace: "default"},
+	}
+	gateway2 := &gwapiv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{Name: "gateway2", Namespace: "other-ns"},
+	}
+
+	err := fakeClient.Create(t.Context(), gateway1)
+	require.NoError(t, err)
+	err = fakeClient.Create(t.Context(), gateway2)
+	require.NoError(t, err)
+
+	// Create controller.
+	c := NewAIGatewayRouteController(fakeClient, nil, logr.Discard(), eventCh.Ch, "/v1")
+
+	// Test AIGatewayRoute with parent references having different namespace configurations.
+	aiGatewayRoute := &aigv1a1.AIGatewayRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-route",
+			Namespace: "default", // Route's namespace.
+		},
+		Spec: aigv1a1.AIGatewayRouteSpec{
+			ParentRefs: []gwapiv1a2.ParentReference{
+				{
+					Name: "gateway1",
+					// No namespace specified - should use route's namespace ("default").
+				},
+				{
+					Name:      "gateway2",
+					Namespace: ptr.To[gwapiv1a2.Namespace]("other-ns"), // Explicit namespace.
+				},
+			},
+		},
+	}
+
+	// Call syncGateways.
+	err = c.syncGateways(t.Context(), aiGatewayRoute)
+	require.NoError(t, err)
+
+	// Verify that events were sent for both gateways.
+	// We should receive 2 events (one for each parent reference).
+	gateways := eventCh.RequireItemsEventually(t, 2)
+	require.Len(t, gateways, 2)
+
+	// Extract the gateway names and namespaces from the events.
+	gw1 := gateways[0]
+	gw2 := gateways[1]
+
+	// Verify first gateway: gateway1 in default namespace (inherited from route).
+	require.Equal(t, "gateway1", gw1.Name)
+	require.Equal(t, "default", gw1.Namespace)
+
+	// Verify second gateway: gateway2 in other-ns (explicitly specified).
+	require.Equal(t, "gateway2", gw2.Name)
+	require.Equal(t, "other-ns", gw2.Namespace)
 }

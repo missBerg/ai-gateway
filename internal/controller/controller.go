@@ -75,6 +75,8 @@ type Options struct {
 	RootPrefix string
 	// ExtProcExtraEnvVars is the semicolon-separated key=value pairs for extra environment variables in extProc container.
 	ExtProcExtraEnvVars string
+	// ExtProcMaxRecvMsgSize is the maximum message size in bytes that the gRPC server can receive for extProc.
+	ExtProcMaxRecvMsgSize int
 }
 
 // StartControllers starts the controllers for the AI Gateway.
@@ -185,6 +187,7 @@ func StartControllers(ctx context.Context, mgr manager.Manager, config *rest.Con
 			options.MetricsRequestHeaderLabels,
 			options.RootPrefix,
 			options.ExtProcExtraEnvVars,
+			options.ExtProcMaxRecvMsgSize,
 		))
 		mgr.GetWebhookServer().Register("/mutate", &webhook.Admission{Handler: h})
 	}
@@ -217,9 +220,6 @@ const (
 	// k8sClientIndexBackendToReferencingAIGatewayRoute is the index name that maps from a Backend to the
 	// AIGatewayRoute that references it.
 	k8sClientIndexBackendToReferencingAIGatewayRoute = "BackendToReferencingAIGatewayRoute"
-	// k8sClientIndexBackendSecurityPolicyToReferencingAIServiceBackend is the index name that maps from a BackendSecurityPolicy
-	// to the AIServiceBackend that references it.
-	k8sClientIndexBackendSecurityPolicyToReferencingAIServiceBackend = "BackendSecurityPolicyToReferencingAIServiceBackend"
 	// k8sClientIndexAIServiceBackendToTargetingBackendSecurityPolicy is the index name that maps from an AIServiceBackend
 	// to the BackendSecurityPolicy whose targetRefs contains the AIServiceBackend.
 	k8sClientIndexAIServiceBackendToTargetingBackendSecurityPolicy = "AIServiceBackendToTargetingBackendSecurityPolicy"
@@ -237,11 +237,6 @@ func ApplyIndexing(ctx context.Context, indexer func(ctx context.Context, obj cl
 	if err != nil {
 		return fmt.Errorf("failed to create index from Gateway to AIGatewayRoute: %w", err)
 	}
-	err = indexer(ctx, &aigv1a1.AIServiceBackend{},
-		k8sClientIndexBackendSecurityPolicyToReferencingAIServiceBackend, aiServiceBackendIndexFunc)
-	if err != nil {
-		return fmt.Errorf("failed to create index from BackendSecurityPolicy to AIServiceBackend: %w", err)
-	}
 	err = indexer(ctx, &aigv1a1.BackendSecurityPolicy{},
 		k8sClientIndexSecretToReferencingBackendSecurityPolicy, backendSecurityPolicyIndexFunc)
 	if err != nil {
@@ -258,9 +253,6 @@ func ApplyIndexing(ctx context.Context, indexer func(ctx context.Context, obj cl
 func aiGatewayRouteToAttachedGatewayIndexFunc(o client.Object) []string {
 	aiGatewayRoute := o.(*aigv1a1.AIGatewayRoute)
 	var ret []string
-	for _, ref := range aiGatewayRoute.Spec.TargetRefs {
-		ret = append(ret, fmt.Sprintf("%s.%s", ref.Name, aiGatewayRoute.Namespace))
-	}
 	for _, ref := range aiGatewayRoute.Spec.ParentRefs {
 		// Use the namespace from parentRef if specified, otherwise use the route's namespace.
 		namespace := aiGatewayRoute.Namespace
@@ -280,15 +272,6 @@ func aiGatewayRouteIndexFunc(o client.Object) []string {
 			key := fmt.Sprintf("%s.%s", backend.Name, aiGatewayRoute.Namespace)
 			ret = append(ret, key)
 		}
-	}
-	return ret
-}
-
-func aiServiceBackendIndexFunc(o client.Object) []string {
-	aiServiceBackend := o.(*aigv1a1.AIServiceBackend)
-	var ret []string
-	if ref := aiServiceBackend.Spec.BackendSecurityPolicyRef; ref != nil {
-		ret = append(ret, fmt.Sprintf("%s.%s", ref.Name, aiServiceBackend.Namespace))
 	}
 	return ret
 }

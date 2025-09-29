@@ -23,10 +23,21 @@ import (
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
 
-	"github.com/envoyproxy/ai-gateway/filterapi"
 	"github.com/envoyproxy/ai-gateway/internal/apischema/openai"
+	"github.com/envoyproxy/ai-gateway/internal/filterapi"
 	"github.com/envoyproxy/ai-gateway/tests/internal/testupstreamlib"
 )
+
+// failIf5xx because 5xx errors are likely a sign of a broken ExtProc or Envoy.
+func failIf5xx(t *testing.T, resp *http.Response, was5xx *bool) {
+	if resp.StatusCode >= 500 && resp.StatusCode < 600 {
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		*was5xx = true
+		t.Fatalf("received %d response with body: %s", resp.StatusCode, string(body))
+	}
+}
 
 // TestWithTestUpstream tests the end-to-end flow of the external processor with Envoy and the test upstream.
 //
@@ -61,7 +72,6 @@ func TestWithTestUpstream(t *testing.T) {
 	env := startTestEnvironment(t, string(configBytes), true, false)
 
 	listenerPort := env.EnvoyListenerPort()
-	metricsPort := env.ExtProcMetricsPort()
 
 	expectedModels := openai.ModelList{
 		Object: "list",
@@ -72,6 +82,7 @@ func TestWithTestUpstream(t *testing.T) {
 		},
 	}
 
+	was5xx := false
 	for _, tc := range []struct {
 		// name is the name of the test case.
 		name,
@@ -196,9 +207,9 @@ func TestWithTestUpstream(t *testing.T) {
 			method:          http.MethodPost,
 			requestBody:     `{"model":"something","messages":[{"role":"system","content":"You are a chatbot."}]}`,
 			expPath:         "/openai/deployments/something/chat/completions",
-			responseBody:    `{"choices":[{"message":{"content":"This is a test."}}]}`,
+			responseBody:    `{"model":"gpt-4o-2024-08-01","choices":[{"message":{"content":"This is a test."}}]}`,
 			expStatus:       http.StatusOK,
-			expResponseBody: `{"choices":[{"message":{"content":"This is a test."}}]}`,
+			expResponseBody: `{"model":"gpt-4o-2024-08-01","choices":[{"message":{"content":"This is a test."}}]}`,
 		},
 		{
 			name:            "gcp-vertexai - /v1/chat/completions",
@@ -288,6 +299,36 @@ data: {"choices":[{"index":0,"delta":{"content":" seems like you're testing my a
 data: {"choices":[{"index":0,"delta":{"content":"","role":"assistant"},"finish_reason":"tool_calls"}],"object":"chat.completion.chunk"}
 
 data: {"object":"chat.completion.chunk","usage":{"completion_tokens":36,"prompt_tokens":41,"total_tokens":77}}
+
+data: [DONE]
+`,
+		},
+		{
+			name:         "aws-bedrock - /v1/chat/completions - streaming with thinking config",
+			backend:      "aws-bedrock",
+			path:         "/v1/chat/completions",
+			responseType: "aws-event-stream",
+			method:       http.MethodPost,
+			requestBody: `{
+		"model":"something",
+		"messages":[{"role":"system","content":"You are a chatbot."}],
+		"stream": true,
+		"thinking": {"type": "enabled", "budget_tokens": 4096}
+	}`,
+			expRequestBody: `{"additionalModelRequestFields":{"thinking":{"budget_tokens":4096,"type":"enabled"}},"inferenceConfig":{},"messages":[],"system":[{"text":"You are a chatbot."}]}`,
+			expPath:        "/model/something/converse-stream",
+			responseBody: `{"role":"assistant"}
+	{"delta":{"reasoningContent":{"text":"First, I'll start by acknowledging the user..."}}}
+	{"delta":{"text":"Hello!"}}
+	{"stopReason":"end_turn"}`,
+			expStatus: http.StatusOK,
+			expResponseBody: `data: {"choices":[{"index":0,"delta":{"content":"","role":"assistant"}}],"object":"chat.completion.chunk"}
+
+data: {"choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":{"text":"First, I'll start by acknowledging the user..."}}}],"object":"chat.completion.chunk"}
+
+data: {"choices":[{"index":0,"delta":{"content":"Hello!","role":"assistant"}}],"object":"chat.completion.chunk"}
+
+data: {"choices":[{"index":0,"delta":{"content":"","role":"assistant"},"finish_reason":"stop"}],"object":"chat.completion.chunk"}
 
 data: [DONE]
 `,
@@ -783,6 +824,9 @@ data: {"type": "message_stop"}
 					return false
 				}
 				defer func() { _ = resp.Body.Close() }()
+
+				failIf5xx(t, resp, &was5xx)
+
 				if resp.StatusCode != tc.expStatus {
 					t.Logf("unexpected status code: %d", resp.StatusCode)
 					return false
@@ -818,6 +862,10 @@ data: {"type": "message_stop"}
 	}
 
 	t.Run("stream non blocking", func(t *testing.T) {
+		if was5xx {
+			return // rather than also failing subsequent tests, which confuses root cause.
+		}
+
 		// This receives a stream of 20 event messages. The testuptream server sleeps 200 ms between each message.
 		// Therefore, if envoy fails to process the response in a streaming manner, the test will fail taking more than 4 seconds.
 		listenerAddress := fmt.Sprintf("http://localhost:%d", listenerPort)
@@ -880,20 +928,6 @@ data: {"type": "message_stop"}
 		}
 		require.True(t, asserted)
 		require.NoError(t, stream.Err())
-	})
-	t.Run("metrics", func(t *testing.T) {
-		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fmt.Sprintf("http://localhost:%d/metrics", metricsPort), nil)
-		require.NoError(t, err)
-
-		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer func() { _ = resp.Body.Close() }()
-		body, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		require.Containsf(t, string(body),
-			`gen_ai_server_time_per_output_token_seconds_bucket{gen_ai_operation_name="chat",gen_ai_request_model="something",gen_ai_system_name="aws.bedrock",otel_scope_name="envoyproxy/ai-gateway"`,
-			"expected metrics in response body:\n%s", string(body),
-		)
 	})
 }
 

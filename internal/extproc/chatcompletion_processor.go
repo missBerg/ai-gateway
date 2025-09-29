@@ -6,12 +6,10 @@
 package extproc
 
 import (
-	"bytes"
-	"compress/gzip"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"strconv"
 
@@ -21,10 +19,11 @@ import (
 	"github.com/tidwall/sjson"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	"github.com/envoyproxy/ai-gateway/filterapi"
 	"github.com/envoyproxy/ai-gateway/internal/apischema/openai"
 	"github.com/envoyproxy/ai-gateway/internal/extproc/backendauth"
+	"github.com/envoyproxy/ai-gateway/internal/extproc/headermutator"
 	"github.com/envoyproxy/ai-gateway/internal/extproc/translator"
+	"github.com/envoyproxy/ai-gateway/internal/filterapi"
 	"github.com/envoyproxy/ai-gateway/internal/internalapi"
 	"github.com/envoyproxy/ai-gateway/internal/llmcostcel"
 	"github.com/envoyproxy/ai-gateway/internal/metrics"
@@ -109,7 +108,7 @@ func (c *chatCompletionProcessorRouterFilter) ProcessResponseBody(ctx context.Co
 
 // ProcessRequestBody implements [Processor.ProcessRequestBody].
 func (c *chatCompletionProcessorRouterFilter) ProcessRequestBody(ctx context.Context, rawBody *extprocv3.HttpBody) (*extprocv3.ProcessingResponse, error) {
-	model, body, err := parseOpenAIChatCompletionBody(rawBody)
+	originalModel, body, err := parseOpenAIChatCompletionBody(rawBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse request body: %w", err)
 	}
@@ -129,12 +128,12 @@ func (c *chatCompletionProcessorRouterFilter) ProcessRequestBody(ctx context.Con
 		// setting this option to false means that clients are trying to escape that rule.
 	}
 
-	c.requestHeaders[c.config.modelNameHeaderKey] = model
+	c.requestHeaders[c.config.modelNameHeaderKey] = originalModel
 
 	var additionalHeaders []*corev3.HeaderValueOption
 	additionalHeaders = append(additionalHeaders, &corev3.HeaderValueOption{
-		// Set the model name to the request header with the key `x-ai-eg-model`.
-		Header: &corev3.HeaderValue{Key: c.config.modelNameHeaderKey, RawValue: []byte(model)},
+		// Set the original model to the request header with the key `x-ai-eg-model`.
+		Header: &corev3.HeaderValue{Key: c.config.modelNameHeaderKey, RawValue: []byte(originalModel)},
 	}, &corev3.HeaderValueOption{
 		Header: &corev3.HeaderValue{Key: originalPathHeader, RawValue: []byte(c.requestHeaders[":path"])},
 	})
@@ -174,9 +173,10 @@ type chatCompletionProcessorUpstreamFilter struct {
 	requestHeaders         map[string]string
 	responseHeaders        map[string]string
 	responseEncoding       string
-	modelNameOverride      string
+	modelNameOverride      internalapi.ModelNameOverride
 	backendName            string
 	handler                backendauth.Handler
+	headerMutator          *headermutator.HeaderMutator
 	originalRequestBodyRaw []byte
 	originalRequestBody    *openai.ChatCompletionRequest
 	translator             translator.OpenAIChatCompletionTranslator
@@ -217,7 +217,7 @@ func (c *chatCompletionProcessorUpstreamFilter) selectTranslator(out filterapi.V
 //
 // At the upstream filter, we already have the original request body at request headers phase.
 // So, we simply do the translation and upstream auth at this stage, and send them back to Envoy
-// with the status CONTINUE_AND_REPLACE. This will allows Envoy to not send the request body again
+// with the status CONTINUE_AND_REPLACE. This allows Envoy to not send the request body again
 // to the extproc.
 func (c *chatCompletionProcessorUpstreamFilter) ProcessRequestHeaders(ctx context.Context, _ *corev3.HeaderMap) (res *extprocv3.ProcessingResponse, err error) {
 	defer func() {
@@ -228,7 +228,9 @@ func (c *chatCompletionProcessorUpstreamFilter) ProcessRequestHeaders(ctx contex
 
 	// Start tracking metrics for this request.
 	c.metrics.StartRequest(c.requestHeaders)
-	c.metrics.SetModel(c.requestHeaders[c.config.modelNameHeaderKey])
+	// Set the request model for metrics from the original model or override if applied.
+	reqModel := cmp.Or(c.requestHeaders[c.config.modelNameHeaderKey], c.originalRequestBody.Model)
+	c.metrics.SetRequestModel(reqModel)
 
 	// We force the body mutation in the following cases:
 	// * The request is a retry request because the body mutation might have happened the previous iteration.
@@ -239,13 +241,23 @@ func (c *chatCompletionProcessorUpstreamFilter) ProcessRequestHeaders(ctx contex
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform request: %w", err)
 	}
+
 	if headerMutation == nil {
 		headerMutation = &extprocv3.HeaderMutation{}
-	} else {
-		for _, h := range headerMutation.SetHeaders {
-			c.requestHeaders[h.Header.Key] = string(h.Header.RawValue)
+	}
+
+	// Apply header mutations from the route and also restore original headers on retry.
+	if h := c.headerMutator; h != nil {
+		if hm := c.headerMutator.Mutate(c.requestHeaders, c.onRetry); hm != nil {
+			headerMutation.RemoveHeaders = append(headerMutation.RemoveHeaders, hm.RemoveHeaders...)
+			headerMutation.SetHeaders = append(headerMutation.SetHeaders, hm.SetHeaders...)
 		}
 	}
+
+	for _, h := range headerMutation.SetHeaders {
+		c.requestHeaders[h.Header.Key] = string(h.Header.RawValue)
+	}
+
 	if h := c.handler; h != nil {
 		if err = h.Do(ctx, c.requestHeaders, headerMutation, bodyMutation); err != nil {
 			return nil, fmt.Errorf("failed to do auth request: %w", err)
@@ -304,27 +316,28 @@ func (c *chatCompletionProcessorUpstreamFilter) ProcessResponseHeaders(ctx conte
 
 // ProcessResponseBody implements [Processor.ProcessResponseBody].
 func (c *chatCompletionProcessorUpstreamFilter) ProcessResponseBody(ctx context.Context, body *extprocv3.HttpBody) (res *extprocv3.ProcessingResponse, err error) {
+	recordRequestCompletionErr := false
 	defer func() {
-		c.metrics.RecordRequestCompletion(ctx, err == nil, c.requestHeaders)
-	}()
-	var br io.Reader
-	var isGzip bool
-	switch c.responseEncoding {
-	case "gzip":
-		br, err = gzip.NewReader(bytes.NewReader(body.Body))
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode gzip: %w", err)
+		if err != nil || recordRequestCompletionErr {
+			c.metrics.RecordRequestCompletion(ctx, false, c.requestHeaders)
+			return
 		}
-		isGzip = true
-	default:
-		br = bytes.NewReader(body.Body)
+		if body.EndOfStream {
+			c.metrics.RecordRequestCompletion(ctx, true, c.requestHeaders)
+		}
+	}()
+
+	// Decompress the body if needed using common utility.
+	decodingResult, err := decodeContentIfNeeded(body.Body, c.responseEncoding)
+	if err != nil {
+		return nil, err
 	}
 
 	// Assume all responses have a valid status code header.
 	if code, _ := strconv.Atoi(c.responseHeaders[":status"]); !isGoodStatusCode(code) {
 		var headerMutation *extprocv3.HeaderMutation
 		var bodyMutation *extprocv3.BodyMutation
-		headerMutation, bodyMutation, err = c.translator.ResponseError(c.responseHeaders, br)
+		headerMutation, bodyMutation, err = c.translator.ResponseError(c.responseHeaders, decodingResult.reader)
 		if err != nil {
 			return nil, fmt.Errorf("failed to transform response error: %w", err)
 		}
@@ -335,6 +348,8 @@ func (c *chatCompletionProcessorUpstreamFilter) ProcessResponseBody(ctx context.
 			}
 			c.span.EndSpanOnError(code, b)
 		}
+		// Mark so the deferred handler records failure.
+		recordRequestCompletionErr = true
 		return &extprocv3.ProcessingResponse{
 			Response: &extprocv3.ProcessingResponse_ResponseBody{
 				ResponseBody: &extprocv3.BodyResponse{
@@ -347,22 +362,13 @@ func (c *chatCompletionProcessorUpstreamFilter) ProcessResponseBody(ctx context.
 		}, nil
 	}
 
-	headerMutation, bodyMutation, tokenUsage, err := c.translator.ResponseBody(c.responseHeaders, br, body.EndOfStream, c.span)
+	headerMutation, bodyMutation, tokenUsage, responseModel, err := c.translator.ResponseBody(c.responseHeaders, decodingResult.reader, body.EndOfStream, c.span)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform response: %w", err)
 	}
-	if bodyMutation != nil && isGzip {
-		if headerMutation == nil {
-			headerMutation = &extprocv3.HeaderMutation{}
-		}
-		// TODO: this is a hotfix, we should update this to recompress since its in the header
-		// If the response was gzipped, ensure we remove the content-encoding header.
-		//
-		// This is only needed when the transformation is actually modifying the body. When the backend
-		// is in OpenAI format (and it's the first try before any retry), the response body is not modified,
-		// so we don't need to remove the header in that case.
-		headerMutation.RemoveHeaders = append(headerMutation.RemoveHeaders, "content-encoding")
-	}
+
+	// Remove content-encoding header if original body encoded but was mutated in the processor.
+	headerMutation = removeContentEncodingIfNeeded(headerMutation, bodyMutation, decodingResult.isEncoded)
 
 	resp := &extprocv3.ProcessingResponse{
 		Response: &extprocv3.ProcessingResponse_ResponseBody{
@@ -375,25 +381,39 @@ func (c *chatCompletionProcessorUpstreamFilter) ProcessResponseBody(ctx context.
 		},
 	}
 
+	// Update accumulated token usage.
 	// TODO: we need to investigate if we need to accumulate the token usage for streaming responses.
-	c.costs.InputTokens += tokenUsage.InputTokens
-	c.costs.OutputTokens += tokenUsage.OutputTokens
-	c.costs.TotalTokens += tokenUsage.TotalTokens
+	if c.stream {
+		// For streaming, translators report cumulative usage; keep the latest totals.
+		if tokenUsage != (translator.LLMTokenUsage{}) {
+			c.costs = tokenUsage
+		}
+	} else {
+		// Non-streaming: single-shot totals.
+		c.costs = tokenUsage
+	}
 
-	// Update metrics with token usage.
-	c.metrics.RecordTokenUsage(ctx, tokenUsage.InputTokens, tokenUsage.OutputTokens, tokenUsage.TotalTokens, c.requestHeaders)
+	// Set the response model for metrics
+	c.metrics.SetResponseModel(responseModel)
+
+	// Record metrics.
 	if c.stream {
 		// Token latency is only recorded for streaming responses, otherwise it doesn't make sense since
 		// these metrics are defined as a difference between the two output events.
-		c.metrics.RecordTokenLatency(ctx, tokenUsage.OutputTokens, c.requestHeaders)
-
+		c.metrics.RecordTokenLatency(ctx, tokenUsage.OutputTokens, body.EndOfStream, c.requestHeaders)
+		// Emit usage once at end-of-stream using final totals.
+		if body.EndOfStream {
+			c.metrics.RecordTokenUsage(ctx, c.costs.InputTokens, c.costs.OutputTokens, c.requestHeaders)
+		}
 		// TODO: if c.forcedStreamOptionIncludeUsage is true, we should not include usage in the response body since
 		// that's what the clients would expect. However, it is a little bit tricky as we simply just reading the streaming
 		// chunk by chunk, we only want to drop a specific line before the last chunk.
+	} else {
+		c.metrics.RecordTokenUsage(ctx, tokenUsage.InputTokens, tokenUsage.OutputTokens, c.requestHeaders)
 	}
 
 	if body.EndOfStream && len(c.config.requestCosts) > 0 {
-		metadata, err := buildDynamicMetadata(c.config, &c.costs, c.requestHeaders, c.modelNameOverride, c.backendName)
+		metadata, err := buildDynamicMetadata(c.config, &c.costs, c.requestHeaders, c.backendName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build dynamic metadata: %w", err)
 		}
@@ -413,7 +433,9 @@ func (c *chatCompletionProcessorUpstreamFilter) ProcessResponseBody(ctx context.
 // SetBackend implements [Processor.SetBackend].
 func (c *chatCompletionProcessorUpstreamFilter) SetBackend(ctx context.Context, b *filterapi.Backend, backendHandler backendauth.Handler, routeProcessor Processor) (err error) {
 	defer func() {
-		c.metrics.RecordRequestCompletion(ctx, err == nil, c.requestHeaders)
+		if err != nil {
+			c.metrics.RecordRequestCompletion(ctx, false, c.requestHeaders)
+		}
 	}()
 	pickedEndpoint, isEndpointPicker := c.requestHeaders[internalapi.EndpointPickerHeaderKey]
 	rp, ok := routeProcessor.(*chatCompletionProcessorRouterFilter)
@@ -428,7 +450,8 @@ func (c *chatCompletionProcessorUpstreamFilter) SetBackend(ctx context.Context, 
 		return fmt.Errorf("failed to select translator: %w", err)
 	}
 	c.handler = backendHandler
-	// Sync header with backend model so header-derived labels/CEL use the actual model.
+	c.headerMutator = headermutator.NewHeaderMutator(b.HeaderMutation, rp.requestHeaders)
+	// Header-derived labels/CEL must be able to see the overridden request model.
 	if c.modelNameOverride != "" {
 		c.requestHeaders[c.config.modelNameHeaderKey] = c.modelNameOverride
 	}
@@ -495,7 +518,11 @@ func buildContentLengthDynamicMetadataOnRequest(config *processorConfig, content
 	return metadata
 }
 
-func buildDynamicMetadata(config *processorConfig, costs *translator.LLMTokenUsage, requestHeaders map[string]string, modelNameOverride, backendName string) (*structpb.Struct, error) {
+// buildDynamicMetadata creates metadata for rate limiting and cost tracking.
+// This function is called by the upstream filter only at the end of the stream (body.EndOfStream=true)
+// when the response is successfully completed. It is not called for failed requests or partial responses.
+// The metadata includes token usage costs and model information for downstream processing.
+func buildDynamicMetadata(config *processorConfig, costs *translator.LLMTokenUsage, requestHeaders map[string]string, backendName string) (*structpb.Struct, error) {
 	metadata := make(map[string]*structpb.Value, len(config.requestCosts)+2)
 	for i := range config.requestCosts {
 		rc := &config.requestCosts[i]
@@ -526,9 +553,10 @@ func buildDynamicMetadata(config *processorConfig, costs *translator.LLMTokenUsa
 		metadata[rc.MetadataKey] = &structpb.Value{Kind: &structpb.Value_NumberValue{NumberValue: float64(cost)}}
 	}
 
-	if modelNameOverride != "" {
-		metadata["model_name_override"] = &structpb.Value{Kind: &structpb.Value_StringValue{StringValue: modelNameOverride}}
-	}
+	// Add the actual request model that was used (after any backend overrides were applied).
+	// At this point, the header contains the final model that was sent to the upstream.
+	actualModel := requestHeaders[config.modelNameHeaderKey]
+	metadata["model_name_override"] = &structpb.Value{Kind: &structpb.Value_StringValue{StringValue: actualModel}}
 
 	if backendName != "" {
 		metadata["backend_name"] = &structpb.Value{Kind: &structpb.Value_StringValue{StringValue: backendName}}
