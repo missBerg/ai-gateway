@@ -2,33 +2,33 @@
   "series": {
     "version": "v0.4",
     "title": "Envoy AI Gateway v0.4.x",
-    "subtitle": "Major release introducing Model Context Protocol (MCP) Gateway, OpenAI Image Generation, first-party Anthropic support, guided decoding for GCP Vertex AI/Gemini, cross-namespace references, enhanced authentication, and comprehensive observability improvements.",
+    "subtitle": "Major release introducing Model Context Protocol (MCP) Gateway, OpenAI Image Generation, first-party Anthropic support, guided output decoding for GCP Vertex AI/Gemini, cross-namespace references, enhanced authentication, and comprehensive observability improvements.",
     "badge": "Latest",
     "badgeType": "milestone"
   },
   "releases": [
     {
       "version": "v0.4.0",
-      "date": "January 2025",
+      "date": "October 30, 2025",
       "type": "minor",
       "tags": [
         { "text": "MCP Gateway", "type": "feature" },
         { "text": "Image Generation", "type": "feature" },
         { "text": "First-Party Anthropic Support", "type": "feature" },
-        { "text": "Guided Decoding", "type": "feature" },
+        { "text": "Guided Output Decoding", "type": "feature" },
         { "text": "Cross-Namespace Support", "type": "feature" },
         { "text": "Enhanced Auth", "type": "feature" },
         { "text": "Client SDK", "type": "feature" },
         { "text": "InferencePool v1", "type": "feature" }
       ],
-      "overview": "Envoy AI Gateway v0.4.0 is a major release introducing Model Context Protocol (MCP) Gateway support with OAuth and API key authentication, OpenAI Image Generation API support, first-party Anthropic provider integration, guided decoding for GCP Vertex AI/Gemini models, cross-namespace resource references with ReferenceGrant, enhanced AWS and Azure authentication, type-safe Kubernetes client SDK, InferencePool v1 support, and comprehensive observability improvements. This release also includes route-level header mutations, cached token tracking, and standalone CLI auto-configuration for multiple providers.",
+      "overview": "Envoy AI Gateway v0.4.0 is a major release introducing Model Context Protocol (MCP) Gateway support with OAuth and API key authentication, OpenAI Image Generation API support, first-party Anthropic provider integration, guided output decoding for GCP Vertex AI/Gemini models, cross-namespace resource references with ReferenceGrant, enhanced AWS and Azure authentication, type-safe Kubernetes client SDK, InferencePool v1 support, and comprehensive observability improvements. This release also includes route-level header mutations, cached token tracking, and standalone CLI auto-configuration for multiple providers.",
       "features": [
         {
           "title": "Model Context Protocol (MCP) Gateway",
           "items": [
             {
-              "title": "New MCPRoute CRD",
-              "description": "Introduces MCPRoute custom resource for routing MCP requests to backend MCP servers, enabling unified AI API for multiple MCP backends."
+              "title": "New <code>MCPRoute</code> CRD",
+              "description": "Introduces <code>MCPRoute</code> custom resource for routing MCP requests to backend MCP servers, enabling unified AI API for multiple MCP backends."
             },
             {
               "title": "Complete MCP spec implementation",
@@ -56,7 +56,7 @@
           "title": "OpenAI Image Generation Support",
           "items": [
             {
-              "title": "Complete /v1/images/generations endpoint",
+              "title": "Complete <code>/v1/images/generations</code> endpoint",
               "description": "End-to-end support for OpenAI's image generation API including request/response translation, Brotli encoding/decoding, and full protocol compatibility."
             },
             {
@@ -74,14 +74,14 @@
           "items": [
             {
               "title": "Direct api.anthropic.com support",
-              "description": "Native integration with Anthropic's API at api.anthropic.com, complementing existing GCP Vertex AI Anthropic support."
+              "description": "Native integration with Anthropic's API at <code>api.anthropic.com</code>, complementing existing GCP Vertex AI Anthropic support."
             },
             {
               "title": "Anthropic API key authentication",
-              "description": "Native x-api-key header-based authentication matching Anthropic's API conventions and SDK patterns."
+              "description": "Native <code>x-api-key</code> header-based authentication matching Anthropic's API conventions and SDK patterns."
             },
             {
-              "title": "Passthrough translator with token tracking",
+              "title": "Passthrough translator with token usage tracking",
               "description": "Efficient passthrough translation layer that captures token usage and maintains API compatibility while minimizing overhead."
             },
             {
@@ -91,7 +91,7 @@
           ]
         },
         {
-          "title": "Guided Decoding",
+          "title": "Guided Output Support for GCP Vertex AI/Gemini",
           "items": [
             {
               "title": "Guided regex support",
@@ -111,8 +111,8 @@
           "title": "Cross-Namespace Resource References",
           "items": [
             {
-              "title": "Cross-namespace AIServiceBackend references",
-              "description": "AIGatewayRoute can now reference AIServiceBackend resources in different namespaces, enabling multi-tenant and organizational separation patterns."
+              "title": "Cross-namespace <code>AIServiceBackend</code> references",
+              "description": "<code>AIGatewayRoute</code> can now reference <code>AIServiceBackend</code> resources in different namespaces, enabling multi-tenant and organizational separation patterns."
             },
             {
               "title": "ReferenceGrant validation",
@@ -125,7 +125,7 @@
           ]
         },
         {
-          "title": "Enhanced Authentication",
+          "title": "Enhanced Upstream Authentication",
           "items": [
             {
               "title": "AWS SDK default credential chain",
@@ -133,11 +133,11 @@
             },
             {
               "title": "Azure API key authentication",
-              "description": "Native Azure OpenAI API key authentication using the api-key header, matching Azure SDK conventions and console practices."
+              "description": "Native Azure OpenAI API key authentication using the <code>api-key</code> header, matching Azure SDK conventions and console practices."
             },
             {
               "title": "Azure CLI auto-configuration",
-              "description": "Standalone CLI auto-configuration from AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT environment variables, compatible with Elastic and other Azure-based deployments."
+              "description": "Standalone CLI auto-configuration from <code>AZURE_OPENAI_API_KEY</code> and <code>AZURE_OPENAI_ENDPOINT</code> environment variables, compatible with Elastic and other Azure-based deployments."
             }
           ]
         },
@@ -146,15 +146,52 @@
           "items": [
             {
               "title": "Route-level header mutations",
-              "description": "New headerMutation field in AIGatewayRouteRuleBackendRef enables per-route header manipulation with smart merge logic when combined with backend-level mutations. Essential for GCP provisioned throughput and other advanced routing scenarios."
+              "description": "New <code>headerMutation</code> field in <code>AIGatewayRouteRuleBackendRef</code> enables per-route header manipulation with smart merge logic when combined with backend-level mutations. Essential for GCP provisioned throughput and other advanced routing scenarios."
             },
             {
-              "title": "InferencePool v1 support",
+              "title": "<code>InferencePool</code> v1 support",
               "description": "Updated to Gateway API Inference Extension v1.0, providing stable intelligent endpoint selection with enhanced performance and reliability."
             },
             {
-              "title": "Cached token usage tracking",
+              "title": "Cached token usage tracking for actual token usage reporting",
               "description": "Captures and reports cached token statistics from cloud providers (Anthropic, Bedrock, etc.), providing accurate cost attribution for prompt caching features."
+            }
+          ]
+        },
+        {
+          "title": "Standalone Mode and CLI",
+          "items": [
+            {
+              "title": "Docker image support",
+              "description": "Official Docker images for the aigw CLI published to GitHub Container Registry, enabling containerized standalone deployments with proper health checks and lifecycle management."
+            },
+            {
+              "title": "Multi-provider auto-configuration",
+              "description": "Zero-config standalone mode supporting automatic configuration from <code>OPENAI_API_KEY</code>, <code>AZURE_OPENAI_API_KEY</code>, or <code>ANTHROPIC_API_KEY</code> environment variables with intelligent dialect detection and OpenAI SDK compatibility. Generates complete Envoy configuration automatically."
+            },
+            {
+              "title": "MCP server configuration",
+              "description": "Native MCP support in standalone mode via <code>--mcp-config</code> and <code>--mcp-json</code> flags, enabling unified LLM and MCP server configuration in a single aigw run invocation without Kubernetes."
+            },
+            {
+              "title": "XDG Base Directory standards",
+              "description": "Proper separation of configuration, data, state, and runtime files following XDG Base Directory specification, improving organization and enabling better cleanup and management of aigw state."
+            },
+            {
+              "title": "Environment variable substitution",
+              "description": "Support for environment variable substitution in configuration files, enabling dynamic configuration and secrets management in standalone deployments."
+            },
+            {
+              "title": "Enhanced readiness monitoring",
+              "description": "Improved Envoy readiness detection and status reporting in standalone mode, providing clear insights into when the gateway is ready to accept traffic with better error messages."
+            },
+            {
+              "title": "Consolidated admin server",
+              "description": "Unified admin server on a single port serving both <code>/metrics</code> and <code>/health</code> endpoints, simplifying monitoring and health check configuration."
+            },
+            {
+              "title": "Improved error handling",
+              "description": "<code>aigw</code> CLI now fails fast and exits cleanly if external processor fails to start, preventing silent failures and improving debugging experience."
             }
           ]
         },
@@ -164,14 +201,6 @@
             {
               "title": "Type-safe Kubernetes client SDK",
               "description": "Generated client libraries for all AI Gateway CRDs following standard Kubernetes client-go patterns, enabling developers to build controllers, operators, CLI tools, and custom integrations with type safety."
-            },
-            {
-              "title": "CLI MCP configuration",
-              "description": "New --mcp-config and --mcp-json flags for standalone mode, enabling MCP server configuration alongside LLM providers in a single aigw run invocation."
-            },
-            {
-              "title": "Multi-provider CLI auto-configuration",
-              "description": "Automatic configuration from OPENAI_API_KEY, AZURE_OPENAI_API_KEY, or ANTHROPIC_API_KEY with proper dialect detection and OpenAI SDK environment variable compatibility."
             }
           ]
         },
@@ -179,56 +208,81 @@
           "title": "Observability Enhancements",
           "items": [
             {
+              "title": "OpenTelemetry native metrics export",
+              "description": "Support for OTEL-native metrics export (in addition to Prometheus), enabling integration with Elastic Stack, OTEL-TUI, and other OTEL-native observability systems. Includes console exporter for ad-hoc debugging without external dependencies."
+            },
+            {
               "title": "Embeddings tracing implementation",
               "description": "Complete OpenInference-compliant tracing for embeddings operations, complementing existing chat completion tracing."
             },
             {
               "title": "Azure OpenAI embeddings translator",
-              "description": "Native support for Azure OpenAI embeddings API with proper protocol translation and token tracking."
+              "description": "Native support for Azure OpenAI embeddings API with proper protocol translation and token usage tracking."
             },
             {
-              "title": "Enhanced /messages endpoint metrics",
-              "description": "Distinct metrics for Anthropic's /messages endpoint, providing accurate attribution separate from /chat/completions endpoints."
+              "title": "Enhanced <code>/messages</code> endpoint metrics",
+              "description": "Distinct metrics for Anthropic's <code>/messages</code> endpoint, providing accurate attribution separate from <code>/chat/completions</code> endpoints."
             },
             {
-              "title": "Completions endpoint observability",
-              "description": "Full tracing and metrics implementation for the legacy /v1/completions endpoint, ensuring comprehensive observability across all API surfaces."
+              "title": "Legacy <code>/v1/completions</code> endpoint",
+              "description": "Full pass-through support for OpenAI's legacy <code>/v1/completions</code> endpoint with complete tracing and metrics implementation, ensuring backward compatibility and comprehensive observability."
+            },
+            {
+              "title": "Original model tracking",
+              "description": "Metrics now track both the original requested model and any overridden model names, providing accurate attribution in multi-provider and model virtualization scenarios."
+            }
+          ]
+        },
+        {
+          "title": "Provider-Specific Enhancements",
+          "items": [
+            {
+              "title": "AWS Bedrock reasoning support",
+              "description": "Full support for reasoning/thinking tokens in AWS Bedrock responses for both streaming and non-streaming modes, properly exposing extended thinking processes in Claude and other reasoning-capable models."
+            },
+            {
+              "title": "GCP Vertex AI safety settings",
+              "description": "Support for GCP-specific safety settings configuration, allowing fine-grained control over content filtering and safety thresholds for Gemini models."
+            },
+            {
+              "title": "Gemini usage chunk improvements",
+              "description": "Accurate completion_tokens reporting in streaming usage chunks for Gemini models, ensuring proper token accounting during streaming responses."
             }
           ]
         }
       ],
       "apiChanges": [
         {
-          "title": "New MCPRoute CRD",
-          "description": "Introduces MCPRoute custom resource with comprehensive fields for MCP server configuration, tool filtering, authentication policies (OAuth and API key), and Protected Resource Metadata."
+          "title": "New <code>MCPRoute</code> CRD",
+          "description": "Introduces <code>MCPRoute</code> custom resource with comprehensive fields for MCP server configuration, tool filtering, authentication policies (OAuth and API key), and Protected Resource Metadata."
         },
         {
-          "title": "Cross-namespace references in AIGatewayRoute",
-          "description": "Added namespace field to AIGatewayRouteRuleBackendRef, enabling cross-namespace backend references with ReferenceGrant validation."
+          "title": "Cross-namespace references in <code>AIGatewayRoute</code>",
+          "description": "Added namespace field to <code>AIGatewayRouteRuleBackendRef</code>, enabling cross-namespace backend references with ReferenceGrant validation."
         },
         {
           "title": "Route-level header mutations",
-          "description": "Added headerMutation field to AIGatewayRouteRuleBackendRef for per-route header manipulation with smart merge logic."
+          "description": "Added headerMutation field to <code>AIGatewayRouteRuleBackendRef</code> for per-route header manipulation with smart merge logic."
         },
         {
           "title": "Anthropic API key authentication",
-          "description": "Added AnthropicAPIKey to BackendSecurityPolicy for x-api-key header authentication."
+          "description": "Added <code>AnthropicAPIKey</code> to <code>BackendSecurityPolicy</code> for <code>x-api-key</code> header authentication."
         },
         {
           "title": "Azure API key authentication",
-          "description": "Added AzureAPIKey to BackendSecurityPolicy for api-key header authentication."
+          "description": "Added AzureAPIKey to <code>BackendSecurityPolicy</code> for api-key header authentication."
         },
         {
           "title": "AWS credential chain support",
-          "description": "BackendSecurityPolicy AWS auth now supports SDK default credential chain when credentials are not explicitly provided."
+          "description": "<code>BackendSecurityPolicy</code> AWS auth now supports SDK default credential chain when credentials are not explicitly provided."
         },
         {
-          "title": "InferencePool v1",
+          "title": "<code>InferencePool</code> v1",
           "description": "Updated to support Gateway API Inference Extension v1.0 (inference.networking.k8s.io/v1) instead of v1alpha1."
         },
         {
-          "title": "Enforced Backend resource requirement",
-          "description": "Added CRD validation to AIServiceBackend explicitly requiring Envoy Gateway Backend resources (Kubernetes Service is not supported)."
+          "title": "Enforced <code>Backend</code> resource requirement",
+          "description": "Added CRD validation to <code>AIServiceBackend</code> explicitly requiring Envoy Gateway <code>Backend</code> resources (Kubernetes Service is not supported)."
         }
       ],
       "dependencies": [

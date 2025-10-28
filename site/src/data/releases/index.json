@@ -2,29 +2,11 @@
   "metadata": {
     "title": "Release Notes",
     "description": "Release Notes for Envoy AI Gateway",
-    "lastUpdated": "2025-10-28"
+    "lastUpdated": "2025-10-30"
   },
   "community": {
     "slack": "https://envoyproxy.slack.com/archives/C07Q4N24VAA",
     "meetings": "https://docs.google.com/document/d/10e1sfsF-3G3Du5nBHGmLjXw5GVMqqCvFDqp_O65B0_w",
     "github": "https://github.com/envoyproxy/ai-gateway"
-  },
-  "releases": [
-    {
-      "version": "v0.4",
-      "date": "January 2025",
-      "title": "Version 0.4 Release",
-      "description": "Major release with MCP Gateway, Image Generation, first-party Anthropic, guided decoding for GCP Vertex AI/Gemini, cross-namespace support, enhanced authentication, and client SDK.",
-      "badge": "Latest",
-      "path": "/release-notes/v0.4"
-    },
-    {
-      "version": "v0.3",
-      "date": "August 2025",
-      "title": "Version 0.3 Release",
-      "description": "Intelligent inference routing with Endpoint Picker Provider, Google Vertex AI support, and enhanced observability.",
-      "badge": null,
-      "path": "/release-notes/v0.3"
-    }
-  ]
+  }
 }
