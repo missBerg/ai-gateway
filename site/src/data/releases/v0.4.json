@@ -45,10 +45,6 @@
             {
               "title": "Session management",
               "description": "Implements MCP session handling with encryption, rotatable seeds, and graceful session lifecycle management."
-            },
-            {
-              "title": "Full observability integration",
-              "description": "Provides comprehensive monitoring, logging, and tracing for MCP operations with configurable access logs and metrics enrichment."
             }
           ]
         },
@@ -117,10 +113,6 @@
             {
               "title": "ReferenceGrant validation",
               "description": "Comprehensive ReferenceGrant integration following Gateway API patterns, with automatic validation and clear error messages when grants are missing."
-            },
-            {
-              "title": "Event-driven reconciliation",
-              "description": "ReferenceGrant changes automatically trigger reconciliation of affected routes, ensuring security policies are always up-to-date."
             }
           ]
         },
@@ -129,15 +121,11 @@
           "items": [
             {
               "title": "AWS SDK default credential chain",
-              "description": "Support for AWS SDK's default credential chain including IRSA (IAM Roles for Service Accounts), EKS Pod Identity, EC2 Instance Profiles, and environment variables, eliminating need for static credentials."
+              "description": "Support for AWS SDK's default credential chain including IRSA (IAM Roles for Service Accounts), EKS Pod Identity, EC2 Instance Profiles, and environment variables, eliminating need for static credentials or OIDC settings"
             },
             {
               "title": "Azure API key authentication",
               "description": "Native Azure OpenAI API key authentication using the <code>api-key</code> header, matching Azure SDK conventions and console practices."
-            },
-            {
-              "title": "Azure CLI auto-configuration",
-              "description": "Standalone CLI auto-configuration from <code>AZURE_OPENAI_API_KEY</code> and <code>AZURE_OPENAI_ENDPOINT</code> environment variables, compatible with Elastic and other Azure-based deployments."
             }
           ]
         },
@@ -145,8 +133,8 @@
           "title": "Traffic Management and Configuration",
           "items": [
             {
-              "title": "Route-level header mutations",
-              "description": "New <code>headerMutation</code> field in <code>AIGatewayRouteRuleBackendRef</code> enables per-route header manipulation with smart merge logic when combined with backend-level mutations. Essential for GCP provisioned throughput and other advanced routing scenarios."
+              "title": "Header mutations at route and backend levels",
+              "description": "New <code>headerMutation</code> fields in both <code>AIServiceBackend</code> and <code>AIGatewayRouteRuleBackendRef</code> enable header manipulation at backend and per-route levels with smart merge logic. Essential for GCP provisioned throughput and other advanced routing scenarios."
             },
             {
               "title": "<code>InferencePool</code> v1 support",
@@ -178,10 +166,6 @@
               "description": "Proper separation of configuration, data, state, and runtime files following XDG Base Directory specification, improving organization and enabling better cleanup and management of aigw state."
             },
             {
-              "title": "Environment variable substitution",
-              "description": "Support for environment variable substitution in configuration files, enabling dynamic configuration and secrets management in standalone deployments."
-            },
-            {
               "title": "Enhanced readiness monitoring",
               "description": "Improved Envoy readiness detection and status reporting in standalone mode, providing clear insights into when the gateway is ready to accept traffic with better error messages."
             },
@@ -208,6 +192,10 @@
           "title": "Observability Enhancements",
           "items": [
             {
+              "title": "MCP operations observability",
+              "description": "Comprehensive monitoring, logging, and tracing for MCP operations with configurable access logs and metrics enrichment, providing full visibility into MCP server interactions and tool routing."
+            },
+            {
               "title": "OpenTelemetry native metrics export",
               "description": "Support for OTEL-native metrics export (in addition to Prometheus), enabling integration with Elastic Stack, OTEL-TUI, and other OTEL-native observability systems. Includes console exporter for ad-hoc debugging without external dependencies."
             },
@@ -224,10 +212,6 @@
               "description": "Distinct metrics for Anthropic's <code>/messages</code> endpoint, providing accurate attribution separate from <code>/chat/completions</code> endpoints."
             },
             {
-              "title": "Legacy <code>/v1/completions</code> endpoint",
-              "description": "Full pass-through support for OpenAI's legacy <code>/v1/completions</code> endpoint with complete tracing and metrics implementation, ensuring backward compatibility and comprehensive observability."
-            },
-            {
               "title": "Original model tracking",
               "description": "Metrics now track both the original requested model and any overridden model names, providing accurate attribution in multi-provider and model virtualization scenarios."
             }
@@ -236,6 +220,10 @@
         {
           "title": "Provider-Specific Enhancements",
           "items": [
+            {
+              "title": "Legacy <code>/v1/completions</code> endpoint",
+              "description": "Full pass-through support for OpenAI's legacy <code>/v1/completions</code> endpoint with complete tracing and metrics implementation, ensuring backward compatibility and comprehensive observability."
+            },
             {
               "title": "AWS Bedrock reasoning support",
               "description": "Full support for reasoning/thinking tokens in AWS Bedrock responses for both streaming and non-streaming modes, properly exposing extended thinking processes in Claude and other reasoning-capable models."
@@ -261,8 +249,8 @@
           "description": "Added namespace field to <code>AIGatewayRouteRuleBackendRef</code>, enabling cross-namespace backend references with ReferenceGrant validation."
         },
         {
-          "title": "Route-level header mutations",
-          "description": "Added headerMutation field to <code>AIGatewayRouteRuleBackendRef</code> for per-route header manipulation with smart merge logic."
+          "title": "Header mutations at route and backend levels",
+          "description": "Added headerMutation fields to both <code>AIServiceBackend</code> and <code>AIGatewayRouteRuleBackendRef</code> for backend-level and per-route header manipulation with smart merge logic."
         },
         {
           "title": "Anthropic API key authentication",
