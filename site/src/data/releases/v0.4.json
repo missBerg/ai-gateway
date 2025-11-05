@@ -9,7 +9,7 @@
   "releases": [
     {
       "version": "v0.4.0",
-      "date": "October 30, 2025",
+      "date": "November 07, 2025",
       "type": "minor",
       "tags": [
         { "text": "MCP Gateway", "type": "feature" },
