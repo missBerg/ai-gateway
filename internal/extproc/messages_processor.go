@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	extprocv3http "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
@@ -18,10 +19,10 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/envoyproxy/ai-gateway/internal/apischema/anthropic"
-	"github.com/envoyproxy/ai-gateway/internal/extproc/backendauth"
-	"github.com/envoyproxy/ai-gateway/internal/extproc/headermutator"
+	"github.com/envoyproxy/ai-gateway/internal/backendauth"
 	"github.com/envoyproxy/ai-gateway/internal/extproc/translator"
 	"github.com/envoyproxy/ai-gateway/internal/filterapi"
+	"github.com/envoyproxy/ai-gateway/internal/headermutator"
 	"github.com/envoyproxy/ai-gateway/internal/internalapi"
 	"github.com/envoyproxy/ai-gateway/internal/metrics"
 	tracing "github.com/envoyproxy/ai-gateway/internal/tracing/api"
@@ -72,10 +73,11 @@ func (c *messagesProcessorRouterFilter) ProcessRequestHeaders(_ context.Context,
 // ProcessRequestBody implements [Processor.ProcessRequestBody].
 func (c *messagesProcessorRouterFilter) ProcessRequestBody(_ context.Context, rawBody *extprocv3.HttpBody) (*extprocv3.ProcessingResponse, error) {
 	// Parse Anthropic request - natural validation.
-	originalModel, body, err := parseAnthropicMessagesBody(rawBody)
+	body, err := parseAnthropicMessagesBody(rawBody)
 	if err != nil {
 		return nil, fmt.Errorf("/v1/messages endpoint requires Anthropic format: %w", err)
 	}
+	originalModel := body.Model
 
 	c.requestHeaders[internalapi.ModelNameHeaderKeyDefault] = originalModel
 	c.originalRequestBody = body
@@ -157,10 +159,13 @@ func (c *messagesProcessorUpstreamFilter) selectTranslator(out filterapi.Version
 		// Anthropic → GCP Anthropic (request direction translator).
 		// Uses backend config version (GCP Vertex AI requires specific versions like "vertex-2023-10-16").
 		c.translator = translator.NewAnthropicToGCPAnthropicTranslator(out.Version, c.modelNameOverride)
+	case filterapi.APISchemaAWSAnthropic:
+		// Anthropic → AWS Bedrock Anthropic (request direction translator).
+		c.translator = translator.NewAnthropicToAWSAnthropicTranslator(out.Version, c.modelNameOverride)
 	case filterapi.APISchemaAnthropic:
 		c.translator = translator.NewAnthropicToAnthropicTranslator(out.Version, c.modelNameOverride)
 	default:
-		return fmt.Errorf("/v1/messages endpoint only supports backends that return native Anthropic format (GCPAnthropic). Backend %s uses different model format", out.Name)
+		return fmt.Errorf("/v1/messages endpoint only supports backends that return native Anthropic format (Anthropic, GCPAnthropic, AWSAnthropic). Backend %s uses different model format", out.Name)
 	}
 	return nil
 }
@@ -176,9 +181,9 @@ func (c *messagesProcessorUpstreamFilter) ProcessRequestHeaders(ctx context.Cont
 	// Start tracking metrics for this request.
 	c.metrics.StartRequest(c.requestHeaders)
 	// Set the original model from the request body before any overrides
-	c.metrics.SetOriginalModel(c.originalRequestBody.GetModel())
+	c.metrics.SetOriginalModel(c.originalRequestBody.Model)
 	// Set the request model for metrics from the original model or override if applied.
-	reqModel := cmp.Or(c.requestHeaders[internalapi.ModelNameHeaderKeyDefault], c.originalRequestBody.GetModel())
+	reqModel := cmp.Or(c.requestHeaders[internalapi.ModelNameHeaderKeyDefault], c.originalRequestBody.Model)
 	c.metrics.SetRequestModel(reqModel)
 
 	// Force body mutation for retry requests as the body mutation might have happened in previous iteration.
@@ -194,9 +199,16 @@ func (c *messagesProcessorUpstreamFilter) ProcessRequestHeaders(ctx context.Cont
 
 	// Apply header mutations from the route and also restore original headers on retry.
 	if h := c.headerMutator; h != nil {
-		if hm := c.headerMutator.Mutate(c.requestHeaders, c.onRetry); hm != nil {
-			headerMutation.RemoveHeaders = append(headerMutation.RemoveHeaders, hm.RemoveHeaders...)
-			headerMutation.SetHeaders = append(headerMutation.SetHeaders, hm.SetHeaders...)
+		sets, removes := c.headerMutator.Mutate(c.requestHeaders, c.onRetry)
+		headerMutation.RemoveHeaders = append(headerMutation.RemoveHeaders, removes...)
+		for _, hdr := range sets {
+			headerMutation.SetHeaders = append(headerMutation.SetHeaders, &corev3.HeaderValueOption{
+				AppendAction: corev3.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
+				Header: &corev3.HeaderValue{
+					Key:      hdr.Key(),
+					RawValue: []byte(hdr.Value()),
+				},
+			})
 		}
 	}
 
@@ -204,8 +216,16 @@ func (c *messagesProcessorUpstreamFilter) ProcessRequestHeaders(ctx context.Cont
 		c.requestHeaders[h.Header.Key] = string(h.Header.RawValue)
 	}
 	if h := c.handler; h != nil {
-		if err = h.Do(ctx, c.requestHeaders, headerMutation, bodyMutation); err != nil {
+		var hdrs []internalapi.Header
+		hdrs, err = h.Do(ctx, c.requestHeaders, bodyMutation.GetBody())
+		if err != nil {
 			return nil, fmt.Errorf("failed to do auth request: %w", err)
+		}
+		for _, h := range hdrs {
+			headerMutation.SetHeaders = append(headerMutation.SetHeaders, &corev3.HeaderValueOption{
+				AppendAction: corev3.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
+				Header:       &corev3.HeaderValue{Key: h.Key(), RawValue: []byte(h.Value())},
+			})
 		}
 	}
 
@@ -270,6 +290,14 @@ func (c *messagesProcessorUpstreamFilter) ProcessResponseBody(ctx context.Contex
 			c.metrics.RecordRequestCompletion(ctx, true, c.requestHeaders)
 		}
 	}()
+	if code, _ := strconv.Atoi(c.responseHeaders[":status"]); !isGoodStatusCode(code) {
+		// For now, simply pass through error responses without modification.
+		// TODO: do the error conversion like other processors, to be able to capture any error in the proper
+		// format expected by the client.
+		return &extprocv3.ProcessingResponse{
+			Response: &extprocv3.ProcessingResponse_ResponseBody{ResponseBody: &extprocv3.BodyResponse{}},
+		}, nil
+	}
 
 	// Decompress the body if needed using common utility.
 	decodingResult, err := decodeContentIfNeeded(body.Body, c.responseEncoding)
@@ -299,9 +327,11 @@ func (c *messagesProcessorUpstreamFilter) ProcessResponseBody(ctx context.Contex
 		},
 	}
 
-	c.costs.InputTokens += tokenUsage.InputTokens
-	c.costs.OutputTokens += tokenUsage.OutputTokens
-	c.costs.TotalTokens += tokenUsage.TotalTokens
+	// Token usages are cumulative for streaming responses, so we update the stored costs.
+	c.costs.InputTokens = tokenUsage.InputTokens
+	c.costs.OutputTokens = tokenUsage.OutputTokens
+	c.costs.TotalTokens = tokenUsage.TotalTokens
+	c.costs.CachedInputTokens = tokenUsage.CachedInputTokens
 
 	// Update metrics with token usage.
 	c.metrics.RecordTokenUsage(ctx, tokenUsage.InputTokens, tokenUsage.CachedInputTokens, tokenUsage.OutputTokens, c.requestHeaders)
@@ -356,7 +386,7 @@ func (c *messagesProcessorUpstreamFilter) SetBackend(ctx context.Context, b *fil
 	c.onRetry = rp.upstreamFilterCount > 1
 
 	// Determine if this is a streaming request from the parsed body.
-	c.stream = rp.originalRequestBody.GetStream()
+	c.stream = rp.originalRequestBody.Stream
 	if isEndpointPicker {
 		if c.logger.Enabled(ctx, slog.LevelDebug) {
 			c.logger.Debug("selected backend", slog.String("picked_endpoint", pickedEndpoint), slog.String("backendName", b.Name), slog.String("modelNameOverride", c.modelNameOverride))
@@ -379,16 +409,10 @@ func (c *messagesProcessorUpstreamFilter) mergeWithTokenLatencyMetadata(metadata
 }
 
 // parseAnthropicMessagesBody parses the Anthropic Messages API request body.
-func parseAnthropicMessagesBody(body *extprocv3.HttpBody) (modelName string, req *anthropic.MessagesRequest, err error) {
+func parseAnthropicMessagesBody(body *extprocv3.HttpBody) (req *anthropic.MessagesRequest, err error) {
 	var anthropicReq anthropic.MessagesRequest
 	if err := json.Unmarshal(body.Body, &anthropicReq); err != nil {
-		return "", nil, fmt.Errorf("failed to unmarshal Anthropic Messages body: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal Anthropic Messages body: %w", err)
 	}
-
-	model := anthropicReq.GetModel()
-	if model == "" {
-		return "", nil, fmt.Errorf("model field is required in Anthropic request")
-	}
-
-	return model, &anthropicReq, nil
+	return &anthropicReq, nil
 }

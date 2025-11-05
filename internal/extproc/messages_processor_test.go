@@ -19,9 +19,9 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 
 	anthropicschema "github.com/envoyproxy/ai-gateway/internal/apischema/anthropic"
-	"github.com/envoyproxy/ai-gateway/internal/extproc/headermutator"
 	"github.com/envoyproxy/ai-gateway/internal/extproc/translator"
 	"github.com/envoyproxy/ai-gateway/internal/filterapi"
+	"github.com/envoyproxy/ai-gateway/internal/headermutator"
 	"github.com/envoyproxy/ai-gateway/internal/internalapi"
 	"github.com/envoyproxy/ai-gateway/internal/metrics"
 	tracing "github.com/envoyproxy/ai-gateway/internal/tracing/api"
@@ -50,90 +50,6 @@ func TestMessagesProcessorFactory(t *testing.T) {
 	require.NoError(t, err, "Factory should create upstream processor without error")
 	require.NotNil(t, upstreamProcessor, "Upstream processor should not be nil")
 	require.IsType(t, &messagesProcessorUpstreamFilter{}, upstreamProcessor, "Should return upstream filter type")
-}
-
-func TestParseAnthropicMessagesBody(t *testing.T) {
-	tests := []struct {
-		name        string
-		body        string
-		expectError bool
-		checkFields func(t *testing.T, req *anthropicschema.MessagesRequest)
-	}{
-		{
-			name: "valid_anthropic_request",
-			body: `{
-				"model": "claude-3-sonnet",
-				"max_tokens": 1000,
-				"messages": [{"role": "user", "content": "Hello"}],
-				"stream": false
-			}`,
-			expectError: false,
-			checkFields: func(t *testing.T, req *anthropicschema.MessagesRequest) {
-				require.Equal(t, "claude-3-sonnet", req.GetModel())
-				require.Equal(t, 1000, req.GetMaxTokens())
-				require.False(t, req.GetStream())
-			},
-		},
-		{
-			name: "streaming_request",
-			body: `{
-				"model": "claude-3-sonnet",
-				"max_tokens": 1000,
-				"messages": [{"role": "user", "content": "Hello"}],
-				"stream": true
-			}`,
-			expectError: false,
-			checkFields: func(t *testing.T, req *anthropicschema.MessagesRequest) {
-				require.True(t, req.GetStream())
-			},
-		},
-		{
-			name:        "invalid_json",
-			body:        `{"invalid": json}`,
-			expectError: true,
-		},
-		{
-			name:        "empty_body",
-			body:        "",
-			expectError: true,
-		},
-		{
-			name: "request_with_tools",
-			body: `{
-				"model": "claude-3-sonnet",
-				"max_tokens": 1000,
-				"messages": [{"role": "user", "content": "Hello"}],
-				"tools": [{"type": "function", "function": {"name": "test"}}]
-			}`,
-			expectError: false,
-			checkFields: func(t *testing.T, req *anthropicschema.MessagesRequest) {
-				tools, ok := (*req)["tools"]
-				require.True(t, ok)
-				require.NotNil(t, tools)
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			bodyBytes := []byte(tt.body)
-			body := &extprocv3.HttpBody{Body: bodyBytes}
-
-			modelName, req, err := parseAnthropicMessagesBody(body)
-
-			if tt.expectError {
-				require.Error(t, err)
-				require.Nil(t, req)
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, req)
-				require.NotEmpty(t, modelName)
-				if tt.checkFields != nil {
-					tt.checkFields(t, req)
-				}
-			}
-		})
-	}
 }
 
 func TestMessagesProcessorRouterFilter_ProcessRequestHeaders(t *testing.T) {
@@ -168,14 +84,6 @@ func TestMessagesProcessorRouterFilter_ProcessRequestBody(t *testing.T) {
 			}`,
 			expectError: false,
 			expectModel: "claude-3-sonnet-20240229",
-		},
-		{
-			name: "missing model field",
-			body: `{
-				"max_tokens": 1000,
-				"messages": [{"role": "user", "content": "Hello"}]
-			}`,
-			expectError: true,
 		},
 		{
 			name:        "invalid json",
@@ -383,11 +291,7 @@ func TestMessagesProcessorUpstreamFilter_ProcessRequestHeaders_WithMocks(t *test
 			headers := map[string]string{":path": "/anthropic/v1/messages", "x-ai-eg-model": "claude-3-sonnet"}
 
 			// Create request body.
-			requestBody := &anthropicschema.MessagesRequest{
-				"model":      "claude-3-sonnet",
-				"max_tokens": 1000,
-				"messages":   []any{map[string]any{"role": "user", "content": "Hello"}},
-			}
+			requestBody := &anthropicschema.MessagesRequest{Model: "claude-3-sonnet"}
 			requestBodyRaw := []byte(`{"model": "claude-3-sonnet", "max_tokens": 1000, "messages": [{"role": "user", "content": "Hello"}]}`)
 
 			// Create mock translator.
@@ -486,11 +390,11 @@ func TestMessagesProcessorUpstreamFilter_ProcessResponseBody_ErrorRecordsFailure
 
 	mm := &mockChatCompletionMetrics{}
 	processor := &messagesProcessorUpstreamFilter{
-		config:         &processorConfig{},
-		requestHeaders: make(map[string]string),
-		logger:         slog.Default(),
-		metrics:        mm,
-		translator:     mockTranslator,
+		config:          &processorConfig{},
+		responseHeaders: map[string]string{":status": "200"},
+		logger:          slog.Default(),
+		metrics:         mm,
+		translator:      mockTranslator,
 	}
 
 	ctx := context.Background()
@@ -595,7 +499,7 @@ func Test_messagesProcessorUpstreamFilter_SetBackend_Success(t *testing.T) {
 		metrics:        chatMetrics,
 	}
 	rp := &messagesProcessorRouterFilter{
-		originalRequestBody: &anthropicschema.MessagesRequest{"model": "claude", "stream": true},
+		originalRequestBody: &anthropicschema.MessagesRequest{Model: "claude", Stream: true},
 	}
 	err := p.SetBackend(t.Context(), &filterapi.Backend{
 		Name:              "gcp",
@@ -610,7 +514,7 @@ func Test_messagesProcessorUpstreamFilter_SetBackend_Success(t *testing.T) {
 
 func TestMessages_ProcessRequestHeaders_SetsRequestModel(t *testing.T) {
 	headers := map[string]string{":path": "/anthropic/v1/messages", internalapi.ModelNameHeaderKeyDefault: "header-model"}
-	requestBody := &anthropicschema.MessagesRequest{"model": "body-model", "messages": []any{"hello"}}
+	requestBody := &anthropicschema.MessagesRequest{Model: "body-model"}
 	requestBodyRaw := []byte(`{"model":"body-model","messages":["hello"]}`)
 	mm := &mockChatCompletionMetrics{}
 	p := &messagesProcessorUpstreamFilter{
@@ -636,7 +540,7 @@ func TestMessages_ProcessRequestHeaders_SetsRequestModel(t *testing.T) {
 // requested (e.g., "claude-3-opus-20240229" instead of "claude-3-opus").
 func TestMessages_ProcessResponseBody_UsesActualResponseModelOverHeaderOverride(t *testing.T) {
 	headers := map[string]string{":path": "/v1/messages", internalapi.ModelNameHeaderKeyDefault: "header-model"}
-	requestBody := &anthropicschema.MessagesRequest{"model": "body-model"}
+	requestBody := &anthropicschema.MessagesRequest{Model: "body-model"}
 	requestBodyRaw := []byte(`{"model": "body-model"}`)
 	mm := &mockChatCompletionMetrics{}
 
@@ -700,11 +604,7 @@ func TestMessagesProcessorUpstreamFilter_ProcessRequestHeaders_WithHeaderMutatio
 		}
 
 		// Create request body.
-		requestBody := &anthropicschema.MessagesRequest{
-			"model":      "claude-3-sonnet",
-			"max_tokens": 1000,
-			"messages":   []any{map[string]any{"role": "user", "content": "Hello"}},
-		}
+		requestBody := &anthropicschema.MessagesRequest{Model: "claude-3-sonnet"}
 		requestBodyRaw := []byte(`{"model": "claude-3-sonnet", "max_tokens": 1000, "messages": [{"role": "user", "content": "Hello"}]}`)
 
 		// Create header mutations.
@@ -756,9 +656,11 @@ func TestMessagesProcessorUpstreamFilter_ProcessRequestHeaders_WithHeaderMutatio
 		// Check that header mutations were applied.
 		require.NotNil(t, commonRes.HeaderMutation)
 		require.ElementsMatch(t, []string{"authorization", "x-api-key"}, commonRes.HeaderMutation.RemoveHeaders)
-		require.Len(t, commonRes.HeaderMutation.SetHeaders, 1)
+		require.Len(t, commonRes.HeaderMutation.SetHeaders, 2)
 		require.Equal(t, "x-new-header", commonRes.HeaderMutation.SetHeaders[0].Header.Key)
 		require.Equal(t, []byte("new-value"), commonRes.HeaderMutation.SetHeaders[0].Header.RawValue)
+		require.Equal(t, "foo", commonRes.HeaderMutation.SetHeaders[1].Header.Key)
+		require.Equal(t, []byte("mock-auth-handler"), commonRes.HeaderMutation.SetHeaders[1].Header.RawValue)
 
 		// Check that headers were modified in the request headers.
 		require.Equal(t, "new-value", headers["x-new-header"])
@@ -777,11 +679,7 @@ func TestMessagesProcessorUpstreamFilter_ProcessRequestHeaders_WithHeaderMutatio
 		}
 
 		// Create request body.
-		requestBody := &anthropicschema.MessagesRequest{
-			"model":      "claude-3-sonnet",
-			"max_tokens": 1000,
-			"messages":   []any{map[string]any{"role": "user", "content": "Hello"}},
-		}
+		requestBody := &anthropicschema.MessagesRequest{Model: "claude-3-sonnet"}
 		requestBodyRaw := []byte(`{"model": "claude-3-sonnet", "max_tokens": 1000, "messages": [{"role": "user", "content": "Hello"}]}`)
 
 		// Create mock translator.
@@ -821,7 +719,9 @@ func TestMessagesProcessorUpstreamFilter_ProcessRequestHeaders_WithHeaderMutatio
 		// Check that no header mutations were applied.
 		require.NotNil(t, commonRes.HeaderMutation)
 		require.Empty(t, commonRes.HeaderMutation.RemoveHeaders)
-		require.Empty(t, commonRes.HeaderMutation.SetHeaders)
+		require.Len(t, commonRes.HeaderMutation.SetHeaders, 1)
+		require.Equal(t, "foo", commonRes.HeaderMutation.SetHeaders[0].Header.Key)
+		require.Equal(t, []byte("mock-auth-handler"), commonRes.HeaderMutation.SetHeaders[0].Header.RawValue)
 
 		// Check that original headers remain unchanged.
 		require.Equal(t, "bearer token123", headers["authorization"])
@@ -855,8 +755,8 @@ func TestMessagesProcessorUpstreamFilter_SetBackend_WithHeaderMutations(t *testi
 		rp := &messagesProcessorRouterFilter{
 			requestHeaders: originalHeaders,
 			originalRequestBody: &anthropicschema.MessagesRequest{
-				"model":  "claude-3-sonnet",
-				"stream": false,
+				Model:  "claude-3-sonnet",
+				Stream: false,
 			},
 			upstreamFilterCount: 0,
 		}
@@ -870,19 +770,6 @@ func TestMessagesProcessorUpstreamFilter_SetBackend_WithHeaderMutations(t *testi
 
 		// Verify header mutator was created.
 		require.NotNil(t, p.headerMutator)
-
-		// Test that the header mutator works correctly.
-		testHeaders := map[string]string{
-			"x-sensitive": "current-secret",
-			"x-existing":  "current-value",
-		}
-		mutation := p.headerMutator.Mutate(testHeaders, false)
-
-		require.NotNil(t, mutation)
-		require.ElementsMatch(t, []string{"x-sensitive"}, mutation.RemoveHeaders)
-		require.Len(t, mutation.SetHeaders, 1)
-		require.Equal(t, "x-backend", mutation.SetHeaders[0].Header.Key)
-		require.Equal(t, []byte("backend-value"), mutation.SetHeaders[0].Header.RawValue)
 	})
 
 	t.Run("header mutator with original headers", func(t *testing.T) {
@@ -911,8 +798,8 @@ func TestMessagesProcessorUpstreamFilter_SetBackend_WithHeaderMutations(t *testi
 		rp := &messagesProcessorRouterFilter{
 			requestHeaders: originalHeaders,
 			originalRequestBody: &anthropicschema.MessagesRequest{
-				"model":  "claude-3-sonnet",
-				"stream": false,
+				Model:  "claude-3-sonnet",
+				Stream: false,
 			},
 			upstreamFilterCount: 0,
 		}
@@ -926,29 +813,5 @@ func TestMessagesProcessorUpstreamFilter_SetBackend_WithHeaderMutations(t *testi
 
 		// Verify header mutator was created with original headers.
 		require.NotNil(t, p.headerMutator)
-
-		// Test retry scenario - original headers should be restored.
-		testHeaders := map[string]string{
-			"x-existing": "previously-set-value",
-		}
-		mutation := p.headerMutator.Mutate(testHeaders, true) // onRetry = true.
-
-		require.NotNil(t, mutation)
-		// RemoveHeaders should be empty because authorization doesn't exist in testHeaders.
-		require.Empty(t, mutation.RemoveHeaders)
-
-		// Should restore x-custom header (not being removed and not already present).
-		var restoredHeader *corev3.HeaderValueOption
-		for _, h := range mutation.SetHeaders {
-			if h.Header.Key == "x-custom" {
-				restoredHeader = h
-				break
-			}
-		}
-		require.NotNil(t, restoredHeader)
-		require.Equal(t, []byte("original-value"), restoredHeader.Header.RawValue)
-		require.Equal(t, "original-value", testHeaders["x-custom"])
-		// x-existing should be equal to existing-value from original headers.
-		require.Equal(t, "existing-value", testHeaders["x-existing"])
 	})
 }

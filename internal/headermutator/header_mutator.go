@@ -8,9 +8,6 @@ package headermutator
 import (
 	"strings"
 
-	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-
 	"github.com/envoyproxy/ai-gateway/internal/filterapi"
 	"github.com/envoyproxy/ai-gateway/internal/internalapi"
 )
@@ -31,11 +28,10 @@ func NewHeaderMutator(headerMutations *filterapi.HTTPHeaderMutation, originalHea
 }
 
 // Mutate mutates the headers based on the header mutations and restores original headers if mutated previously.
-func (h *HeaderMutator) Mutate(headers map[string]string, onRetry bool) *extprocv3.HeaderMutation {
+func (h *HeaderMutator) Mutate(headers map[string]string, onRetry bool) (sets []internalapi.Header, removes []string) {
 	skipRemove := h.headerMutations == nil || len(h.headerMutations.Remove) == 0
 	skipSet := h.headerMutations == nil || len(h.headerMutations.Set) == 0
 
-	headerMutation := &extprocv3.HeaderMutation{}
 	// Removes sensitive headers before sending to backend.
 	removedHeadersSet := make(map[string]struct{})
 	if !skipRemove {
@@ -47,7 +43,7 @@ func (h *HeaderMutator) Mutate(headers map[string]string, onRetry bool) *extproc
 			if _, ok := headers[key]; ok {
 				// Do NOT delete from the local headers map so metrics can still read it.
 				// Instead, always instruct Envoy to remove it before forwarding upstream.
-				headerMutation.RemoveHeaders = append(headerMutation.RemoveHeaders, key)
+				removes = append(removes, key)
 			}
 		}
 	}
@@ -62,9 +58,7 @@ func (h *HeaderMutator) Mutate(headers map[string]string, onRetry bool) *extproc
 			}
 			setHeadersSet[key] = struct{}{}
 			headers[key] = h.Value
-			headerMutation.SetHeaders = append(headerMutation.SetHeaders, &corev3.HeaderValueOption{
-				Header: &corev3.HeaderValue{Key: h.Name, RawValue: []byte(h.Value)},
-			})
+			sets = append(sets, internalapi.Header{key, h.Value})
 		}
 	}
 
@@ -77,12 +71,14 @@ func (h *HeaderMutator) Mutate(headers map[string]string, onRetry bool) *extproc
 			_, isRemoved := removedHeadersSet[key]
 			_, isSet := setHeadersSet[key]
 			_, exists := headers[key]
-			if !isRemoved && !exists && !isSet {
+			if !exists && !isSet {
+				// Restore the original header value irrespective of whether it was removed or not in the headers map if it doesn't exist in the set headers
+				// so that metrics can still read it.
 				headers[key] = v
-				setHeadersSet[key] = struct{}{}
-				headerMutation.SetHeaders = append(headerMutation.SetHeaders, &corev3.HeaderValueOption{
-					Header: &corev3.HeaderValue{Key: key, RawValue: []byte(v)},
-				})
+				if !isRemoved {
+					setHeadersSet[key] = struct{}{}
+					sets = append(sets, internalapi.Header{key, v})
+				}
 			}
 		}
 		// 1. Remove any headers that were added in the previous attempt (not part of original headers and not being set now).
@@ -91,23 +87,23 @@ func (h *HeaderMutator) Mutate(headers map[string]string, onRetry bool) *extproc
 			if shouldIgnoreHeader(key) {
 				continue
 			}
-			if _, isSet := setHeadersSet[key]; isSet {
+			_, isSet := setHeadersSet[key]
+			_, isRemoved := removedHeadersSet[key]
+			if isRemoved || isSet {
 				continue
 			}
 			originalValue, exists := h.originalHeaders[key]
 			if !exists {
 				delete(headers, key)
-				headerMutation.RemoveHeaders = append(headerMutation.RemoveHeaders, key)
+				removes = append(removes, key)
 			} else {
 				// Restore original value.
 				headers[key] = originalValue
-				headerMutation.SetHeaders = append(headerMutation.SetHeaders, &corev3.HeaderValueOption{
-					Header: &corev3.HeaderValue{Key: key, RawValue: []byte(originalValue)},
-				})
+				sets = append(sets, internalapi.Header{key, originalValue})
 			}
 		}
 	}
-	return headerMutation
+	return
 }
 
 // shouldIgnoreHeader returns true if the header key should be ignored for mutation.
