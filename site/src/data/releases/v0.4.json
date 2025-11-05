@@ -2,7 +2,7 @@
   "series": {
     "version": "v0.4",
     "title": "Envoy AI Gateway v0.4.x",
-    "subtitle": "Release introducing Model Context Protocol (MCP) Gateway, OpenAI Image Generation, first-party Anthropic support, guided output decoding for GCP Vertex AI/Gemini, cross-namespace references, enhanced authentication, and comprehensive observability improvements.",
+    "subtitle": "Release introducing Model Context Protocol (MCP) Gateway, OpenAI Image Generation, Anthropic support (direct and AWS Bedrock), guided output decoding for GCP Vertex AI/Gemini, cross-namespace references, enhanced authentication, and comprehensive observability improvements.",
     "badge": "Latest",
     "badgeType": "milestone"
   },
@@ -14,14 +14,13 @@
       "tags": [
         { "text": "MCP Gateway", "type": "feature" },
         { "text": "Image Generation", "type": "feature" },
-        { "text": "First-Party Anthropic Support", "type": "feature" },
+        { "text": "Anthropic Support", "type": "feature" },
         { "text": "Guided Output Decoding", "type": "feature" },
         { "text": "Cross-Namespace Support", "type": "feature" },
-        { "text": "Enhanced Auth", "type": "feature" },
-        { "text": "Client SDK", "type": "feature" },
+        { "text": "Enhanced Upstream Auth", "type": "feature" },
         { "text": "InferencePool v1", "type": "feature" }
       ],
-      "overview": "Envoy AI Gateway v0.4.0 is a major release introducing Model Context Protocol (MCP) Gateway with full OAuth and server multiplexing support, OpenAI Image Generation API, and first-party Anthropic provider integration. This release also brings guided output decoding for GCP Vertex AI/Gemini, cross-namespace resource references, enhanced authentication for AWS and Azure, and comprehensive observability improvements across all providers.",
+      "overview": "Envoy AI Gateway v0.4.0 is a major release introducing Model Context Protocol (MCP) Gateway with full OAuth and server multiplexing support, OpenAI Image Generation API, first-party Anthropic provider integration, and native Anthropic Messages API support for AWS Bedrock. This release also brings guided output decoding for GCP Vertex AI/Gemini, cross-namespace resource references, enhanced authentication for AWS and Azure, and comprehensive observability improvements across all providers.",
       "features": [
         {
           "title": "Model Context Protocol (MCP) Gateway",
@@ -49,19 +48,23 @@
           ]
         },
         {
-          "title": "First-Party Anthropic Provider",
+          "title": "Anthropic Provider Support",
           "items": [
             {
               "title": "Direct api.anthropic.com support",
               "description": "Native integration with Anthropic's API at <code>api.anthropic.com</code>, complementing existing GCP Vertex AI Anthropic support."
             },
             {
+              "title": "AWS Bedrock native Anthropic Messages API",
+              "description": "Support for Claude models on AWS Bedrock using the native Anthropic Messages API format instead of the generic Converse API, enabling full feature parity with direct Anthropic API including prompt caching and extended thinking."
+            },
+            {
               "title": "Anthropic API key authentication",
-              "description": "Native <code>x-api-key</code> header-based authentication matching Anthropic's API conventions and SDK patterns."
+              "description": "Native <code>x-api-key</code> header-based authentication matching Anthropic's API conventions and SDK patterns for direct Anthropic connections."
             },
             {
               "title": "Passthrough translator with token usage tracking",
-              "description": "Efficient passthrough translation layer that captures token usage and maintains API compatibility while minimizing overhead."
+              "description": "Efficient passthrough translation layer that captures token usage and maintains API compatibility while minimizing overhead for both direct and AWS Bedrock Anthropic endpoints."
             },
             {
               "title": "Standalone CLI auto-configuration",
@@ -239,6 +242,10 @@
           "description": "Added headerMutation fields to both <code>AIServiceBackend</code> and <code>AIGatewayRouteRuleBackendRef</code> for backend-level and per-route header manipulation with smart merge logic."
         },
         {
+          "title": "New <code>AWSAnthropic</code> API schema",
+          "description": "Added <code>AWSAnthropic</code> schema for Claude models on AWS Bedrock using the native Anthropic Messages API format, providing full feature parity with direct Anthropic API."
+        },
+        {
           "title": "Anthropic API key authentication",
           "description": "Added <code>AnthropicAPIKey</code> to <code>BackendSecurityPolicy</code> for <code>x-api-key</code> header authentication."
         },
@@ -269,7 +276,6 @@
     }
   ],
   "navigation": {
-    "previous": { "version": "v0.3.x Series", "path": "/release-notes/v0.3" },
-    "next": null
+    "previous": { "version": "v0.3.x Series", "path": "/release-notes/v0.3" }
   }
 }
