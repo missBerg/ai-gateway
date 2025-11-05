@@ -21,7 +21,7 @@
         { "text": "Client SDK", "type": "feature" },
         { "text": "InferencePool v1", "type": "feature" }
       ],
-      "overview": "Envoy AI Gateway v0.4.0 is a major release introducing Model Context Protocol (MCP) Gateway support with OAuth and API key authentication, OpenAI Image Generation API support, first-party Anthropic provider integration, guided output decoding for GCP Vertex AI/Gemini models, cross-namespace resource references with ReferenceGrant, enhanced AWS and Azure authentication, type-safe Kubernetes client SDK, InferencePool v1 support, and comprehensive observability improvements. This release also includes route-level header mutations, cached token tracking, and standalone CLI auto-configuration for multiple providers.",
+      "overview": "Envoy AI Gateway v0.4.0 is a major release introducing Model Context Protocol (MCP) Gateway with full OAuth and server multiplexing support, OpenAI Image Generation API, and first-party Anthropic provider integration. This release also brings guided output decoding for GCP Vertex AI/Gemini, cross-namespace resource references, enhanced authentication for AWS and Azure, and comprehensive observability improvements across all providers.",
       "features": [
         {
           "title": "Model Context Protocol (MCP) Gateway",
@@ -49,23 +49,6 @@
           ]
         },
         {
-          "title": "OpenAI Image Generation Support",
-          "items": [
-            {
-              "title": "Complete <code>/v1/images/generations</code> endpoint",
-              "description": "End-to-end support for OpenAI's image generation API including request/response translation, Brotli encoding/decoding, and full protocol compatibility."
-            },
-            {
-              "title": "Image generation tracing",
-              "description": "OpenInference-compliant distributed tracing for image generation requests with detailed request parameters and timing information."
-            },
-            {
-              "title": "Image generation metrics",
-              "description": "Comprehensive metrics instrumentation following OpenTelemetry Gen AI semantic conventions for image generation operations."
-            }
-          ]
-        },
-        {
           "title": "First-Party Anthropic Provider",
           "items": [
             {
@@ -82,7 +65,7 @@
             },
             {
               "title": "Standalone CLI auto-configuration",
-              "description": "Auto-configuration from ANTHROPIC_API_KEY environment variable in standalone mode, enabling zero-config deployments."
+              "description": "Auto-configuration from <code>ANTHROPIC_API_KEY</code> environment variable in standalone mode for zero-config deployments."
             }
           ]
         },
@@ -100,6 +83,35 @@
             {
               "title": "Guided JSON support",
               "description": "Ensures model outputs are valid JSON conforming to specified schemas for GCP Vertex AI/Gemini models, with OpenAI-compatible API translation."
+            }
+          ]
+        },
+        {
+          "title": "Provider-Specific Enhancements",
+          "items": [
+            {
+              "title": "OpenAI Image Generation <code>/v1/images/generations</code> endpoint",
+              "description": "End-to-end support for OpenAI's image generation API including request/response translation, Brotli encoding/decoding, and full protocol compatibility."
+            },
+            {
+              "title": "OpenAI legacy <code>/v1/completions</code> endpoint",
+              "description": "Full pass-through support for OpenAI's legacy completions endpoint with complete tracing and metrics, ensuring backward compatibility."
+            },
+            {
+              "title": "Azure OpenAI embeddings support",
+              "description": "Native support for Azure OpenAI embeddings API with proper protocol translation and token usage tracking."
+            },
+            {
+              "title": "AWS Bedrock reasoning tokens",
+              "description": "Full support for reasoning/thinking tokens in AWS Bedrock responses for both streaming and non-streaming modes, properly exposing extended thinking processes in Claude models."
+            },
+            {
+              "title": "GCP Vertex AI safety settings",
+              "description": "Support for GCP-specific safety settings configuration, allowing fine-grained control over content filtering and safety thresholds for Gemini models."
+            },
+            {
+              "title": "GCP Gemini streaming token accounting",
+              "description": "Accurate completion_tokens reporting in streaming usage chunks for Gemini models, ensuring proper token accounting during streaming responses."
             }
           ]
         },
@@ -134,7 +146,7 @@
           "items": [
             {
               "title": "Header mutations at route and backend levels",
-              "description": "New <code>headerMutation</code> fields in both <code>AIServiceBackend</code> and <code>AIGatewayRouteRuleBackendRef</code> enable header manipulation at backend and per-route levels with smart merge logic. Essential for GCP provisioned throughput and other advanced routing scenarios."
+              "description": "New <code>headerMutation</code> fields in both <code>AIServiceBackend</code> and <code>AIGatewayRouteRuleBackendRef</code> enable header manipulation with smart merge logic for advanced routing scenarios."
             },
             {
               "title": "<code>InferencePool</code> v1 support",
@@ -155,7 +167,7 @@
             },
             {
               "title": "Multi-provider auto-configuration",
-              "description": "Zero-config standalone mode supporting automatic configuration from <code>OPENAI_API_KEY</code>, <code>AZURE_OPENAI_API_KEY</code>, or <code>ANTHROPIC_API_KEY</code> environment variables with intelligent dialect detection and OpenAI SDK compatibility. Generates complete Envoy configuration automatically."
+              "description": "Zero-config standalone mode with automatic configuration from <code>OPENAI_API_KEY</code>, <code>AZURE_OPENAI_API_KEY</code>, or <code>ANTHROPIC_API_KEY</code> environment variables. Generates complete Envoy configuration with OpenAI SDK compatibility."
             },
             {
               "title": "MCP server configuration",
@@ -176,15 +188,10 @@
             {
               "title": "Improved error handling",
               "description": "<code>aigw</code> CLI now fails fast and exits cleanly if external processor fails to start, preventing silent failures and improving debugging experience."
-            }
-          ]
-        },
-        {
-          "title": "Developer Experience",
-          "items": [
+            },
             {
               "title": "Type-safe Kubernetes client SDK",
-              "description": "Generated client libraries for all AI Gateway CRDs following standard Kubernetes client-go patterns, enabling developers to build controllers, operators, CLI tools, and custom integrations with type safety."
+              "description": "Generated client libraries for all AI Gateway CRDs following standard Kubernetes client-go patterns, enabling developers to build controllers, operators, and custom integrations with type safety."
             }
           ]
         },
@@ -193,19 +200,19 @@
           "items": [
             {
               "title": "MCP operations observability",
-              "description": "Comprehensive monitoring, logging, and tracing for MCP operations with configurable access logs and metrics enrichment, providing full visibility into MCP server interactions and tool routing."
+              "description": "Comprehensive monitoring, logging, and tracing for MCP operations with configurable access logs and metrics enrichment for MCP server interactions and tool routing."
+            },
+            {
+              "title": "Image generation tracing and metrics",
+              "description": "OpenInference-compliant distributed tracing and OpenTelemetry Gen AI metrics for image generation requests with detailed request parameters and timing information."
             },
             {
               "title": "OpenTelemetry native metrics export",
-              "description": "Support for OTEL-native metrics export (in addition to Prometheus), enabling integration with Elastic Stack, OTEL-TUI, and other OTEL-native observability systems. Includes console exporter for ad-hoc debugging without external dependencies."
+              "description": "Support for OTEL-native metrics export (in addition to Prometheus), enabling integration with Elastic Stack, OTEL-TUI, and other OTEL-native observability systems. Includes console exporter for ad-hoc debugging."
             },
             {
               "title": "Embeddings tracing implementation",
               "description": "Complete OpenInference-compliant tracing for embeddings operations, complementing existing chat completion tracing."
-            },
-            {
-              "title": "Azure OpenAI embeddings translator",
-              "description": "Native support for Azure OpenAI embeddings API with proper protocol translation and token usage tracking."
             },
             {
               "title": "Enhanced <code>/messages</code> endpoint metrics",
@@ -214,27 +221,6 @@
             {
               "title": "Original model tracking",
               "description": "Metrics now track both the original requested model and any overridden model names, providing accurate attribution in multi-provider and model virtualization scenarios."
-            }
-          ]
-        },
-        {
-          "title": "Provider-Specific Enhancements",
-          "items": [
-            {
-              "title": "Legacy <code>/v1/completions</code> endpoint",
-              "description": "Full pass-through support for OpenAI's legacy <code>/v1/completions</code> endpoint with complete tracing and metrics implementation, ensuring backward compatibility and comprehensive observability."
-            },
-            {
-              "title": "AWS Bedrock reasoning support",
-              "description": "Full support for reasoning/thinking tokens in AWS Bedrock responses for both streaming and non-streaming modes, properly exposing extended thinking processes in Claude and other reasoning-capable models."
-            },
-            {
-              "title": "GCP Vertex AI safety settings",
-              "description": "Support for GCP-specific safety settings configuration, allowing fine-grained control over content filtering and safety thresholds for Gemini models."
-            },
-            {
-              "title": "Gemini usage chunk improvements",
-              "description": "Accurate completion_tokens reporting in streaming usage chunks for Gemini models, ensuring proper token accounting during streaming responses."
             }
           ]
         }
