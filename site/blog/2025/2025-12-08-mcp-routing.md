@@ -28,32 +28,32 @@ Before discussing how it works, let’s address how people _think_ it works. The
 ### **Misconception 1:** "AI Gateway's MCP implementation is slow."
 
 #### Reality
+
 The AIGW MCP implementation offers performance comparable to other cloud-native solutions while providing full access to all Envoy traffic-handling features.
 
-
 #### The Nuance
-The default configuration settings balance performance, functionality, and security. If you want to further reduce latency based on your use case, you can easily adjust the configuration to prioritize raw speed in internal or low-latency environments.
 
+The default configuration settings balance performance, functionality, and security. If you want to further reduce latency based on your use case, you can easily adjust the configuration to prioritize raw speed in internal or low-latency environments.
 
 ### **Misconception 2:** "Envoy AI Gateway is a separate project that ignores core Envoy."
 
 #### Reality
+
 Envoy AI Gateway is deeply integrated into the Envoy Ecosystem. It extends the Envoy Gateway control plane and leverages Envoy Proxy data-plane extensions.
 
 It is not a fork or a side project running in isolation; it is designed to feed proven implementations back into Envoy core, accelerating the adoption of emerging patterns like MCP that require faster iteration than the core release cycle typically allows.
 
-
 ### **Misconception 3:** “Envoy is not able to handle AI traffic.”
 
 #### Reality
+
 The Envoy proxy's architecture is ideally suited for managing AI traffic, including use cases like MCP. Both LLM and MCP traffic ultimately rely on HTTP. As a cloud-native, battle-tested HTTP proxy utilized at scale for over a decade, Envoy is a proven solution.
 
 Furthermore, the [Envoy community is actively working](https://github.com/search?q=repo%3Aenvoyproxy%2Fenvoy+mcp&type=pullrequests&s=created&o=desc) toward making the core Envoy proxy fully MCP-compliant. This future compatibility means Envoy AI Gateway users will be able to leverage the standard Envoy proxy for their data plane needs.
 
-
 #### The Nuance
-Currently, Envoy AI Gateway leverages Envoy Proxy extensions to fill functionality gaps and enable MCP routing via Envoy Proxy. This is thanks to Envoy Proxy's extensible architecture, which allows us to rapidly respond to and handle the various challenges the new era of AI gives us.
 
+Currently, Envoy AI Gateway leverages Envoy Proxy extensions to fill functionality gaps and enable MCP routing via Envoy Proxy. This is thanks to Envoy Proxy's extensible architecture, which allows us to rapidly respond to and handle the various challenges the new era of AI gives us.
 
 ---
 
