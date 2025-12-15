@@ -5,10 +5,8 @@ local-prefix: "github.com/envoyproxy/ai-gateway/"
 
 threshold:
   file: 70
-  # TODO: increase to 90.
   package: 81
-  # TODO: increase to 95.
-  total: 83
+  total: 86
 
 exclude:
   paths:
@@ -18,10 +16,10 @@ exclude:
     - cmd/
     # Generated code should not be tested.
     - zz_generated.deepcopy.go
+    # Generated Kubernetes client code.
+    - api/v1alpha1/client/
     # They are test-only libraries.
-    - tests/internal/envtest.go
-    - tests/internal/testenvironment/
-    - tests/internal/testopeninference/openai_proxy.go
+    - tests/internal/
     - internal/testing/
     # TODO: Remove this exclusion.
     - internal/controller/controller.go

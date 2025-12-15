@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -41,7 +42,7 @@ const (
 	newGCPAccessToken  = "new-gcp-access-token" // #nosec G101
 )
 
-func TestGCPTokenRotator_Rotate(t *testing.T) {
+func TestGCPOIDCTokenRotator_Rotate(t *testing.T) {
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
 
@@ -206,7 +207,7 @@ func TestGCPTokenRotator_Rotate(t *testing.T) {
 			gcpCredentials := aigv1a1.BackendSecurityPolicyGCPCredentials{
 				ProjectName: dummyProjectName,
 				Region:      dummyProjectRegion,
-				WorkloadIdentityFederationConfig: aigv1a1.GCPWorkloadIdentityFederationConfig{
+				WorkloadIdentityFederationConfig: &aigv1a1.GCPWorkloadIdentityFederationConfig{
 					ProjectID:                "test-project-id",
 					WorkloadIdentityPoolName: "test-pool-name",
 				},
@@ -269,7 +270,7 @@ func TestGCPTokenRotator_Rotate(t *testing.T) {
 	}
 }
 
-func TestGCPTokenRotator_GetPreRotationTime(t *testing.T) {
+func TestGCPOIDCTokenRotator_GetPreRotationTime(t *testing.T) {
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
 
@@ -364,7 +365,7 @@ func TestGCPTokenRotator_GetPreRotationTime(t *testing.T) {
 	}
 }
 
-func TestGCPTokenRotator_IsExpired(t *testing.T) {
+func TestGCPOIDCTokenRotator_IsExpired(t *testing.T) {
 	fakeKubeClient := fake.NewFakeClient()
 	rotator := &gcpOIDCTokenRotator{
 		client: fakeKubeClient,
@@ -673,7 +674,7 @@ func TestNewGCPOIDCTokenRotator(t *testing.T) {
 	// Define OIDC values based on the real Envoy Gateway API types.
 	validOIDCConfig := aigv1a1.BackendSecurityPolicyOIDC{
 		OIDC: egv1a1.OIDC{
-			ClientID: "client-id",
+			ClientID: ptr.To("client-id"),
 			Scopes:   []string{"scope1", "scope2"},
 		},
 	}
@@ -707,7 +708,7 @@ func TestNewGCPOIDCTokenRotator(t *testing.T) {
 					GCPCredentials: &aigv1a1.BackendSecurityPolicyGCPCredentials{
 						ProjectName: "test-project",
 						Region:      "us-central1",
-						WorkloadIdentityFederationConfig: aigv1a1.GCPWorkloadIdentityFederationConfig{
+						WorkloadIdentityFederationConfig: &aigv1a1.GCPWorkloadIdentityFederationConfig{
 							ProjectID:                    "test-project-id",
 							WorkloadIdentityPoolName:     "test-pool-name",
 							WorkloadIdentityProviderName: "test-provider",
@@ -818,43 +819,46 @@ func (c *errorOnGetClient) Get(_ context.Context, _ client.ObjectKey, _ client.O
 	return fmt.Errorf("lookup error")
 }
 
-func TestGetGCPProxyClientOption(t *testing.T) {
+func TestNewBearerAuthRoundTripper(t *testing.T) {
 	tests := []struct {
-		name           string
-		proxyURL       string
-		setEnvVar      bool
-		wantErr        bool
-		wantNilOption  bool
-		validateOption func(t *testing.T, opt option.ClientOption)
+		name        string
+		token       string
+		proxyURL    string
+		setProxyEnv bool
+		wantErr     bool
 	}{
 		{
-			name:          "no proxy URL environment variable",
-			setEnvVar:     false,
-			wantErr:       false,
-			wantNilOption: true,
+			name:        "no proxy, no token",
+			token:       "",
+			setProxyEnv: false,
+			wantErr:     false,
 		},
 		{
-			name:          "empty proxy URL environment variable",
-			proxyURL:      "",
-			setEnvVar:     true,
-			wantErr:       false,
-			wantNilOption: true,
+			name:        "no proxy, with token",
+			token:       "test-token",
+			setProxyEnv: false,
+			wantErr:     false,
 		},
 		{
-			name:          "valid HTTPS proxy URL",
-			proxyURL:      "https://secure-proxy.example.com:8443",
-			setEnvVar:     true,
-			wantErr:       false,
-			wantNilOption: false,
-			validateOption: func(t *testing.T, opt option.ClientOption) {
-				require.NotNil(t, opt)
-			},
+			name:        "empty proxy, with token",
+			token:       "test-token",
+			proxyURL:    "",
+			setProxyEnv: true,
+			wantErr:     false,
 		},
 		{
-			name:      "invalid proxy URL - missing protocol scheme",
-			proxyURL:  "://invalid",
-			setEnvVar: true,
-			wantErr:   true,
+			name:        "with valid proxy, no token",
+			token:       "",
+			proxyURL:    "http://proxy.example.com:3128",
+			setProxyEnv: true,
+			wantErr:     false,
+		},
+		{
+			name:        "with valid proxy and token",
+			token:       "test-token",
+			proxyURL:    "https://secure-proxy.example.com:8443",
+			setProxyEnv: true,
+			wantErr:     false,
 		},
 	}
 
@@ -870,34 +874,80 @@ func TestGetGCPProxyClientOption(t *testing.T) {
 				}
 			}()
 
-			if tt.setEnvVar {
+			if tt.setProxyEnv {
 				os.Setenv("AI_GATEWAY_GCP_AUTH_PROXY_URL", tt.proxyURL)
 			} else {
 				os.Unsetenv("AI_GATEWAY_GCP_AUTH_PROXY_URL")
 			}
 
 			// Call the function under test.
-			got, err := getGCPProxyClientOption()
+			roundTripper, err := newBearerAuthRoundTripper(tt.token)
 
 			// Validate error expectation.
 			if tt.wantErr {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "invalid proxy URL")
+				require.Nil(t, roundTripper)
 				return
 			}
 
 			require.NoError(t, err)
+			require.NotNil(t, roundTripper)
 
-			// Validate nil option expectation.
-			if tt.wantNilOption {
-				require.Nil(t, got)
-				return
-			}
+			// Verify it's the expected type.
+			bearerRT, ok := roundTripper.(*bearerAuthRoundTripper)
+			require.True(t, ok, "Expected bearerAuthRoundTripper type")
+			require.Equal(t, tt.token, bearerRT.token)
+			require.NotNil(t, bearerRT.base)
+		})
+	}
+}
 
-			// Additional validation if provided.
-			if tt.validateOption != nil {
-				tt.validateOption(t, got)
-			}
+func TestBearerAuthRoundTripper_RoundTrip(t *testing.T) {
+	tests := []struct {
+		name             string
+		token            string
+		expectAuthHeader bool
+	}{
+		{
+			name:             "with token",
+			token:            "test-bearer-token",
+			expectAuthHeader: true,
+		},
+		{
+			name:             "without token",
+			token:            "",
+			expectAuthHeader: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a test server to capture the request.
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				authHeader := r.Header.Get("Authorization")
+				if tt.expectAuthHeader {
+					expectedAuth := "Bearer " + tt.token
+					require.Equal(t, expectedAuth, authHeader, "Authorization header mismatch")
+				} else {
+					require.Empty(t, authHeader, "Authorization header should be empty")
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+
+			// Create the round tripper.
+			roundTripper, err := newBearerAuthRoundTripper(tt.token)
+			require.NoError(t, err)
+
+			// Create a request to the test server.
+			req, err := http.NewRequest(http.MethodGet, server.URL, nil)
+			require.NoError(t, err)
+
+			// Execute the request through the round tripper.
+			resp, err := roundTripper.RoundTrip(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			require.Equal(t, http.StatusOK, resp.StatusCode)
 		})
 	}
 }

@@ -19,12 +19,14 @@ import (
 	endpointv3 "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	listenerv3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	httpconnectionmanagerv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	httpv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/upstreams/http/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -34,12 +36,23 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	gwaiev1a2 "sigs.k8s.io/gateway-api-inference-extension/api/v1alpha2"
+	gwaiev1 "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 
 	aigv1a1 "github.com/envoyproxy/ai-gateway/api/v1alpha1"
 	"github.com/envoyproxy/ai-gateway/internal/controller"
 	"github.com/envoyproxy/ai-gateway/internal/internalapi"
 )
+
+// mustToAny marshals the provided message to an Any message.
+func mustToAny(t *testing.T, msg proto.Message) *anypb.Any {
+	b, err := proto.Marshal(msg)
+	require.NoError(t, err)
+	const envoyAPIPrefix = "type.googleapis.com/"
+	return &anypb.Any{
+		TypeUrl: envoyAPIPrefix + string(msg.ProtoReflect().Descriptor().FullName()),
+		Value:   b,
+	}
+}
 
 func newFakeClient() client.Client {
 	builder := fake.NewClientBuilder().WithScheme(controller.Scheme).
@@ -126,9 +139,6 @@ func Test_maybeModifyCluster(t *testing.T) {
 			Name: "httproute/ns/name/rule/invalid",
 		}, errLog: "failed to parse HTTPRoute rule index"},
 		{c: &clusterv3.Cluster{
-			Name: "httproute/ns/nonexistent/rule/0",
-		}, errLog: `failed to get AIGatewayRoute object`},
-		{c: &clusterv3.Cluster{
 			Name: "httproute/ns/myroute/rule/99999",
 		}, errLog: `HTTPRoute rule index out of range`},
 		{c: &clusterv3.Cluster{
@@ -142,7 +152,8 @@ func Test_maybeModifyCluster(t *testing.T) {
 		t.Run("error/"+tc.errLog, func(t *testing.T) {
 			var buf bytes.Buffer
 			s := New(c, logr.FromSlogHandler(slog.NewTextHandler(&buf, &slog.HandlerOptions{})), udsPath, false)
-			s.maybeModifyCluster(tc.c)
+			err = s.maybeModifyCluster(tc.c)
+			require.NoError(t, err)
 			t.Logf("buf: %s", buf.String())
 			require.Contains(t, buf.String(), tc.errLog)
 		})
@@ -167,7 +178,8 @@ func Test_maybeModifyCluster(t *testing.T) {
 		}
 		var buf bytes.Buffer
 		s := New(c, logr.FromSlogHandler(slog.NewTextHandler(&buf, &slog.HandlerOptions{})), udsPath, false)
-		s.maybeModifyCluster(cluster)
+		err = s.maybeModifyCluster(cluster)
+		require.NoError(t, err)
 		require.Empty(t, buf.String())
 
 		require.Len(t, cluster.LoadAssignment.Endpoints, 2)
@@ -187,19 +199,19 @@ func Test_maybeModifyCluster(t *testing.T) {
 // Helper function to create an InferencePool ExtensionResource.
 func createInferencePoolExtensionResource(name, namespace string) *egextension.ExtensionResource {
 	unstructuredObj := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "inference.networking.x-k8s.io/v1alpha2",
+		Object: map[string]any{
+			"apiVersion": "inference.networking.k8s.io/v1",
 			"kind":       "InferencePool",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name":      name,
 				"namespace": namespace,
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"targetPortNumber": int32(8080),
-				"selector": map[string]interface{}{
+				"selector": map[string]any{
 					"app": "test-inference",
 				},
-				"extensionRef": map[string]interface{}{
+				"extensionRef": map[string]any{
 					"name": "test-epp",
 				},
 			},
@@ -235,26 +247,13 @@ func TestMaybeModifyClusterExtended(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	t.Run("AIGatewayRoute not found but has InferencePool metadata", func(t *testing.T) {
+	t.Run("AIGatewayRoute not found", func(t *testing.T) {
 		var buf bytes.Buffer
 		s := New(c, logr.FromSlogHandler(slog.NewTextHandler(&buf, &slog.HandlerOptions{})), udsPath, false)
-
-		// Create cluster with InferencePool metadata but non-existent route.
-		cluster := &clusterv3.Cluster{
-			Name: "httproute/test-ns/nonexistent-route/rule/0",
-			Metadata: &corev3.Metadata{
-				FilterMetadata: map[string]*structpb.Struct{
-					internalapi.InternalEndpointMetadataNamespace: {
-						Fields: map[string]*structpb.Value{
-							"per_route_rule_inference_pool": structpb.NewStringValue("test-ns/test-pool/test-epp/9002"),
-						},
-					},
-				},
-			},
-		}
-
-		s.maybeModifyCluster(cluster)
-		require.Contains(t, buf.String(), "AIGatewayRoute not found, but found InferencePool in cluster metadata")
+		cluster := &clusterv3.Cluster{Name: "httproute/test-ns/nonexistent-route/rule/0", Metadata: &corev3.Metadata{}}
+		err = s.maybeModifyCluster(cluster)
+		require.NoError(t, err)
+		require.Contains(t, buf.String(), "kipping non-AIGatewayRoute HTTPRoute cluster modification")
 	})
 
 	t.Run("cluster with InferencePool metadata and existing route", func(t *testing.T) {
@@ -267,14 +266,15 @@ func TestMaybeModifyClusterExtended(t *testing.T) {
 				FilterMetadata: map[string]*structpb.Struct{
 					internalapi.InternalEndpointMetadataNamespace: {
 						Fields: map[string]*structpb.Value{
-							"per_route_rule_inference_pool": structpb.NewStringValue("test-ns/test-pool/test-epp/9002"),
+							"per_route_rule_inference_pool": structpb.NewStringValue("test-ns/test-pool/test-epp/9002/duplex/false"),
 						},
 					},
 				},
 			},
 		}
 
-		s.maybeModifyCluster(cluster)
+		err = s.maybeModifyCluster(cluster)
+		require.NoError(t, err)
 
 		// Verify InferencePool metadata was added to cluster.
 		require.NotNil(t, cluster.Metadata)
@@ -311,11 +311,12 @@ func TestMaybeModifyClusterExtended(t *testing.T) {
 				},
 			},
 			TypedExtensionProtocolOptions: map[string]*anypb.Any{
-				"envoy.extensions.upstreams.http.v3.HttpProtocolOptions": mustToAny(existingPO),
+				"envoy.extensions.upstreams.http.v3.HttpProtocolOptions": mustToAny(t, existingPO),
 			},
 		}
 
-		s.maybeModifyCluster(cluster)
+		err = s.maybeModifyCluster(cluster)
+		require.NoError(t, err)
 
 		// Verify filters were added correctly.
 		require.NotNil(t, cluster.TypedExtensionProtocolOptions)
@@ -323,7 +324,7 @@ func TestMaybeModifyClusterExtended(t *testing.T) {
 		// Unmarshal and verify the updated protocol options.
 		updatedPOAny := cluster.TypedExtensionProtocolOptions["envoy.extensions.upstreams.http.v3.HttpProtocolOptions"]
 		updatedPO := &httpv3.HttpProtocolOptions{}
-		err := updatedPOAny.UnmarshalTo(updatedPO)
+		err = updatedPOAny.UnmarshalTo(updatedPO)
 		require.NoError(t, err)
 
 		// Should have ext_proc + header_mutation + existing_filter (which becomes the last filter).
@@ -358,16 +359,17 @@ func TestMaybeModifyClusterExtended(t *testing.T) {
 				},
 			},
 			TypedExtensionProtocolOptions: map[string]*anypb.Any{
-				"envoy.extensions.upstreams.http.v3.HttpProtocolOptions": mustToAny(existingPO),
+				"envoy.extensions.upstreams.http.v3.HttpProtocolOptions": mustToAny(t, existingPO),
 			},
 		}
 
-		s.maybeModifyCluster(cluster)
+		err = s.maybeModifyCluster(cluster)
+		require.NoError(t, err)
 
 		// Verify no additional filters were added since ext_proc already exists.
 		updatedPOAny := cluster.TypedExtensionProtocolOptions["envoy.extensions.upstreams.http.v3.HttpProtocolOptions"]
 		updatedPO := &httpv3.HttpProtocolOptions{}
-		err := updatedPOAny.UnmarshalTo(updatedPO)
+		err = updatedPOAny.UnmarshalTo(updatedPO)
 		require.NoError(t, err)
 
 		// Should still have only the existing filter.
@@ -389,14 +391,15 @@ func TestMaybeModifyClusterExtended(t *testing.T) {
 			},
 		}
 
-		s.maybeModifyCluster(cluster)
+		err = s.maybeModifyCluster(cluster)
+		require.NoError(t, err)
 
 		// Verify filters were added correctly.
 		require.NotNil(t, cluster.TypedExtensionProtocolOptions)
 
 		updatedPOAny := cluster.TypedExtensionProtocolOptions["envoy.extensions.upstreams.http.v3.HttpProtocolOptions"]
 		updatedPO := &httpv3.HttpProtocolOptions{}
-		err := updatedPOAny.UnmarshalTo(updatedPO)
+		err = updatedPOAny.UnmarshalTo(updatedPO)
 		require.NoError(t, err)
 
 		// Should have ext_proc + header_mutation + upstream_codec.
@@ -430,7 +433,8 @@ func TestMaybeModifyClusterExtended(t *testing.T) {
 			},
 		}
 
-		s.maybeModifyCluster(cluster)
+		err = s.maybeModifyCluster(cluster)
+		require.Error(t, err)
 		require.Contains(t, buf.String(), "failed to unmarshal HttpProtocolOptions")
 	})
 }
@@ -458,7 +462,7 @@ func TestMaybeModifyListenerAndRoutes(t *testing.T) {
 				Filters: []*listenerv3.Filter{
 					{
 						Name:       wellknown.HTTPConnectionManager,
-						ConfigType: &listenerv3.Filter_TypedConfig{TypedConfig: mustToAny(hcm)},
+						ConfigType: &listenerv3.Filter_TypedConfig{TypedConfig: mustToAny(t, hcm)},
 					},
 				},
 			},
@@ -473,7 +477,7 @@ func TestMaybeModifyListenerAndRoutes(t *testing.T) {
 				FilterMetadata: map[string]*structpb.Struct{
 					internalapi.InternalEndpointMetadataNamespace: {
 						Fields: map[string]*structpb.Value{
-							"per_route_rule_inference_pool": structpb.NewStringValue("test-ns/test-pool/test-epp/9002"),
+							"per_route_rule_inference_pool": structpb.NewStringValue("test-ns/test-pool/test-epp/9002/duplex/false"),
 						},
 					},
 				},
@@ -482,8 +486,8 @@ func TestMaybeModifyListenerAndRoutes(t *testing.T) {
 	}
 
 	t.Run("empty listeners and routes", func(_ *testing.T) {
-		s.maybeModifyListenerAndRoutes([]*listenerv3.Listener{}, []*routev3.RouteConfiguration{})
-		// Should not panic or error.
+		err := s.maybeModifyListenerAndRoutes([]*listenerv3.Listener{}, []*routev3.RouteConfiguration{})
+		require.NoError(t, err)
 	})
 
 	t.Run("listener with envoy-gateway prefix is skipped", func(_ *testing.T) {
@@ -505,7 +509,8 @@ func TestMaybeModifyListenerAndRoutes(t *testing.T) {
 			},
 		}
 
-		s.maybeModifyListenerAndRoutes(listeners, routes)
+		err := s.maybeModifyListenerAndRoutes(listeners, routes)
+		require.NoError(t, err)
 		// Should process only normal-listener, not envoy-gateway-listener.
 	})
 
@@ -525,13 +530,14 @@ func TestMaybeModifyListenerAndRoutes(t *testing.T) {
 				Filters: []*listenerv3.Filter{
 					{
 						Name:       wellknown.HTTPConnectionManager,
-						ConfigType: &listenerv3.Filter_TypedConfig{TypedConfig: mustToAny(hcm)},
+						ConfigType: &listenerv3.Filter_TypedConfig{TypedConfig: mustToAny(t, hcm)},
 					},
 				},
 			},
 		}
 
-		s.maybeModifyListenerAndRoutes([]*listenerv3.Listener{listener}, []*routev3.RouteConfiguration{})
+		err := s.maybeModifyListenerAndRoutes([]*listenerv3.Listener{listener}, []*routev3.RouteConfiguration{})
+		require.NoError(t, err)
 		// Should handle gracefully when no RDS route config name is found.
 	})
 
@@ -541,7 +547,8 @@ func TestMaybeModifyListenerAndRoutes(t *testing.T) {
 			// No DefaultFilterChain set.
 		}
 
-		s.maybeModifyListenerAndRoutes([]*listenerv3.Listener{listener}, []*routev3.RouteConfiguration{})
+		err := s.maybeModifyListenerAndRoutes([]*listenerv3.Listener{listener}, []*routev3.RouteConfiguration{})
+		require.NoError(t, err)
 		// Should handle gracefully when no default filter chain exists.
 	})
 
@@ -565,7 +572,8 @@ func TestMaybeModifyListenerAndRoutes(t *testing.T) {
 			},
 		}
 
-		s.maybeModifyListenerAndRoutes(listeners, routes)
+		err := s.maybeModifyListenerAndRoutes(listeners, routes)
+		require.NoError(t, err)
 		// Should identify and process InferencePool routes.
 	})
 
@@ -600,7 +608,9 @@ func TestMaybeModifyListenerAndRoutes(t *testing.T) {
 			},
 		}
 
-		s.maybeModifyListenerAndRoutes(listeners, routes)
+		err := s.maybeModifyListenerAndRoutes(listeners, routes)
+		require.NoError(t, err)
+
 		// Should handle multiple listeners with different route configurations.
 	})
 
@@ -623,7 +633,8 @@ func TestMaybeModifyListenerAndRoutes(t *testing.T) {
 			},
 		}
 
-		s.maybeModifyListenerAndRoutes(listeners, routes)
+		err := s.maybeModifyListenerAndRoutes(listeners, routes)
+		require.NoError(t, err)
 		// Should handle gracefully when referenced route config is not found.
 	})
 }
@@ -633,20 +644,16 @@ func TestPatchListenerWithInferencePoolFilters(t *testing.T) {
 	s := New(newFakeClient(), logr.Discard(), udsPath, false)
 
 	// Helper function to create an InferencePool.
-	createInferencePool := func(name, namespace string) *gwaiev1a2.InferencePool {
-		return &gwaiev1a2.InferencePool{
+	createInferencePool := func(name, namespace string) *gwaiev1.InferencePool {
+		return &gwaiev1.InferencePool{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: namespace,
 			},
-			Spec: gwaiev1a2.InferencePoolSpec{
-				TargetPortNumber: 8080,
-				EndpointPickerConfig: gwaiev1a2.EndpointPickerConfig{
-					ExtensionRef: &gwaiev1a2.Extension{
-						ExtensionReference: gwaiev1a2.ExtensionReference{
-							Name: "test-epp",
-						},
-					},
+			Spec: gwaiev1.InferencePoolSpec{
+				TargetPorts: []gwaiev1.Port{{Number: 8080}},
+				EndpointPickerRef: gwaiev1.EndpointPickerRef{
+					Name: "test-epp",
 				},
 			},
 		}
@@ -664,7 +671,7 @@ func TestPatchListenerWithInferencePoolFilters(t *testing.T) {
 				Filters: []*listenerv3.Filter{
 					{
 						Name:       wellknown.HTTPConnectionManager,
-						ConfigType: &listenerv3.Filter_TypedConfig{TypedConfig: mustToAny(hcm)},
+						ConfigType: &listenerv3.Filter_TypedConfig{TypedConfig: mustToAny(t, hcm)},
 					},
 				},
 			},
@@ -675,7 +682,7 @@ func TestPatchListenerWithInferencePoolFilters(t *testing.T) {
 		listener := &listenerv3.Listener{
 			Name: "test-listener",
 		}
-		pools := []*gwaiev1a2.InferencePool{createInferencePool("test-pool", "test-ns")}
+		pools := []*gwaiev1.InferencePool{createInferencePool("test-pool", "test-ns")}
 
 		s.patchListenerWithInferencePoolFilters(listener, pools)
 		// Should handle gracefully when no filter chains exist.
@@ -695,7 +702,7 @@ func TestPatchListenerWithInferencePoolFilters(t *testing.T) {
 				},
 			},
 		}
-		pools := []*gwaiev1a2.InferencePool{createInferencePool("test-pool", "test-ns")}
+		pools := []*gwaiev1.InferencePool{createInferencePool("test-pool", "test-ns")}
 
 		server.patchListenerWithInferencePoolFilters(listener, pools)
 		require.Contains(t, buf.String(), "failed to find an HCM in the current chain")
@@ -708,7 +715,7 @@ func TestPatchListenerWithInferencePoolFilters(t *testing.T) {
 		}
 
 		listener := createListenerWithHCM("test-listener", existingFilters)
-		pools := []*gwaiev1a2.InferencePool{createInferencePool("test-pool", "test-ns")}
+		pools := []*gwaiev1.InferencePool{createInferencePool("test-pool", "test-ns")}
 
 		s.patchListenerWithInferencePoolFilters(listener, pools)
 
@@ -725,7 +732,7 @@ func TestPatchListenerWithInferencePoolFilters(t *testing.T) {
 		}
 
 		listener := createListenerWithHCM("test-listener", existingFilters)
-		pools := []*gwaiev1a2.InferencePool{createInferencePool("test-pool", "test-ns")}
+		pools := []*gwaiev1.InferencePool{createInferencePool("test-pool", "test-ns")}
 
 		s.patchListenerWithInferencePoolFilters(listener, pools)
 
@@ -744,7 +751,7 @@ func TestPatchListenerWithInferencePoolFilters(t *testing.T) {
 		}
 
 		listener := createListenerWithHCM("test-listener", existingFilters)
-		pools := []*gwaiev1a2.InferencePool{
+		pools := []*gwaiev1.InferencePool{
 			createInferencePool("pool1", "test-ns"),
 			createInferencePool("pool2", "test-ns"),
 		}
@@ -775,7 +782,7 @@ func TestPatchListenerWithInferencePoolFilters(t *testing.T) {
 					Filters: []*listenerv3.Filter{
 						{
 							Name:       wellknown.HTTPConnectionManager,
-							ConfigType: &listenerv3.Filter_TypedConfig{TypedConfig: mustToAny(hcm)},
+							ConfigType: &listenerv3.Filter_TypedConfig{TypedConfig: mustToAny(t, hcm)},
 						},
 					},
 				},
@@ -784,13 +791,13 @@ func TestPatchListenerWithInferencePoolFilters(t *testing.T) {
 				Filters: []*listenerv3.Filter{
 					{
 						Name:       wellknown.HTTPConnectionManager,
-						ConfigType: &listenerv3.Filter_TypedConfig{TypedConfig: mustToAny(hcm)},
+						ConfigType: &listenerv3.Filter_TypedConfig{TypedConfig: mustToAny(t, hcm)},
 					},
 				},
 			},
 		}
 
-		pools := []*gwaiev1a2.InferencePool{createInferencePool("test-pool", "test-ns")}
+		pools := []*gwaiev1.InferencePool{createInferencePool("test-pool", "test-ns")}
 
 		s.patchListenerWithInferencePoolFilters(listener, pools)
 
@@ -818,7 +825,7 @@ func TestPatchListenerWithInferencePoolFilters(t *testing.T) {
 		listener := createListenerWithHCM("test-listener", []*httpconnectionmanagerv3.HttpFilter{
 			{Name: "envoy.filters.http.router"},
 		})
-		pools := []*gwaiev1a2.InferencePool{createInferencePool("test-pool", "test-ns")}
+		pools := []*gwaiev1.InferencePool{createInferencePool("test-pool", "test-ns")}
 
 		server.patchListenerWithInferencePoolFilters(listener, pools)
 		// This test mainly ensures the error handling path is covered.
@@ -831,33 +838,29 @@ func TestPatchVirtualHostWithInferencePool(t *testing.T) {
 	s := New(newFakeClient(), logr.Discard(), udsPath, false)
 
 	// Helper function to create an InferencePool.
-	createInferencePool := func(name, namespace string) *gwaiev1a2.InferencePool {
-		return &gwaiev1a2.InferencePool{
+	createInferencePool := func(name, namespace string) *gwaiev1.InferencePool {
+		return &gwaiev1.InferencePool{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: namespace,
 			},
-			Spec: gwaiev1a2.InferencePoolSpec{
-				TargetPortNumber: 8080,
-				EndpointPickerConfig: gwaiev1a2.EndpointPickerConfig{
-					ExtensionRef: &gwaiev1a2.Extension{
-						ExtensionReference: gwaiev1a2.ExtensionReference{
-							Name: "test-epp",
-						},
-					},
+			Spec: gwaiev1.InferencePoolSpec{
+				TargetPorts: []gwaiev1.Port{{Number: 8080}},
+				EndpointPickerRef: gwaiev1.EndpointPickerRef{
+					Name: "test-epp",
 				},
 			},
 		}
 	}
 
 	// Helper function to create a route with InferencePool metadata.
-	createRouteWithInferencePool := func(routeName string, pool *gwaiev1a2.InferencePool) *routev3.Route {
+	createRouteWithInferencePool := func(routeName string, pool *gwaiev1.InferencePool) *routev3.Route {
 		metadata := &corev3.Metadata{
 			FilterMetadata: map[string]*structpb.Struct{
 				internalapi.InternalEndpointMetadataNamespace: {
 					Fields: map[string]*structpb.Value{
 						"per_route_rule_inference_pool": structpb.NewStringValue(
-							fmt.Sprintf("%s/%s/test-epp/9002", pool.Namespace, pool.Name),
+							fmt.Sprintf("%s/%s/test-epp/9002/duplex/false", pool.Namespace, pool.Name),
 						),
 					},
 				},
@@ -875,9 +878,10 @@ func TestPatchVirtualHostWithInferencePool(t *testing.T) {
 			Name:   "test-vh",
 			Routes: []*routev3.Route{},
 		}
-		pools := []*gwaiev1a2.InferencePool{createInferencePool("test-pool", "test-ns")}
+		pools := []*gwaiev1.InferencePool{createInferencePool("test-pool", "test-ns")}
 
-		s.patchVirtualHostWithInferencePool(vh, pools)
+		err := s.patchVirtualHostWithInferencePool(vh, pools)
+		require.NoError(t, err)
 		// Should handle gracefully when no routes exist.
 	})
 
@@ -889,9 +893,10 @@ func TestPatchVirtualHostWithInferencePool(t *testing.T) {
 			Name:   "test-vh",
 			Routes: []*routev3.Route{normalRoute},
 		}
-		pools := []*gwaiev1a2.InferencePool{createInferencePool("test-pool", "test-ns")}
+		pools := []*gwaiev1.InferencePool{createInferencePool("test-pool", "test-ns")}
 
-		s.patchVirtualHostWithInferencePool(vh, pools)
+		err := s.patchVirtualHostWithInferencePool(vh, pools)
+		require.NoError(t, err)
 
 		// Verify the route was configured to disable all inference pool filters.
 		require.NotNil(t, normalRoute.TypedPerFilterConfig)
@@ -907,9 +912,10 @@ func TestPatchVirtualHostWithInferencePool(t *testing.T) {
 			Name:   "test-vh",
 			Routes: []*routev3.Route{inferenceRoute},
 		}
-		pools := []*gwaiev1a2.InferencePool{pool}
+		pools := []*gwaiev1.InferencePool{pool}
 
-		s.patchVirtualHostWithInferencePool(vh, pools)
+		err := s.patchVirtualHostWithInferencePool(vh, pools)
+		require.NoError(t, err)
 
 		// Verify the route was not configured to disable its own filter.
 		// It should not have any TypedPerFilterConfig for its own filter.
@@ -930,9 +936,10 @@ func TestPatchVirtualHostWithInferencePool(t *testing.T) {
 			Name:   "test-vh",
 			Routes: []*routev3.Route{inferenceRoute},
 		}
-		pools := []*gwaiev1a2.InferencePool{pool1, pool2}
+		pools := []*gwaiev1.InferencePool{pool1, pool2}
 
-		s.patchVirtualHostWithInferencePool(vh, pools)
+		err := s.patchVirtualHostWithInferencePool(vh, pools)
+		require.NoError(t, err)
 
 		// Verify the route disables pool2's filter but not pool1's filter.
 		require.NotNil(t, inferenceRoute.TypedPerFilterConfig)
@@ -962,9 +969,10 @@ func TestPatchVirtualHostWithInferencePool(t *testing.T) {
 			Name:   "test-vh",
 			Routes: []*routev3.Route{directResponseRoute},
 		}
-		pools := []*gwaiev1a2.InferencePool{createInferencePool("test-pool", "test-ns")}
+		pools := []*gwaiev1.InferencePool{createInferencePool("test-pool", "test-ns")}
 
-		s.patchVirtualHostWithInferencePool(vh, pools)
+		err := s.patchVirtualHostWithInferencePool(vh, pools)
+		require.NoError(t, err)
 
 		// Verify the direct response route was not skipped (And TypedPerFilterConfig added).
 		require.NotNil(t, directResponseRoute.TypedPerFilterConfig)
@@ -988,9 +996,10 @@ func TestPatchVirtualHostWithInferencePool(t *testing.T) {
 			Name:   "test-vh",
 			Routes: []*routev3.Route{directResponseRoute},
 		}
-		pools := []*gwaiev1a2.InferencePool{createInferencePool("test-pool", "test-ns")}
+		pools := []*gwaiev1.InferencePool{createInferencePool("test-pool", "test-ns")}
 
-		s.patchVirtualHostWithInferencePool(vh, pools)
+		err := s.patchVirtualHostWithInferencePool(vh, pools)
+		require.NoError(t, err)
 
 		// Verify the direct response route was processed (TypedPerFilterConfig added).
 		require.NotNil(t, directResponseRoute.TypedPerFilterConfig)
@@ -1010,9 +1019,10 @@ func TestPatchVirtualHostWithInferencePool(t *testing.T) {
 			Name:   "test-vh",
 			Routes: []*routev3.Route{normalRoute, inferenceRoute1, inferenceRoute2},
 		}
-		pools := []*gwaiev1a2.InferencePool{pool1, pool2}
+		pools := []*gwaiev1.InferencePool{pool1, pool2}
 
-		s.patchVirtualHostWithInferencePool(vh, pools)
+		err := s.patchVirtualHostWithInferencePool(vh, pools)
+		require.NoError(t, err)
 
 		// Verify normal route disables both filters.
 		require.NotNil(t, normalRoute.TypedPerFilterConfig)
@@ -1204,10 +1214,10 @@ func TestConstructInferencePoolsFrom(t *testing.T) {
 
 	t.Run("wrong API version", func(t *testing.T) {
 		unstructuredObj := &unstructured.Unstructured{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "v1",
 				"kind":       "Service",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name":      "test-service",
 					"namespace": "default",
 				},
@@ -1225,19 +1235,15 @@ func TestConstructInferencePoolsFrom(t *testing.T) {
 // TestInferencePoolHelperFunctions tests various helper functions for InferencePool.
 func TestInferencePoolHelperFunctions(t *testing.T) {
 	// Create a test InferencePool.
-	pool := &gwaiev1a2.InferencePool{
+	pool := &gwaiev1.InferencePool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pool",
 			Namespace: "test-ns",
 		},
-		Spec: gwaiev1a2.InferencePoolSpec{
-			TargetPortNumber: 8080,
-			EndpointPickerConfig: gwaiev1a2.EndpointPickerConfig{
-				ExtensionRef: &gwaiev1a2.Extension{
-					ExtensionReference: gwaiev1a2.ExtensionReference{
-						Name: "test-epp",
-					},
-				},
+		Spec: gwaiev1.InferencePoolSpec{
+			TargetPorts: []gwaiev1.Port{{Number: 8080}},
+			EndpointPickerRef: gwaiev1.EndpointPickerRef{
+				Name: "test-epp",
 			},
 		},
 	}
@@ -1269,34 +1275,345 @@ func TestInferencePoolHelperFunctions(t *testing.T) {
 
 	t.Run("portForInferencePool custom", func(t *testing.T) {
 		customPool := pool.DeepCopy()
-		customPort := gwaiev1a2.PortNumber(8888)
-		customPool.Spec.ExtensionRef.ExtensionReference.PortNumber = &customPort
+		customPort := gwaiev1.PortNumber(8888)
+		customPool.Spec.EndpointPickerRef.Port = &gwaiev1.Port{Number: customPort}
 		port := portForInferencePool(customPool)
 		require.Equal(t, uint32(8888), port)
 	})
 }
 
+// TestInferencePoolAnnotationHelpers tests the annotation helper functions.
+func TestInferencePoolAnnotationHelpers(t *testing.T) {
+	t.Run("getProcessingBodyModeFromAnnotations", func(t *testing.T) {
+		t.Run("no annotations", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+				},
+			}
+			mode := getProcessingBodyModeFromAnnotations(pool)
+			require.Equal(t, extprocv3.ProcessingMode_FULL_DUPLEX_STREAMED, mode)
+		})
+
+		t.Run("annotation set to duplex", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+					Annotations: map[string]string{
+						"aigateway.envoyproxy.io/processing-body-mode": "duplex",
+					},
+				},
+			}
+			mode := getProcessingBodyModeFromAnnotations(pool)
+			require.Equal(t, extprocv3.ProcessingMode_FULL_DUPLEX_STREAMED, mode)
+		})
+
+		t.Run("annotation set to buffered", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+					Annotations: map[string]string{
+						"aigateway.envoyproxy.io/processing-body-mode": "buffered",
+					},
+				},
+			}
+			mode := getProcessingBodyModeFromAnnotations(pool)
+			require.Equal(t, extprocv3.ProcessingMode_BUFFERED, mode)
+		})
+
+		t.Run("annotation set to invalid value", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+					Annotations: map[string]string{
+						"aigateway.envoyproxy.io/processing-body-mode": "invalid",
+					},
+				},
+			}
+			mode := getProcessingBodyModeFromAnnotations(pool)
+			require.Equal(t, extprocv3.ProcessingMode_FULL_DUPLEX_STREAMED, mode)
+		})
+	})
+
+	t.Run("getAllowModeOverrideFromAnnotations", func(t *testing.T) {
+		t.Run("no annotations", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+				},
+			}
+			override := getAllowModeOverrideFromAnnotations(pool)
+			require.False(t, override)
+		})
+
+		t.Run("annotation set to true", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+					Annotations: map[string]string{
+						"aigateway.envoyproxy.io/allow-mode-override": "true",
+					},
+				},
+			}
+			override := getAllowModeOverrideFromAnnotations(pool)
+			require.True(t, override)
+		})
+
+		t.Run("annotation set to false", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+					Annotations: map[string]string{
+						"aigateway.envoyproxy.io/allow-mode-override": "false",
+					},
+				},
+			}
+			override := getAllowModeOverrideFromAnnotations(pool)
+			require.False(t, override)
+		})
+
+		t.Run("annotation set to invalid value", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+					Annotations: map[string]string{
+						"aigateway.envoyproxy.io/allow-mode-override": "invalid",
+					},
+				},
+			}
+			override := getAllowModeOverrideFromAnnotations(pool)
+			require.False(t, override)
+		})
+	})
+
+	t.Run("getProcessingBodyModeStringFromAnnotations", func(t *testing.T) {
+		t.Run("no annotations", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+				},
+			}
+			mode := getProcessingBodyModeStringFromAnnotations(pool)
+			require.Equal(t, "duplex", mode)
+		})
+
+		t.Run("annotation set to duplex", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+					Annotations: map[string]string{
+						"aigateway.envoyproxy.io/processing-body-mode": "duplex",
+					},
+				},
+			}
+			mode := getProcessingBodyModeStringFromAnnotations(pool)
+			require.Equal(t, "duplex", mode)
+		})
+
+		t.Run("annotation set to buffered", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+					Annotations: map[string]string{
+						"aigateway.envoyproxy.io/processing-body-mode": "buffered",
+					},
+				},
+			}
+			mode := getProcessingBodyModeStringFromAnnotations(pool)
+			require.Equal(t, "buffered", mode)
+		})
+
+		t.Run("annotation set to invalid value", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+					Annotations: map[string]string{
+						"aigateway.envoyproxy.io/processing-body-mode": "invalid",
+					},
+				},
+			}
+			mode := getProcessingBodyModeStringFromAnnotations(pool)
+			require.Equal(t, "invalid", mode) // Returns the raw value
+		})
+	})
+
+	t.Run("getAllowModeOverrideStringFromAnnotations", func(t *testing.T) {
+		t.Run("no annotations", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+				},
+			}
+			override := getAllowModeOverrideStringFromAnnotations(pool)
+			require.Equal(t, "false", override)
+		})
+
+		t.Run("annotation set to true", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+					Annotations: map[string]string{
+						"aigateway.envoyproxy.io/allow-mode-override": "true",
+					},
+				},
+			}
+			override := getAllowModeOverrideStringFromAnnotations(pool)
+			require.Equal(t, "true", override)
+		})
+
+		t.Run("annotation set to false", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+					Annotations: map[string]string{
+						"aigateway.envoyproxy.io/allow-mode-override": "false",
+					},
+				},
+			}
+			override := getAllowModeOverrideStringFromAnnotations(pool)
+			require.Equal(t, "false", override)
+		})
+
+		t.Run("annotation set to invalid value", func(t *testing.T) {
+			pool := &gwaiev1.InferencePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool",
+					Namespace: "test-ns",
+					Annotations: map[string]string{
+						"aigateway.envoyproxy.io/allow-mode-override": "invalid",
+					},
+				},
+			}
+			override := getAllowModeOverrideStringFromAnnotations(pool)
+			require.Equal(t, "invalid", override) // Returns the raw value
+		})
+	})
+}
+
+// TestBuildHTTPFilterForInferencePool tests the buildHTTPFilterForInferencePool function with annotations.
+func TestBuildHTTPFilterForInferencePool(t *testing.T) {
+	t.Run("default configuration", func(t *testing.T) {
+		pool := &gwaiev1.InferencePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pool",
+				Namespace: "test-ns",
+			},
+			Spec: gwaiev1.InferencePoolSpec{
+				EndpointPickerRef: gwaiev1.EndpointPickerRef{Name: "test-epp"},
+			},
+		}
+
+		filter := buildHTTPFilterForInferencePool(pool)
+		require.NotNil(t, filter)
+		require.Equal(t, extprocv3.ProcessingMode_FULL_DUPLEX_STREAMED, filter.ProcessingMode.RequestBodyMode)
+		require.Equal(t, extprocv3.ProcessingMode_FULL_DUPLEX_STREAMED, filter.ProcessingMode.ResponseBodyMode)
+		require.Equal(t, extprocv3.ProcessingMode_SEND, filter.ProcessingMode.RequestTrailerMode)
+		require.Equal(t, extprocv3.ProcessingMode_SEND, filter.ProcessingMode.ResponseTrailerMode)
+		require.False(t, filter.AllowModeOverride)
+	})
+
+	t.Run("with buffered mode annotation", func(t *testing.T) {
+		pool := &gwaiev1.InferencePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pool",
+				Namespace: "test-ns",
+				Annotations: map[string]string{
+					"aigateway.envoyproxy.io/processing-body-mode": "buffered",
+				},
+			},
+			Spec: gwaiev1.InferencePoolSpec{
+				EndpointPickerRef: gwaiev1.EndpointPickerRef{Name: "test-epp"},
+			},
+		}
+
+		filter := buildHTTPFilterForInferencePool(pool)
+		require.NotNil(t, filter)
+		require.Equal(t, extprocv3.ProcessingMode_BUFFERED, filter.ProcessingMode.RequestBodyMode)
+		require.Equal(t, extprocv3.ProcessingMode_BUFFERED, filter.ProcessingMode.ResponseBodyMode)
+		require.Equal(t, extprocv3.ProcessingMode_SEND, filter.ProcessingMode.RequestTrailerMode)
+		require.Equal(t, extprocv3.ProcessingMode_SEND, filter.ProcessingMode.ResponseTrailerMode)
+		require.False(t, filter.AllowModeOverride)
+	})
+
+	t.Run("with allow mode override annotation", func(t *testing.T) {
+		pool := &gwaiev1.InferencePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pool",
+				Namespace: "test-ns",
+				Annotations: map[string]string{
+					"aigateway.envoyproxy.io/allow-mode-override": "true",
+				},
+			},
+			Spec: gwaiev1.InferencePoolSpec{
+				EndpointPickerRef: gwaiev1.EndpointPickerRef{Name: "test-epp"},
+			},
+		}
+
+		filter := buildHTTPFilterForInferencePool(pool)
+		require.NotNil(t, filter)
+		require.Equal(t, extprocv3.ProcessingMode_FULL_DUPLEX_STREAMED, filter.ProcessingMode.RequestBodyMode)
+		require.Equal(t, extprocv3.ProcessingMode_FULL_DUPLEX_STREAMED, filter.ProcessingMode.ResponseBodyMode)
+		require.Equal(t, extprocv3.ProcessingMode_SEND, filter.ProcessingMode.RequestTrailerMode)
+		require.Equal(t, extprocv3.ProcessingMode_SEND, filter.ProcessingMode.ResponseTrailerMode)
+		require.True(t, filter.AllowModeOverride)
+	})
+
+	t.Run("with both annotations", func(t *testing.T) {
+		pool := &gwaiev1.InferencePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pool",
+				Namespace: "test-ns",
+				Annotations: map[string]string{
+					"aigateway.envoyproxy.io/processing-body-mode": "buffered",
+					"aigateway.envoyproxy.io/allow-mode-override":  "true",
+				},
+			},
+			Spec: gwaiev1.InferencePoolSpec{
+				EndpointPickerRef: gwaiev1.EndpointPickerRef{Name: "test-epp"},
+			},
+		}
+
+		filter := buildHTTPFilterForInferencePool(pool)
+		require.NotNil(t, filter)
+		require.Equal(t, extprocv3.ProcessingMode_BUFFERED, filter.ProcessingMode.RequestBodyMode)
+		require.Equal(t, extprocv3.ProcessingMode_BUFFERED, filter.ProcessingMode.ResponseBodyMode)
+		require.Equal(t, extprocv3.ProcessingMode_SEND, filter.ProcessingMode.RequestTrailerMode)
+		require.Equal(t, extprocv3.ProcessingMode_SEND, filter.ProcessingMode.ResponseTrailerMode)
+		require.True(t, filter.AllowModeOverride)
+	})
+}
+
 // TestBuildExtProcClusterForInferencePoolEndpointPicker tests cluster building.
 func TestBuildExtProcClusterForInferencePoolEndpointPicker(t *testing.T) {
-	pool := &gwaiev1a2.InferencePool{
+	pool := &gwaiev1.InferencePool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pool",
 			Namespace: "test-ns",
 		},
-		Spec: gwaiev1a2.InferencePoolSpec{
-			TargetPortNumber: 8080,
-			EndpointPickerConfig: gwaiev1a2.EndpointPickerConfig{
-				ExtensionRef: &gwaiev1a2.Extension{
-					ExtensionReference: gwaiev1a2.ExtensionReference{
-						Name: "test-epp",
-					},
-				},
-			},
+		Spec: gwaiev1.InferencePoolSpec{
+			TargetPorts:       []gwaiev1.Port{{Number: 8080}},
+			EndpointPickerRef: gwaiev1.EndpointPickerRef{Name: "test-epp"},
 		},
 	}
 
 	t.Run("valid pool", func(t *testing.T) {
-		cluster := buildExtProcClusterForInferencePoolEndpointPicker(pool)
+		cluster, err := buildExtProcClusterForInferencePoolEndpointPicker(pool)
+		require.NoError(t, err)
 		require.NotNil(t, cluster)
 		require.Equal(t, "envoy.clusters.endpointpicker_test-pool_test-ns_ext_proc", cluster.Name)
 		require.Equal(t, clusterv3.Cluster_STRICT_DNS, cluster.GetType())
@@ -1307,15 +1624,7 @@ func TestBuildExtProcClusterForInferencePoolEndpointPicker(t *testing.T) {
 
 	t.Run("nil pool panics", func(t *testing.T) {
 		require.Panics(t, func() {
-			buildExtProcClusterForInferencePoolEndpointPicker(nil)
-		})
-	})
-
-	t.Run("nil ExtensionRef panics", func(t *testing.T) {
-		invalidPool := pool.DeepCopy()
-		invalidPool.Spec.EndpointPickerConfig.ExtensionRef = nil
-		require.Panics(t, func() {
-			buildExtProcClusterForInferencePoolEndpointPicker(invalidPool)
+			_, _ = buildExtProcClusterForInferencePoolEndpointPicker(nil)
 		})
 	})
 }
@@ -1329,7 +1638,7 @@ func TestBuildClustersForInferencePoolEndpointPickers(t *testing.T) {
 			FilterMetadata: map[string]*structpb.Struct{
 				internalapi.InternalEndpointMetadataNamespace: {
 					Fields: map[string]*structpb.Value{
-						"per_route_rule_inference_pool": structpb.NewStringValue("test-ns/test-pool/test-epp/9002"),
+						"per_route_rule_inference_pool": structpb.NewStringValue("test-ns/test-pool/test-epp/9002/duplex/false"),
 					},
 				},
 			},
@@ -1338,7 +1647,8 @@ func TestBuildClustersForInferencePoolEndpointPickers(t *testing.T) {
 
 	t.Run("with InferencePool metadata", func(t *testing.T) {
 		clusters := []*clusterv3.Cluster{cluster}
-		result := buildClustersForInferencePoolEndpointPickers(clusters)
+		result, err := buildClustersForInferencePoolEndpointPickers(clusters)
+		require.NoError(t, err)
 		require.Len(t, result, 1)
 		require.Contains(t, result[0].Name, "endpointpicker")
 	})
@@ -1346,18 +1656,9 @@ func TestBuildClustersForInferencePoolEndpointPickers(t *testing.T) {
 	t.Run("without InferencePool metadata", func(t *testing.T) {
 		normalCluster := &clusterv3.Cluster{Name: "normal-cluster"}
 		clusters := []*clusterv3.Cluster{normalCluster}
-		result := buildClustersForInferencePoolEndpointPickers(clusters)
+		result, err := buildClustersForInferencePoolEndpointPickers(clusters)
+		require.NoError(t, err)
 		require.Empty(t, result)
-	})
-}
-
-// TestMustToAny tests the mustToAny helper function.
-func TestMustToAny(t *testing.T) {
-	t.Run("valid message", func(t *testing.T) {
-		cluster := &clusterv3.Cluster{Name: "test"}
-		anyProto := mustToAny(cluster)
-		require.NotNil(t, anyProto)
-		require.Contains(t, anyProto.TypeUrl, "envoy.config.cluster.v3.Cluster")
 	})
 }
 

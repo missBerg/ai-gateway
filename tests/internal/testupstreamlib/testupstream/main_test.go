@@ -60,7 +60,7 @@ func Test_main(t *testing.T) {
 		require.Equal(t, http.StatusOK, response.StatusCode)
 
 		reader := bufio.NewReader(response.Body)
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			dataLine, err := reader.ReadString('\n')
 			require.NoError(t, err)
 			require.Equal(t, fmt.Sprintf("data: %d\n", i+1), dataLine)
@@ -317,7 +317,13 @@ func Test_main(t *testing.T) {
 		require.NoError(t, err)
 		request.Header.Set(testupstreamlib.ResponseTypeKey, "aws-event-stream")
 		request.Header.Set(testupstreamlib.ResponseBodyHeaderKey,
-			base64.StdEncoding.EncodeToString([]byte(strings.Join([]string{"1", "2", "3", "4", "5"}, "\n"))))
+			base64.StdEncoding.EncodeToString([]byte(strings.Join([]string{
+				"{\"contentBlockIndex\": 0, \"delta\":{\"text\":\"1\"}}",
+				"{\"contentBlockIndex\": 0, \"delta\":{\"text\":\"2\"}}",
+				"{\"contentBlockIndex\": 0, \"delta\":{\"text\":\"3\"}}",
+				"{\"contentBlockIndex\": 0, \"delta\":{\"text\":\"4\"}}",
+				"{\"contentBlockIndex\": 0, \"delta\":{\"text\":\"5\"}}",
+			}, "\n"))))
 
 		now := time.Now()
 		response, err := http.DefaultClient.Do(request)
@@ -328,12 +334,12 @@ func Test_main(t *testing.T) {
 		require.Equal(t, http.StatusOK, response.StatusCode)
 
 		decoder := eventstream.NewDecoder()
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			var message eventstream.Message
 			message, err = decoder.Decode(response.Body, nil)
 			require.NoError(t, err)
-			require.Equal(t, "content", message.Headers.Get("event-type").String())
-			require.Equal(t, fmt.Sprintf("%d", i+1), string(message.Payload))
+			require.Equal(t, "contentBlockDelta", message.Headers.Get(":event-type").String())
+			require.JSONEq(t, fmt.Sprintf("{\"contentBlockIndex\": 0, \"delta\":{\"text\":\"%d\"}}", i+1), string(message.Payload))
 
 			// Ensure that the server sends the response line every second.
 			require.Greater(t, time.Since(now), 100*time.Millisecond, time.Since(now).String())
@@ -565,5 +571,73 @@ func Test_main(t *testing.T) {
 			_ = response.Body.Close()
 		}()
 		require.Equal(t, http.StatusBadRequest, response.StatusCode)
+	})
+	t.Run("sse with distinct event blocks", func(t *testing.T) {
+		t.Parallel()
+		request, err := http.NewRequestWithContext(t.Context(), "GET", "http://"+l.Addr().String()+"/sse", strings.NewReader("some-body"))
+		require.NoError(t, err)
+
+		// Define two complete SSE events, separated by "\n\n".
+		// This structure is designed to hit the `bytes.Split(expResponseBody, []byte("\n\n"))` logic.
+		ssePayload := "data: 1\n\ndata: 2"
+
+		request.Header.Set(testupstreamlib.ResponseTypeKey, "sse")
+		request.Header.Set(testupstreamlib.ResponseBodyHeaderKey,
+			base64.StdEncoding.EncodeToString([]byte(ssePayload)))
+
+		now := time.Now()
+		response, err := http.DefaultClient.Do(request)
+		require.NoError(t, err)
+		defer func() {
+			_ = response.Body.Close()
+		}()
+
+		require.Equal(t, http.StatusOK, response.StatusCode)
+
+		reader := bufio.NewReader(response.Body)
+		for i := range 2 {
+			dataLine, err := reader.ReadString('\n')
+			require.NoError(t, err)
+			require.Equal(t, fmt.Sprintf("data: %d\n", i+1), dataLine)
+			// Ensure that the server sends the response line every second.
+			require.Greater(t, time.Since(now), 100*time.Millisecond, time.Since(now).String())
+			require.Less(t, time.Since(now), 300*time.Millisecond, time.Since(now).String())
+			now = time.Now()
+
+			// Ignore the additional newline character.
+			_, err = reader.ReadString('\n')
+			require.NoError(t, err)
+		}
+	})
+	t.Run("sse with empty block should be skipped", func(t *testing.T) {
+		t.Parallel()
+		request, err := http.NewRequestWithContext(t.Context(), "GET", "http://"+l.Addr().String()+"/sse", strings.NewReader("some-body"))
+		require.NoError(t, err)
+
+		// This payload contains an empty block between two valid SSE messages.
+		// The server is expected to split by "\n\n", find the empty block, and skip it.
+		ssePayload := "data: first\n\n\n\ndata: second"
+
+		request.Header.Set(testupstreamlib.ExpectedPathHeaderKey,
+			base64.StdEncoding.EncodeToString([]byte("/sse")))
+		request.Header.Set(testupstreamlib.ResponseTypeKey, "sse")
+		request.Header.Set(testupstreamlib.ResponseBodyHeaderKey,
+			base64.StdEncoding.EncodeToString([]byte(ssePayload)))
+
+		response, err := http.DefaultClient.Do(request)
+		require.NoError(t, err)
+		defer func() {
+			_ = response.Body.Close()
+		}()
+
+		require.Equal(t, http.StatusOK, response.StatusCode)
+
+		bodyBytes, err := io.ReadAll(response.Body)
+		require.NoError(t, err)
+
+		// The expected response should only contain the two valid data blocks.
+		// The empty block should have been filtered out by the server.
+		expectedBody := "data: first\n\ndata: second\n\n"
+		require.Equal(t, expectedBody, string(bodyBytes))
 	})
 }

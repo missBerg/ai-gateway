@@ -14,11 +14,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwapiv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
+	gwapiv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	aigv1a1 "github.com/envoyproxy/ai-gateway/api/v1alpha1"
 )
@@ -135,6 +137,105 @@ func Test_backendSecurityPolicyIndexFunc(t *testing.T) {
 			},
 			expKey: "some-secret4.ns",
 		},
+		{
+			name: "Azure api key with namespace",
+			backendSecurityPolicy: &aigv1a1.BackendSecurityPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-backend-security-policy-5", Namespace: "ns"},
+				Spec: aigv1a1.BackendSecurityPolicySpec{
+					Type: aigv1a1.BackendSecurityPolicyTypeAzureAPIKey,
+					AzureAPIKey: &aigv1a1.BackendSecurityPolicyAzureAPIKey{
+						SecretRef: &gwapiv1.SecretObjectReference{
+							Name:      "some-secret5",
+							Namespace: ptr.To[gwapiv1.Namespace]("foo"),
+						},
+					},
+				},
+			},
+			expKey: "some-secret5.foo",
+		},
+		{
+			name: "Azure api key without namespace",
+			backendSecurityPolicy: &aigv1a1.BackendSecurityPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-backend-security-policy-6", Namespace: "ns"},
+				Spec: aigv1a1.BackendSecurityPolicySpec{
+					Type: aigv1a1.BackendSecurityPolicyTypeAzureAPIKey,
+					AzureAPIKey: &aigv1a1.BackendSecurityPolicyAzureAPIKey{
+						SecretRef: &gwapiv1.SecretObjectReference{Name: "some-secret6"},
+					},
+				},
+			},
+			expKey: "some-secret6.ns",
+		},
+		{
+			name: "Azure credentials with namespace",
+			backendSecurityPolicy: &aigv1a1.BackendSecurityPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-backend-security-policy-7", Namespace: "ns"},
+				Spec: aigv1a1.BackendSecurityPolicySpec{
+					Type: aigv1a1.BackendSecurityPolicyTypeAzureCredentials,
+					AzureCredentials: &aigv1a1.BackendSecurityPolicyAzureCredentials{
+						ClientSecretRef: &gwapiv1.SecretObjectReference{
+							Name:      "some-secret7",
+							Namespace: ptr.To[gwapiv1.Namespace]("foo"),
+						},
+					},
+				},
+			},
+			expKey: "some-secret7.foo",
+		},
+		{
+			name: "Azure credentials without namespace",
+			backendSecurityPolicy: &aigv1a1.BackendSecurityPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-backend-security-policy-8", Namespace: "ns"},
+				Spec: aigv1a1.BackendSecurityPolicySpec{
+					Type: aigv1a1.BackendSecurityPolicyTypeAzureCredentials,
+					AzureCredentials: &aigv1a1.BackendSecurityPolicyAzureCredentials{
+						ClientSecretRef: &gwapiv1.SecretObjectReference{
+							Name: "some-secret8",
+						},
+					},
+				},
+			},
+			expKey: "some-secret8.ns",
+		},
+		{
+			name: "AWS OIDC exchange token",
+			backendSecurityPolicy: &aigv1a1.BackendSecurityPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-backend-security-policy-9", Namespace: "foo"},
+				Spec: aigv1a1.BackendSecurityPolicySpec{
+					Type: aigv1a1.BackendSecurityPolicyTypeAWSCredentials,
+					AWSCredentials: &aigv1a1.BackendSecurityPolicyAWSCredentials{
+						OIDCExchangeToken: &aigv1a1.AWSOIDCExchangeToken{},
+					},
+				},
+			},
+			expKey: "some-backend-security-policy-9.foo",
+		},
+		{
+			name: "Azure OIDC exchange token",
+			backendSecurityPolicy: &aigv1a1.BackendSecurityPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-backend-security-policy-10", Namespace: "foo"},
+				Spec: aigv1a1.BackendSecurityPolicySpec{
+					Type: aigv1a1.BackendSecurityPolicyTypeAzureCredentials,
+					AzureCredentials: &aigv1a1.BackendSecurityPolicyAzureCredentials{
+						OIDCExchangeToken: &aigv1a1.AzureOIDCExchangeToken{},
+					},
+				},
+			},
+			expKey: "some-backend-security-policy-10.foo",
+		},
+		{
+			name: "anthropic api key",
+			backendSecurityPolicy: &aigv1a1.BackendSecurityPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-backend-security-policy-2", Namespace: "ns"},
+				Spec: aigv1a1.BackendSecurityPolicySpec{
+					Type: aigv1a1.BackendSecurityPolicyTypeAnthropicAPIKey,
+					AnthropicAPIKey: &aigv1a1.BackendSecurityPolicyAnthropicAPIKey{
+						SecretRef: &gwapiv1.SecretObjectReference{Name: "some-aaaa"},
+					},
+				},
+			},
+			expKey: "some-aaaa.ns",
+		},
 	} {
 		t.Run(bsp.name, func(t *testing.T) {
 			c := fake.NewClientBuilder().
@@ -164,6 +265,250 @@ func Test_getSecretNameAndNamespace(t *testing.T) {
 	require.Equal(t, "mysecret.default", getSecretNameAndNamespace(secretRef, "foo"))
 	secretRef.Namespace = nil
 	require.Equal(t, "mysecret.foo", getSecretNameAndNamespace(secretRef, "foo"))
+}
+
+func Test_referenceGrantToTargetKindIndexFunc(t *testing.T) {
+	tests := []struct {
+		name           string
+		referenceGrant *gwapiv1b1.ReferenceGrant
+		expectedKeys   []string
+	}{
+		{
+			name: "single target kind - AIServiceBackend",
+			referenceGrant: &gwapiv1b1.ReferenceGrant{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "grant1",
+					Namespace: "backend-ns",
+				},
+				Spec: gwapiv1b1.ReferenceGrantSpec{
+					From: []gwapiv1b1.ReferenceGrantFrom{
+						{
+							Group:     "aigateway.envoyproxy.io",
+							Kind:      "AIGatewayRoute",
+							Namespace: "route-ns",
+						},
+					},
+					To: []gwapiv1b1.ReferenceGrantTo{
+						{
+							Group: "aigateway.envoyproxy.io",
+							Kind:  "AIServiceBackend",
+						},
+					},
+				},
+			},
+			expectedKeys: []string{"backend-ns.AIServiceBackend"},
+		},
+		{
+			name: "multiple target kinds",
+			referenceGrant: &gwapiv1b1.ReferenceGrant{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "grant2",
+					Namespace: "backend-ns",
+				},
+				Spec: gwapiv1b1.ReferenceGrantSpec{
+					From: []gwapiv1b1.ReferenceGrantFrom{
+						{
+							Group:     "aigateway.envoyproxy.io",
+							Kind:      "AIGatewayRoute",
+							Namespace: "route-ns",
+						},
+					},
+					To: []gwapiv1b1.ReferenceGrantTo{
+						{
+							Group: "aigateway.envoyproxy.io",
+							Kind:  "AIServiceBackend",
+						},
+						{
+							Group: "",
+							Kind:  "Secret",
+						},
+					},
+				},
+			},
+			expectedKeys: []string{"backend-ns.AIServiceBackend", "backend-ns.Secret"},
+		},
+		{
+			name: "empty group for core resources",
+			referenceGrant: &gwapiv1b1.ReferenceGrant{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "grant3",
+					Namespace: "other-ns",
+				},
+				Spec: gwapiv1b1.ReferenceGrantSpec{
+					From: []gwapiv1b1.ReferenceGrantFrom{
+						{
+							Group:     "gateway.networking.k8s.io",
+							Kind:      "HTTPRoute",
+							Namespace: "route-ns",
+						},
+					},
+					To: []gwapiv1b1.ReferenceGrantTo{
+						{
+							Group: "",
+							Kind:  "Service",
+						},
+					},
+				},
+			},
+			expectedKeys: []string{"other-ns.Service"},
+		},
+		{
+			name: "no target kinds",
+			referenceGrant: &gwapiv1b1.ReferenceGrant{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "grant4",
+					Namespace: "backend-ns",
+				},
+				Spec: gwapiv1b1.ReferenceGrantSpec{
+					From: []gwapiv1b1.ReferenceGrantFrom{
+						{
+							Group:     "aigateway.envoyproxy.io",
+							Kind:      "AIGatewayRoute",
+							Namespace: "route-ns",
+						},
+					},
+					To: []gwapiv1b1.ReferenceGrantTo{},
+				},
+			},
+			expectedKeys: nil, // nil is returned for empty To array
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			keys := referenceGrantToTargetKindIndexFunc(tt.referenceGrant)
+			require.Equal(t, tt.expectedKeys, keys)
+		})
+	}
+}
+
+func Test_referenceGrantIndexWithQuery(t *testing.T) {
+	// Create a fake client with the ReferenceGrant index
+	c := fake.NewClientBuilder().
+		WithScheme(Scheme).
+		WithIndex(&gwapiv1b1.ReferenceGrant{}, k8sClientIndexReferenceGrantToTargetKind, referenceGrantToTargetKindIndexFunc).
+		Build()
+
+	// Create multiple ReferenceGrants with different target kinds
+	grant1 := &gwapiv1b1.ReferenceGrant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "grant-aiservicebackend",
+			Namespace: "backend-ns",
+		},
+		Spec: gwapiv1b1.ReferenceGrantSpec{
+			From: []gwapiv1b1.ReferenceGrantFrom{
+				{
+					Group:     "aigateway.envoyproxy.io",
+					Kind:      "AIGatewayRoute",
+					Namespace: "route-ns",
+				},
+			},
+			To: []gwapiv1b1.ReferenceGrantTo{
+				{
+					Group: "aigateway.envoyproxy.io",
+					Kind:  "AIServiceBackend",
+				},
+			},
+		},
+	}
+
+	grant2 := &gwapiv1b1.ReferenceGrant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "grant-secret",
+			Namespace: "backend-ns",
+		},
+		Spec: gwapiv1b1.ReferenceGrantSpec{
+			From: []gwapiv1b1.ReferenceGrantFrom{
+				{
+					Group:     "gateway.networking.k8s.io",
+					Kind:      "HTTPRoute",
+					Namespace: "route-ns",
+				},
+			},
+			To: []gwapiv1b1.ReferenceGrantTo{
+				{
+					Group: "",
+					Kind:  "Secret",
+				},
+			},
+		},
+	}
+
+	grant3 := &gwapiv1b1.ReferenceGrant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "grant-multiple",
+			Namespace: "backend-ns",
+		},
+		Spec: gwapiv1b1.ReferenceGrantSpec{
+			From: []gwapiv1b1.ReferenceGrantFrom{
+				{
+					Group:     "aigateway.envoyproxy.io",
+					Kind:      "AIGatewayRoute",
+					Namespace: "route-ns",
+				},
+			},
+			To: []gwapiv1b1.ReferenceGrantTo{
+				{
+					Group: "aigateway.envoyproxy.io",
+					Kind:  "AIServiceBackend",
+				},
+				{
+					Group: "",
+					Kind:  "Secret",
+				},
+			},
+		},
+	}
+
+	require.NoError(t, c.Create(t.Context(), grant1))
+	require.NoError(t, c.Create(t.Context(), grant2))
+	require.NoError(t, c.Create(t.Context(), grant3))
+
+	t.Run("query for AIServiceBackend grants in backend-ns", func(t *testing.T) {
+		var grants gwapiv1b1.ReferenceGrantList
+		err := c.List(t.Context(), &grants,
+			client.MatchingFields{k8sClientIndexReferenceGrantToTargetKind: "backend-ns.AIServiceBackend"})
+		require.NoError(t, err)
+
+		// Should find grant1 and grant3 (both allow AIServiceBackend in backend-ns)
+		require.Len(t, grants.Items, 2)
+		names := []string{grants.Items[0].Name, grants.Items[1].Name}
+		require.Contains(t, names, "grant-aiservicebackend")
+		require.Contains(t, names, "grant-multiple")
+	})
+
+	t.Run("query for Secret grants in backend-ns", func(t *testing.T) {
+		var grants gwapiv1b1.ReferenceGrantList
+		err := c.List(t.Context(), &grants,
+			client.MatchingFields{k8sClientIndexReferenceGrantToTargetKind: "backend-ns.Secret"})
+		require.NoError(t, err)
+
+		// Should find grant2 and grant3 (both allow Secret in backend-ns)
+		require.Len(t, grants.Items, 2)
+		names := []string{grants.Items[0].Name, grants.Items[1].Name}
+		require.Contains(t, names, "grant-secret")
+		require.Contains(t, names, "grant-multiple")
+	})
+
+	t.Run("query for non-existent kind", func(t *testing.T) {
+		var grants gwapiv1b1.ReferenceGrantList
+		err := c.List(t.Context(), &grants,
+			client.MatchingFields{k8sClientIndexReferenceGrantToTargetKind: "backend-ns.NonExistentKind"})
+		require.NoError(t, err)
+
+		// Should find nothing
+		require.Empty(t, grants.Items)
+	})
+
+	t.Run("query with wrong namespace", func(t *testing.T) {
+		var grants gwapiv1b1.ReferenceGrantList
+		err := c.List(t.Context(), &grants,
+			client.MatchingFields{k8sClientIndexReferenceGrantToTargetKind: "wrong-ns.AIServiceBackend"})
+		require.NoError(t, err)
+
+		// Should find nothing (wrong namespace)
+		require.Empty(t, grants.Items)
+	})
 }
 
 func Test_handleFinalizer(t *testing.T) {
@@ -273,4 +618,191 @@ func (m *mockClient) Update(context.Context, client.Object, ...client.UpdateOpti
 		return fmt.Errorf("mock update error")
 	}
 	return nil
+}
+
+func Test_aiGatewayRouteToAttachedGatewayIndexFunc(t *testing.T) {
+	tests := []struct {
+		name            string
+		route           *aigv1a1.AIGatewayRoute
+		expectedIndexes []string
+	}{
+		{
+			name: "parentRef cross-namespace reference",
+			route: &aigv1a1.AIGatewayRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ai-route",
+					Namespace: "envoy-ai-gateway-system",
+				},
+				Spec: aigv1a1.AIGatewayRouteSpec{
+					ParentRefs: []gwapiv1a2.ParentReference{
+						{
+							Name:      "my-gateway",
+							Namespace: ptr.To[gwapiv1a2.Namespace]("envoy-gateway-system"),
+							Kind:      ptr.To(gwapiv1a2.Kind("Gateway")),
+						},
+					},
+				},
+			},
+			expectedIndexes: []string{"my-gateway.envoy-gateway-system"},
+		},
+		{
+			name: "parentRef same namespace as route",
+			route: &aigv1a1.AIGatewayRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ai-route",
+					Namespace: "production",
+				},
+				Spec: aigv1a1.AIGatewayRouteSpec{
+					ParentRefs: []gwapiv1a2.ParentReference{
+						{
+							Name: "my-gateway",
+							Kind: ptr.To(gwapiv1a2.Kind("Gateway")),
+						},
+					},
+				},
+			},
+			expectedIndexes: []string{"my-gateway.production"},
+		},
+		{
+			name: "multiple parentRefs with mixed namespaces",
+			route: &aigv1a1.AIGatewayRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ai-route",
+					Namespace: "app-namespace",
+				},
+				Spec: aigv1a1.AIGatewayRouteSpec{
+					ParentRefs: []gwapiv1a2.ParentReference{
+						{
+							Name:      "gateway-1",
+							Namespace: ptr.To[gwapiv1a2.Namespace]("infra-namespace"),
+							Kind:      ptr.To(gwapiv1a2.Kind("Gateway")),
+						},
+						{
+							Name: "gateway-2",
+							Kind: ptr.To(gwapiv1a2.Kind("Gateway")),
+						},
+					},
+				},
+			},
+			expectedIndexes: []string{
+				"gateway-1.infra-namespace",
+				"gateway-2.app-namespace",
+			},
+		},
+		{
+			name: "targetRefs always use route namespace",
+			route: &aigv1a1.AIGatewayRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ai-route",
+					Namespace: "default",
+				},
+				Spec: aigv1a1.AIGatewayRouteSpec{
+					ParentRefs: []gwapiv1a2.ParentReference{
+						{
+							Name:      "parent-gateway",
+							Namespace: ptr.To[gwapiv1a2.Namespace]("system"),
+							Kind:      ptr.To(gwapiv1a2.Kind("Gateway")),
+						},
+					},
+				},
+			},
+			expectedIndexes: []string{"parent-gateway.system"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			indexes := aiGatewayRouteToAttachedGatewayIndexFunc(tt.route)
+			require.ElementsMatch(t, tt.expectedIndexes, indexes)
+		})
+	}
+}
+
+func Test_mcpRouteToAttachedGatewayIndexFunc(t *testing.T) {
+	tests := []struct {
+		name            string
+		route           *aigv1a1.MCPRoute
+		expectedIndexes []string
+	}{
+		{
+			name: "parentRef cross-namespace reference",
+			route: &aigv1a1.MCPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "mcp-route",
+					Namespace: "envoy-mcp-gateway-system",
+				},
+				Spec: aigv1a1.MCPRouteSpec{
+					ParentRefs: []gwapiv1a2.ParentReference{
+						{
+							Name:      "my-gateway",
+							Namespace: ptr.To[gwapiv1a2.Namespace]("envoy-gateway-system"),
+							Kind:      ptr.To(gwapiv1a2.Kind("Gateway")),
+						},
+					},
+				},
+			},
+			expectedIndexes: []string{"my-gateway.envoy-gateway-system"},
+		},
+		{
+			name: "parentRef same namespace as route",
+			route: &aigv1a1.MCPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "mcp-route",
+					Namespace: "production",
+				},
+				Spec: aigv1a1.MCPRouteSpec{
+					ParentRefs: []gwapiv1a2.ParentReference{
+						{
+							Name: "my-gateway",
+							Kind: ptr.To(gwapiv1a2.Kind("Gateway")),
+						},
+					},
+				},
+			},
+			expectedIndexes: []string{"my-gateway.production"},
+		},
+		{
+			name: "multiple parentRefs with mixed namespaces",
+			route: &aigv1a1.MCPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "mcp-route",
+					Namespace: "app-namespace",
+				},
+				Spec: aigv1a1.MCPRouteSpec{
+					ParentRefs: []gwapiv1a2.ParentReference{
+						{
+							Name:      "gateway-1",
+							Namespace: ptr.To[gwapiv1a2.Namespace]("infra-namespace"),
+							Kind:      ptr.To(gwapiv1a2.Kind("Gateway")),
+						},
+						{
+							Name: "gateway-2",
+							Kind: ptr.To(gwapiv1a2.Kind("Gateway")),
+						},
+					},
+				},
+			},
+			expectedIndexes: []string{
+				"gateway-1.infra-namespace",
+				"gateway-2.app-namespace",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			indexes := mcpRouteToAttachedGatewayIndexFunc(tt.route)
+			require.ElementsMatch(t, tt.expectedIndexes, indexes)
+		})
+	}
+}
+
+func Test_isKubernetes133OrLater(t *testing.T) {
+	require.False(t, isKubernetes133OrLater(&version.Info{}, logr.Discard()))
+	require.False(t, isKubernetes133OrLater(&version.Info{Major: "invalid"}, logr.Discard()))
+	require.False(t, isKubernetes133OrLater(&version.Info{Major: "1", Minor: "invalid"}, logr.Discard()))
+	require.False(t, isKubernetes133OrLater(&version.Info{Major: "1", Minor: "1"}, logr.Discard()))
+	require.False(t, isKubernetes133OrLater(&version.Info{Major: "1", Minor: "32"}, logr.Discard()))
+	require.True(t, isKubernetes133OrLater(&version.Info{Major: "1", Minor: "33"}, logr.Discard()))
+	require.True(t, isKubernetes133OrLater(&version.Info{Major: "1", Minor: "40"}, logr.Discard()))
 }

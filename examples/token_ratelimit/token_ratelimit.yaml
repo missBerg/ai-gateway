@@ -21,6 +21,11 @@ spec:
     - name: http
       protocol: HTTP
       port: 80
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: envoy-ai-gateway-token-ratelimit
 ---
 apiVersion: aigateway.envoyproxy.io/v1alpha1
 kind: AIGatewayRoute
@@ -28,15 +33,7 @@ metadata:
   name: envoy-ai-gateway-token-ratelimit
   namespace: default
 spec:
-  schema:
-    name: OpenAI
-  # parentRefs:
-  #   - name: envoy-ai-gateway-token-ratelimit
-  #     kind: Gateway
-  #     group: gateway.networking.k8s.io
-  # Use parentRefs above instead of targetRefs below, targetRefs will be deprecated in the next version.
-  # Here, we use targetRefs just for the reference as well as to ensure there's an upgrade path.
-  targetRefs:
+  parentRefs:
     - name: envoy-ai-gateway-token-ratelimit
       kind: Gateway
       group: gateway.networking.k8s.io
@@ -52,13 +49,15 @@ spec:
   llmRequestCosts:
     - metadataKey: llm_input_token
       type: InputToken
+    - metadataKey: llm_cached_input_token
+      type: CachedInputToken
     - metadataKey: llm_output_token
       type: OutputToken
     - metadataKey: llm_total_token
       type: TotalToken
     # This configures the token limit based on the CEL expression.
-    # For a demonstration purpose, the CEL expression returns 100000000 only when the input token is 3,
-    # otherwise it returns 0 (no token usage).
+    # For a demonstration purpose, the CEL expression returns 100000000 only when the input token is 3.
+    # Otherwise, it returns 0 (no token usage).
     - metadataKey: llm_cel_calculated_token
       type: CEL
       cel: "input_tokens == uint(3) ? 100000000 : 0"
@@ -168,6 +167,26 @@ spec:
                 key: llm_total_token
 
         # Repeat the same configuration for a different token type.
+        # This configures the cached input token limit, and it has a different budget than others,
+        # so it will be rate limited separately.
+        - clientSelectors:
+            - headers:
+                - name: x-user-id
+                  type: Distinct
+          limit:
+            requests: 100
+            unit: Hour
+          cost:
+            request:
+              from: Number
+              number: 0
+            response:
+              from: Metadata
+              metadata:
+                namespace: io.envoy.ai_gateway
+                key: llm_cached_input_token
+
+        # Repeat the same configuration for a different token type.
         # This configures the token limit based on the CEL expression.
         - clientSelectors:
             - headers:
@@ -221,3 +240,18 @@ spec:
       port: 80
       targetPort: 8080
   type: ClusterIP
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: envoy-ai-gateway-token-ratelimit
+  namespace: default
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        container:
+          # Note: this is to clear the large default memory/cpu requirements for local tests.
+          # In production, you should set these to values that make sense for your environment.
+          resources: {}

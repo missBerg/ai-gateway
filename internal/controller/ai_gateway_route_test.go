@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwapiv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
+	gwapiv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	aigv1a1 "github.com/envoyproxy/ai-gateway/api/v1alpha1"
 	internaltesting "github.com/envoyproxy/ai-gateway/internal/testing"
@@ -32,7 +33,7 @@ import (
 func TestAIGatewayRouteController_Reconcile(t *testing.T) {
 	fakeClient := requireNewFakeClientWithIndexes(t)
 	eventCh := internaltesting.NewControllerEventChan[*gwapiv1.Gateway]()
-	c := NewAIGatewayRouteController(fakeClient, fake2.NewClientset(), ctrl.Log, eventCh.Ch)
+	c := NewAIGatewayRouteController(fakeClient, fake2.NewClientset(), ctrl.Log, eventCh.Ch, "/v1")
 
 	err := fakeClient.Create(t.Context(), &gwapiv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: "mytarget", Namespace: "default"}})
 	require.NoError(t, err)
@@ -46,11 +47,8 @@ func TestAIGatewayRouteController_Reconcile(t *testing.T) {
 	err = fakeClient.Get(t.Context(), types.NamespacedName{Namespace: "default", Name: "myroute"}, &current)
 	// Make sure the finalizer is added.
 	require.NoError(t, err)
-	require.Contains(t, current.ObjectMeta.Finalizers, aiGatewayControllerFinalizer, "Finalizer should be added")
-	current.Spec.APISchema = aigv1a1.VersionedAPISchema{Name: aigv1a1.APISchemaOpenAI, Version: ptr.To("v123")}
-	current.Spec.TargetRefs = []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName{
-		{LocalPolicyTargetReference: gwapiv1a2.LocalPolicyTargetReference{Name: "mytarget"}},
-	}
+	require.Contains(t, current.Finalizers, aiGatewayControllerFinalizer, "Finalizer should be added")
+	current.Spec.ParentRefs = []gwapiv1a2.ParentReference{{Name: "mytarget"}}
 	err = fakeClient.Update(t.Context(), &current)
 	require.NoError(t, err)
 	_, err = c.Reconcile(t.Context(), reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: "myroute"}})
@@ -62,9 +60,8 @@ func TestAIGatewayRouteController_Reconcile(t *testing.T) {
 
 	require.Equal(t, "myroute", updated.Name)
 	require.Equal(t, "default", updated.Namespace)
-	require.Len(t, updated.Spec.TargetRefs, 1)
-	require.Equal(t, "mytarget", string(updated.Spec.TargetRefs[0].Name))
-	require.Equal(t, aigv1a1.APISchemaOpenAI, updated.Spec.APISchema.Name)
+	require.Len(t, updated.Spec.ParentRefs, 1)
+	require.Equal(t, "mytarget", string(updated.Spec.ParentRefs[0].Name))
 
 	// Test the case where the AIGatewayRoute is being deleted.
 	err = fakeClient.Delete(t.Context(), &aigv1a1.AIGatewayRoute{ObjectMeta: metav1.ObjectMeta{Name: "myroute", Namespace: "default"}})
@@ -77,13 +74,12 @@ func TestAIGatewayRouteController_Reconcile_SyncError(t *testing.T) {
 	// Test error path where syncAIGatewayRoute fails.
 	fakeClient := requireNewFakeClientWithIndexes(t)
 	eventCh := internaltesting.NewControllerEventChan[*gwapiv1.Gateway]()
-	c := NewAIGatewayRouteController(fakeClient, fake2.NewClientset(), ctrl.Log, eventCh.Ch)
+	c := NewAIGatewayRouteController(fakeClient, fake2.NewClientset(), ctrl.Log, eventCh.Ch, "/v1")
 
 	// Create a route without creating the filter to cause sync error.
 	route := &aigv1a1.AIGatewayRoute{
 		ObjectMeta: metav1.ObjectMeta{Name: "errorroute", Namespace: "default"},
 		Spec: aigv1a1.AIGatewayRouteSpec{
-			APISchema: aigv1a1.VersionedAPISchema{Name: aigv1a1.APISchemaOpenAI, Version: ptr.To("v1")},
 			Rules: []aigv1a1.AIGatewayRouteRule{
 				{
 					BackendRefs: []aigv1a1.AIGatewayRouteRuleBackendRef{
@@ -125,7 +121,7 @@ func TestAIGatewayRouterController_syncAIGatewayRoute(t *testing.T) {
 	fakeClient := requireNewFakeClientWithIndexes(t)
 	kube := fake2.NewClientset()
 	eventCh := internaltesting.NewControllerEventChan[*gwapiv1.Gateway]()
-	s := NewAIGatewayRouteController(fakeClient, kube, logr.Discard(), eventCh.Ch)
+	s := NewAIGatewayRouteController(fakeClient, kube, logr.Discard(), eventCh.Ch, "/")
 	require.NotNil(t, s)
 
 	for _, backend := range []*aigv1a1.AIServiceBackend{
@@ -149,7 +145,6 @@ func TestAIGatewayRouterController_syncAIGatewayRoute(t *testing.T) {
 						BackendRefs: []aigv1a1.AIGatewayRouteRuleBackendRef{{Name: "apple", Weight: ptr.To[int32](1)}, {Name: "orange", Weight: ptr.To[int32](1)}},
 					},
 				},
-				APISchema: aigv1a1.VersionedAPISchema{Name: aigv1a1.APISchemaOpenAI, Version: ptr.To("v123")},
 			},
 		}
 		err := fakeClient.Create(t.Context(), route, &client.CreateOptions{})
@@ -168,8 +163,8 @@ func TestAIGatewayRouterController_syncAIGatewayRoute(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, updatedHTTPRoute.Spec.Rules, 2) // 1 rule + 1 for the default rule.
 		require.Len(t, updatedHTTPRoute.Spec.Rules[0].BackendRefs, 2)
-		require.Equal(t, "some-backend1", string(updatedHTTPRoute.Spec.Rules[0].BackendRefs[0].BackendRef.Name))
-		require.Equal(t, "some-backend2", string(updatedHTTPRoute.Spec.Rules[0].BackendRefs[1].BackendRef.Name))
+		require.Equal(t, "some-backend1", string(updatedHTTPRoute.Spec.Rules[0].BackendRefs[0].Name))
+		require.Equal(t, "some-backend2", string(updatedHTTPRoute.Spec.Rules[0].BackendRefs[1].Name))
 		// Defaulting to the empty path, which shouldn't reach in practice.
 		require.Empty(t, updatedHTTPRoute.Spec.Rules[1].BackendRefs)
 		require.Equal(t, "/", *updatedHTTPRoute.Spec.Rules[1].Matches[0].Path.Value)
@@ -209,7 +204,7 @@ func Test_newHTTPRoute(t *testing.T) {
 			)
 			fakeClient := requireNewFakeClientWithIndexes(t)
 			eventCh := internaltesting.NewControllerEventChan[*gwapiv1.Gateway]()
-			s := NewAIGatewayRouteController(fakeClient, nil, logr.Discard(), eventCh.Ch)
+			s := NewAIGatewayRouteController(fakeClient, nil, logr.Discard(), eventCh.Ch, "/")
 			httpRoute := &gwapiv1.HTTPRoute{
 				ObjectMeta: metav1.ObjectMeta{Name: "myroute", Namespace: ns},
 				Spec:       gwapiv1.HTTPRouteSpec{},
@@ -217,11 +212,11 @@ func Test_newHTTPRoute(t *testing.T) {
 			aiGatewayRoute := &aigv1a1.AIGatewayRoute{
 				ObjectMeta: metav1.ObjectMeta{Name: "myroute", Namespace: ns},
 				Spec: aigv1a1.AIGatewayRouteSpec{
-					TargetRefs: []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName{
+					ParentRefs: []gwapiv1a2.ParentReference{
 						{
-							LocalPolicyTargetReference: gwapiv1a2.LocalPolicyTargetReference{
-								Name: "gtw", Kind: "Gateway", Group: "gateway.networking.k8s.io",
-							},
+							Name:  "gtw",
+							Kind:  ptr.To(gwapiv1a2.Kind("Gateway")),
+							Group: ptr.To(gwapiv1a2.Group("gateway.networking.k8s.io")),
 						},
 					},
 					Rules: []aigv1a1.AIGatewayRouteRule{
@@ -298,10 +293,11 @@ func Test_newHTTPRoute(t *testing.T) {
 					Name:  gwapiv1.ObjectName(getHostRewriteFilterName("myroute")),
 				},
 			}}
+			expPath := &gwapiv1.HTTPPathMatch{Value: ptr.To("/")}
 			expRules := []gwapiv1.HTTPRouteRule{
 				{
 					Matches: []gwapiv1.HTTPRouteMatch{
-						{Headers: []gwapiv1.HTTPHeaderMatch{{Name: "x-test", Value: "rule-0"}}},
+						{Headers: []gwapiv1.HTTPHeaderMatch{{Name: "x-test", Value: "rule-0"}}, Path: expPath},
 					},
 					BackendRefs: []gwapiv1.HTTPBackendRef{{BackendRef: gwapiv1.BackendRef{BackendObjectReference: gwapiv1.BackendObjectReference{Name: "some-backend1", Namespace: refNs}, Weight: ptr.To[int32](100)}}},
 					Timeouts:    &gwapiv1.HTTPRouteTimeouts{Request: &defaultTimeout},
@@ -309,7 +305,7 @@ func Test_newHTTPRoute(t *testing.T) {
 				},
 				{
 					Matches: []gwapiv1.HTTPRouteMatch{
-						{Headers: []gwapiv1.HTTPHeaderMatch{{Name: "x-test", Value: "rule-1"}}},
+						{Headers: []gwapiv1.HTTPHeaderMatch{{Name: "x-test", Value: "rule-1"}}, Path: expPath},
 					},
 					BackendRefs: []gwapiv1.HTTPBackendRef{
 						{BackendRef: gwapiv1.BackendRef{BackendObjectReference: gwapiv1.BackendObjectReference{Name: "some-backend2", Namespace: refNs}, Weight: ptr.To[int32](100)}},
@@ -321,7 +317,7 @@ func Test_newHTTPRoute(t *testing.T) {
 				},
 				{
 					Matches: []gwapiv1.HTTPRouteMatch{
-						{Headers: []gwapiv1.HTTPHeaderMatch{{Name: "x-test", Value: "rule-2"}}},
+						{Headers: []gwapiv1.HTTPHeaderMatch{{Name: "x-test", Value: "rule-2"}}, Path: expPath},
 					},
 					BackendRefs: []gwapiv1.HTTPBackendRef{{BackendRef: gwapiv1.BackendRef{BackendObjectReference: gwapiv1.BackendObjectReference{Name: "some-backend4", Namespace: refNs}, Weight: ptr.To[int32](1)}}},
 					Timeouts:    &gwapiv1.HTTPRouteTimeouts{Request: &timeout1, BackendRequest: &timeout2},
@@ -352,7 +348,7 @@ func TestAIGatewayRouteController_updateAIGatewayRouteStatus(t *testing.T) {
 	fakeClient := requireNewFakeClientWithIndexes(t)
 	kube := fake2.NewClientset()
 	eventCh := internaltesting.NewControllerEventChan[*gwapiv1.Gateway]()
-	s := NewAIGatewayRouteController(fakeClient, kube, logr.Discard(), eventCh.Ch)
+	s := NewAIGatewayRouteController(fakeClient, kube, logr.Discard(), eventCh.Ch, "/v1")
 
 	r := &aigv1a1.AIGatewayRoute{
 		ObjectMeta: metav1.ObjectMeta{
@@ -398,7 +394,7 @@ func TestAIGatewayRouteController_backend(t *testing.T) {
 	fakeClient := requireNewFakeClientWithIndexes(t)
 	kube := fake2.NewClientset()
 	eventCh := internaltesting.NewControllerEventChan[*gwapiv1.Gateway]()
-	c := NewAIGatewayRouteController(fakeClient, kube, ctrl.Log, eventCh.Ch)
+	c := NewAIGatewayRouteController(fakeClient, kube, ctrl.Log, eventCh.Ch, "/v1")
 
 	// Test successful backend retrieval.
 	backend := &aigv1a1.AIServiceBackend{
@@ -423,7 +419,7 @@ func TestAIGatewayRouterController_syncGateway_notFound(t *testing.T) { // This 
 	fakeClient := requireNewFakeClientWithIndexes(t)
 	kube := fake2.NewClientset()
 	eventCh := internaltesting.NewControllerEventChan[*gwapiv1.Gateway]()
-	s := NewAIGatewayRouteController(fakeClient, kube, logr.Discard(), eventCh.Ch)
+	s := NewAIGatewayRouteController(fakeClient, kube, logr.Discard(), eventCh.Ch, "/v1")
 	s.syncGateway(t.Context(), "ns", "non-exist")
 }
 
@@ -442,7 +438,7 @@ func Test_newHTTPRoute_InferencePool(t *testing.T) {
 					BackendRefs: []aigv1a1.AIGatewayRouteRuleBackendRef{
 						{
 							Name:   "test-inference-pool",
-							Group:  ptr.To("inference.networking.x-k8s.io"),
+							Group:  ptr.To("inference.networking.k8s.io"),
 							Kind:   ptr.To("InferencePool"),
 							Weight: ptr.To(int32(100)),
 						},
@@ -465,7 +461,7 @@ func Test_newHTTPRoute_InferencePool(t *testing.T) {
 
 	// Check the first rule (our InferencePool rule).
 	backendRef := httpRoute.Spec.Rules[0].BackendRefs[0]
-	require.Equal(t, "inference.networking.x-k8s.io", string(*backendRef.Group))
+	require.Equal(t, "inference.networking.k8s.io", string(*backendRef.Group))
 	require.Equal(t, "InferencePool", string(*backendRef.Kind))
 	require.Equal(t, "test-inference-pool", string(backendRef.Name))
 	require.Equal(t, "test-ns", string(*backendRef.Namespace))
@@ -474,4 +470,383 @@ func Test_newHTTPRoute_InferencePool(t *testing.T) {
 	// Check the second rule is the default "route-not-found" rule.
 	require.Equal(t, "route-not-found", string(*httpRoute.Spec.Rules[1].Name))
 	require.Empty(t, httpRoute.Spec.Rules[1].BackendRefs) // No backend refs for default rule.
+}
+
+func Test_newHTTPRoute_LabelAndAnnotationPropagation(t *testing.T) {
+	c := requireNewFakeClientWithIndexes(t)
+
+	// Create test backends.
+	backend := &aigv1a1.AIServiceBackend{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-backend", Namespace: "test-ns"},
+		Spec: aigv1a1.AIServiceBackendSpec{
+			BackendRef: gwapiv1.BackendObjectReference{Name: "some-backend", Namespace: ptr.To(gwapiv1.Namespace("test-ns"))},
+		},
+	}
+	require.NoError(t, c.Create(context.Background(), backend))
+
+	// Create an AIGatewayRoute with custom labels and annotations.
+	aiGatewayRoute := &aigv1a1.AIGatewayRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-route",
+			Namespace: "test-ns",
+			Labels: map[string]string{
+				"custom-label-1": "value-1",
+				"custom-label-2": "value-2",
+			},
+			Annotations: map[string]string{
+				"custom-annotation-1": "ann-value-1",
+				"custom-annotation-2": "ann-value-2",
+			},
+		},
+		Spec: aigv1a1.AIGatewayRouteSpec{
+			Rules: []aigv1a1.AIGatewayRouteRule{
+				{
+					BackendRefs: []aigv1a1.AIGatewayRouteRuleBackendRef{
+						{Name: "test-backend", Weight: ptr.To[int32](100)},
+					},
+				},
+			},
+		},
+	}
+
+	controller := &AIGatewayRouteController{client: c}
+
+	// Test initial HTTPRoute creation with labels and annotations.
+	httpRoute := &gwapiv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-route",
+			Namespace: "test-ns",
+		},
+	}
+
+	err := controller.newHTTPRoute(context.Background(), httpRoute, aiGatewayRoute)
+	require.NoError(t, err)
+
+	// Verify that all labels from AIGatewayRoute are copied to HTTPRoute.
+	require.NotNil(t, httpRoute.Labels)
+	require.Equal(t, "value-1", httpRoute.Labels["custom-label-1"])
+	require.Equal(t, "value-2", httpRoute.Labels["custom-label-2"])
+
+	// Verify that all annotations from AIGatewayRoute are copied to HTTPRoute.
+	require.NotNil(t, httpRoute.Annotations)
+	require.Equal(t, "ann-value-1", httpRoute.Annotations["custom-annotation-1"])
+	require.Equal(t, "ann-value-2", httpRoute.Annotations["custom-annotation-2"])
+
+	// Verify that controller-specific annotations are also present.
+	require.Equal(t, "true", httpRoute.Annotations[httpRouteAnnotationForAIGatewayGeneratedIndication])
+
+	// Test updating existing HTTPRoute with new labels and annotations.
+	aiGatewayRoute.Labels["new-label"] = "new-value"
+	aiGatewayRoute.Labels["custom-label-1"] = "new-value-1"
+	aiGatewayRoute.Annotations["new-annotation"] = "new-ann-value"
+	aiGatewayRoute.Annotations["custom-annotation-1"] = "new-ann-value-1"
+
+	err = controller.newHTTPRoute(context.Background(), httpRoute, aiGatewayRoute)
+	require.NoError(t, err)
+
+	// Verify new labels and annotations are propagated.
+	require.Equal(t, "new-value", httpRoute.Labels["new-label"])
+	require.Equal(t, "new-ann-value", httpRoute.Annotations["new-annotation"])
+	require.Equal(t, "new-value-1", httpRoute.Labels["custom-label-1"])
+	require.Equal(t, "new-ann-value-1", httpRoute.Annotations["custom-annotation-1"])
+
+	// Verify old labels and annotations are still present.
+	require.Equal(t, "value-2", httpRoute.Labels["custom-label-2"])
+	require.Equal(t, "ann-value-2", httpRoute.Annotations["custom-annotation-2"])
+}
+
+func TestAIGatewayRouteController_syncGateways_NamespaceDetermination(t *testing.T) {
+	fakeClient := requireNewFakeClientWithIndexes(t)
+	eventCh := internaltesting.NewControllerEventChan[*gwapiv1.Gateway]()
+
+	// Create test gateways in different namespaces.
+	gateway1 := &gwapiv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{Name: "gateway1", Namespace: "default"},
+	}
+	gateway2 := &gwapiv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{Name: "gateway2", Namespace: "other-ns"},
+	}
+
+	err := fakeClient.Create(t.Context(), gateway1)
+	require.NoError(t, err)
+	err = fakeClient.Create(t.Context(), gateway2)
+	require.NoError(t, err)
+
+	// Create controller.
+	c := NewAIGatewayRouteController(fakeClient, nil, logr.Discard(), eventCh.Ch, "/v1")
+
+	// Test AIGatewayRoute with parent references having different namespace configurations.
+	aiGatewayRoute := &aigv1a1.AIGatewayRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-route",
+			Namespace: "default", // Route's namespace.
+		},
+		Spec: aigv1a1.AIGatewayRouteSpec{
+			ParentRefs: []gwapiv1a2.ParentReference{
+				{
+					Name: "gateway1",
+					// No namespace specified - should use route's namespace ("default").
+				},
+				{
+					Name:      "gateway2",
+					Namespace: ptr.To[gwapiv1a2.Namespace]("other-ns"), // Explicit namespace.
+				},
+			},
+		},
+	}
+
+	// Call syncGateways.
+	err = c.syncGateways(t.Context(), aiGatewayRoute)
+	require.NoError(t, err)
+
+	// Verify that events were sent for both gateways.
+	// We should receive 2 events (one for each parent reference).
+	gateways := eventCh.RequireItemsEventually(t, 2)
+	require.Len(t, gateways, 2)
+
+	// Extract the gateway names and namespaces from the events.
+	gw1 := gateways[0]
+	gw2 := gateways[1]
+
+	// Verify first gateway: gateway1 in default namespace (inherited from route).
+	require.Equal(t, "gateway1", gw1.Name)
+	require.Equal(t, "default", gw1.Namespace)
+
+	// Verify second gateway: gateway2 in other-ns (explicitly specified).
+	require.Equal(t, "gateway2", gw2.Name)
+	require.Equal(t, "other-ns", gw2.Namespace)
+}
+
+func TestAIGatewayRouteController_CrossNamespaceBackend_WithReferenceGrant(t *testing.T) {
+	fakeClient := requireNewFakeClientWithIndexes(t)
+	eventCh := internaltesting.NewControllerEventChan[*gwapiv1.Gateway]()
+	c := NewAIGatewayRouteController(fakeClient, fake2.NewClientset(), ctrl.Log, eventCh.Ch, "/v1")
+
+	// Create backend in backend-ns namespace
+	backend := &aigv1a1.AIServiceBackend{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cross-ns-backend",
+			Namespace: "backend-ns",
+		},
+		Spec: aigv1a1.AIServiceBackendSpec{
+			APISchema: aigv1a1.VersionedAPISchema{
+				Name:    aigv1a1.APISchemaOpenAI,
+				Version: ptr.To("v1"),
+			},
+			BackendRef: gwapiv1.BackendObjectReference{
+				Group: ptr.To(gwapiv1.Group("gateway.envoyproxy.io")),
+				Kind:  ptr.To(gwapiv1.Kind("Backend")),
+				Name:  "my-backend",
+			},
+		},
+	}
+	err := fakeClient.Create(t.Context(), backend)
+	require.NoError(t, err)
+
+	// Create ReferenceGrant allowing cross-namespace access
+	grant := &gwapiv1b1.ReferenceGrant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "allow-from-route-ns",
+			Namespace: "backend-ns",
+		},
+		Spec: gwapiv1b1.ReferenceGrantSpec{
+			From: []gwapiv1b1.ReferenceGrantFrom{
+				{
+					Group:     "aigateway.envoyproxy.io",
+					Kind:      "AIGatewayRoute",
+					Namespace: "route-ns",
+				},
+			},
+			To: []gwapiv1b1.ReferenceGrantTo{
+				{
+					Group: "aigateway.envoyproxy.io",
+					Kind:  "AIServiceBackend",
+				},
+			},
+		},
+	}
+	err = fakeClient.Create(t.Context(), grant)
+	require.NoError(t, err)
+
+	// Create AIGatewayRoute in route-ns that references backend in backend-ns
+	route := &aigv1a1.AIGatewayRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cross-ns-route",
+			Namespace: "route-ns",
+		},
+		Spec: aigv1a1.AIGatewayRouteSpec{
+			Rules: []aigv1a1.AIGatewayRouteRule{
+				{
+					BackendRefs: []aigv1a1.AIGatewayRouteRuleBackendRef{
+						{
+							Name:      "cross-ns-backend",
+							Namespace: ptr.To(gwapiv1.Namespace("backend-ns")),
+							Weight:    ptr.To[int32](1),
+						},
+					},
+				},
+			},
+		},
+	}
+	err = fakeClient.Create(t.Context(), route)
+	require.NoError(t, err)
+
+	// Reconcile should succeed with ReferenceGrant
+	_, err = c.Reconcile(t.Context(), reconcile.Request{
+		NamespacedName: types.NamespacedName{Namespace: "route-ns", Name: "cross-ns-route"},
+	})
+	require.NoError(t, err)
+
+	// Verify that HTTPRoute was created
+	var httpRoute gwapiv1.HTTPRoute
+	err = fakeClient.Get(t.Context(), types.NamespacedName{
+		Namespace: "route-ns",
+		Name:      "cross-ns-route",
+	}, &httpRoute)
+	require.NoError(t, err)
+
+	// Verify the status is Accepted
+	var updatedRoute aigv1a1.AIGatewayRoute
+	err = fakeClient.Get(t.Context(), types.NamespacedName{
+		Namespace: "route-ns",
+		Name:      "cross-ns-route",
+	}, &updatedRoute)
+	require.NoError(t, err)
+	require.Len(t, updatedRoute.Status.Conditions, 1)
+	require.Equal(t, aigv1a1.ConditionTypeAccepted, updatedRoute.Status.Conditions[0].Type)
+}
+
+func TestAIGatewayRouteController_CrossNamespaceBackend_WithoutReferenceGrant(t *testing.T) {
+	fakeClient := requireNewFakeClientWithIndexes(t)
+	eventCh := internaltesting.NewControllerEventChan[*gwapiv1.Gateway]()
+	c := NewAIGatewayRouteController(fakeClient, fake2.NewClientset(), ctrl.Log, eventCh.Ch, "/v1")
+
+	// Create backend in backend-ns namespace
+	backend := &aigv1a1.AIServiceBackend{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cross-ns-backend",
+			Namespace: "backend-ns",
+		},
+		Spec: aigv1a1.AIServiceBackendSpec{
+			APISchema: aigv1a1.VersionedAPISchema{
+				Name:    aigv1a1.APISchemaOpenAI,
+				Version: ptr.To("v1"),
+			},
+			BackendRef: gwapiv1.BackendObjectReference{
+				Group: ptr.To(gwapiv1.Group("gateway.envoyproxy.io")),
+				Kind:  ptr.To(gwapiv1.Kind("Backend")),
+				Name:  "my-backend",
+			},
+		},
+	}
+	err := fakeClient.Create(t.Context(), backend)
+	require.NoError(t, err)
+
+	// Create AIGatewayRoute in route-ns that references backend in backend-ns
+	// WITHOUT creating a ReferenceGrant
+	route := &aigv1a1.AIGatewayRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cross-ns-route",
+			Namespace: "route-ns",
+		},
+		Spec: aigv1a1.AIGatewayRouteSpec{
+			Rules: []aigv1a1.AIGatewayRouteRule{
+				{
+					BackendRefs: []aigv1a1.AIGatewayRouteRuleBackendRef{
+						{
+							Name:      "cross-ns-backend",
+							Namespace: ptr.To(gwapiv1.Namespace("backend-ns")),
+							Weight:    ptr.To[int32](1),
+						},
+					},
+				},
+			},
+		},
+	}
+	err = fakeClient.Create(t.Context(), route)
+	require.NoError(t, err)
+
+	// Reconcile should fail without ReferenceGrant
+	_, err = c.Reconcile(t.Context(), reconcile.Request{
+		NamespacedName: types.NamespacedName{Namespace: "route-ns", Name: "cross-ns-route"},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "is not permitted")
+	require.Contains(t, err.Error(), "no valid ReferenceGrant found")
+
+	// Verify the status is NotAccepted
+	var updatedRoute aigv1a1.AIGatewayRoute
+	err = fakeClient.Get(t.Context(), types.NamespacedName{
+		Namespace: "route-ns",
+		Name:      "cross-ns-route",
+	}, &updatedRoute)
+	require.NoError(t, err)
+	require.Len(t, updatedRoute.Status.Conditions, 1)
+	require.Equal(t, aigv1a1.ConditionTypeNotAccepted, updatedRoute.Status.Conditions[0].Type)
+}
+
+func TestAIGatewayRouteController_SameNamespaceBackend_NoReferenceGrantNeeded(t *testing.T) {
+	fakeClient := requireNewFakeClientWithIndexes(t)
+	eventCh := internaltesting.NewControllerEventChan[*gwapiv1.Gateway]()
+	c := NewAIGatewayRouteController(fakeClient, fake2.NewClientset(), ctrl.Log, eventCh.Ch, "/v1")
+
+	// Create backend in same namespace as route
+	backend := &aigv1a1.AIServiceBackend{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "same-ns-backend",
+			Namespace: "default",
+		},
+		Spec: aigv1a1.AIServiceBackendSpec{
+			APISchema: aigv1a1.VersionedAPISchema{
+				Name:    aigv1a1.APISchemaOpenAI,
+				Version: ptr.To("v1"),
+			},
+			BackendRef: gwapiv1.BackendObjectReference{
+				Group: ptr.To(gwapiv1.Group("gateway.envoyproxy.io")),
+				Kind:  ptr.To(gwapiv1.Kind("Backend")),
+				Name:  "my-backend",
+			},
+		},
+	}
+	err := fakeClient.Create(t.Context(), backend)
+	require.NoError(t, err)
+
+	// Create AIGatewayRoute in same namespace
+	route := &aigv1a1.AIGatewayRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "same-ns-route",
+			Namespace: "default",
+		},
+		Spec: aigv1a1.AIGatewayRouteSpec{
+			Rules: []aigv1a1.AIGatewayRouteRule{
+				{
+					BackendRefs: []aigv1a1.AIGatewayRouteRuleBackendRef{
+						{
+							Name:   "same-ns-backend",
+							Weight: ptr.To[int32](1),
+							// No namespace specified, should use route's namespace
+						},
+					},
+				},
+			},
+		},
+	}
+	err = fakeClient.Create(t.Context(), route)
+	require.NoError(t, err)
+
+	// Reconcile should succeed without ReferenceGrant for same-namespace reference
+	_, err = c.Reconcile(t.Context(), reconcile.Request{
+		NamespacedName: types.NamespacedName{Namespace: "default", Name: "same-ns-route"},
+	})
+	require.NoError(t, err)
+
+	// Verify the status is Accepted
+	var updatedRoute aigv1a1.AIGatewayRoute
+	err = fakeClient.Get(t.Context(), types.NamespacedName{
+		Namespace: "default",
+		Name:      "same-ns-route",
+	}, &updatedRoute)
+	require.NoError(t, err)
+	require.Len(t, updatedRoute.Status.Conditions, 1)
+	require.Equal(t, aigv1a1.ConditionTypeAccepted, updatedRoute.Status.Conditions[0].Type)
 }

@@ -59,7 +59,6 @@ const config: Config = {
   projectName: 'ai-gateway',
 
   onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'warn',
 
   // Even if you don't use internationalization, you can use this field to set
   // useful metadata like html lang. For example, if your site is Chinese, you
@@ -71,6 +70,9 @@ const config: Config = {
 
   markdown: {
     mermaid: true,
+    hooks: {
+      onBrokenMarkdownLinks: 'warn'
+    },
   },
 
   themes: ['@docusaurus/theme-mermaid'],
@@ -89,6 +91,16 @@ const config: Config = {
             current: {
               label: 'latest',
               path: '/',
+              banner: 'none'
+            },
+            '0.4': {
+              label: '0.4',
+              path: '0.4',
+              banner: 'none'
+            },
+            '0.3': {
+              label: '0.3',
+              path: '0.3',
               banner: 'none'
             },
             '0.2': {
@@ -113,6 +125,8 @@ const config: Config = {
           onInlineTags: 'warn',
           onInlineAuthors: 'warn',
           onUntruncatedBlogPosts: 'warn',
+          blogSidebarTitle: 'Blog posts',
+          blogSidebarCount: 'ALL',
         },
         theme: {
           customCss: './src/css/custom.css',

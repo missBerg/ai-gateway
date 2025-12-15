@@ -55,8 +55,8 @@ func createTestAwsSecret(t *testing.T, client client.Client, bspName string, acc
 		profile = awsProfileName
 	}
 	data := map[string][]byte{
-		AwsCredentialsKey: []byte(fmt.Sprintf("[%s]\naws_access_key_id = %s\naws_secret_access_key = %s\naws_session_token = %s\nregion = %s\n",
-			profile, accessKey, secretKey, sessionToken, awsRegion)),
+		AwsCredentialsKey: fmt.Appendf(nil, "[%s]\naws_access_key_id = %s\naws_secret_access_key = %s\naws_session_token = %s\nregion = %s\n",
+			profile, accessKey, secretKey, sessionToken, awsRegion),
 	}
 	err := client.Create(t.Context(), &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -128,7 +128,7 @@ func TestAWS_OIDCRotator(t *testing.T) {
 			Issuer:        discoveryServer.URL,
 			TokenEndpoint: &tokenServer.URL,
 		},
-		ClientID: "some-client-id",
+		ClientID: ptr.To("some-client-id"),
 		ClientSecret: gwapiv1.SecretObjectReference{
 			Name:      gwapiv1.ObjectName(testClientSecret),
 			Namespace: (*gwapiv1.Namespace)(ptr.To(policyNameSpace)),

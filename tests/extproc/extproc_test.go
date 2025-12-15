@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/envoyproxy/ai-gateway/filterapi"
+	"github.com/envoyproxy/ai-gateway/internal/filterapi"
 	"github.com/envoyproxy/ai-gateway/tests/internal/testenvironment"
 )
 
@@ -36,14 +36,16 @@ const (
 var (
 	openAISchema         = filterapi.VersionedAPISchema{Name: filterapi.APISchemaOpenAI, Version: "v1"}
 	awsBedrockSchema     = filterapi.VersionedAPISchema{Name: filterapi.APISchemaAWSBedrock}
+	awsAnthropicSchema   = filterapi.VersionedAPISchema{Name: filterapi.APISchemaAWSAnthropic, Version: "bedrock-2023-05-31"}
 	azureOpenAISchema    = filterapi.VersionedAPISchema{Name: filterapi.APISchemaAzureOpenAI, Version: "2025-01-01-preview"}
 	gcpVertexAISchema    = filterapi.VersionedAPISchema{Name: filterapi.APISchemaGCPVertexAI}
-	gcpAnthropicAISchema = filterapi.VersionedAPISchema{Name: filterapi.APISchemaGCPAnthropic}
+	gcpAnthropicAISchema = filterapi.VersionedAPISchema{Name: filterapi.APISchemaGCPAnthropic, Version: "vertex-2023-10-16"}
 	geminiSchema         = filterapi.VersionedAPISchema{Name: filterapi.APISchemaOpenAI, Version: "v1beta/openai"}
 	groqSchema           = filterapi.VersionedAPISchema{Name: filterapi.APISchemaOpenAI, Version: "openai/v1"}
 	grokSchema           = filterapi.VersionedAPISchema{Name: filterapi.APISchemaOpenAI, Version: "v1"}
 	sambaNovaSchema      = filterapi.VersionedAPISchema{Name: filterapi.APISchemaOpenAI, Version: "v1"}
 	deepInfraSchema      = filterapi.VersionedAPISchema{Name: filterapi.APISchemaOpenAI, Version: "v1/openai"}
+	anthropicSchema      = filterapi.VersionedAPISchema{Name: filterapi.APISchemaAnthropic}
 
 	testUpstreamOpenAIBackend      = filterapi.Backend{Name: "testupstream-openai", Schema: openAISchema}
 	testUpstreamModelNameOverride  = filterapi.Backend{Name: "testupstream-modelname-override", ModelNameOverride: "override-model", Schema: openAISchema}
@@ -59,9 +61,32 @@ var (
 		Region:      "gcp-region",
 		ProjectName: "gcp-project-name",
 	}}}
-	// This always failing backend is configured to have AWS Bedrock schema so that
-	// we can test that the extproc can fallback to the different schema. E.g. Primary AWS and then OpenAI.
-	alwaysFailingBackend = filterapi.Backend{Name: "always-failing-backend", Schema: awsBedrockSchema}
+	testUpstreamAWSAnthropicBackend = filterapi.Backend{Name: "testupstream-aws-anthropic", Schema: awsAnthropicSchema}
+	alwaysFailingBackend            = filterapi.Backend{Name: "always-failing-backend", Schema: openAISchema}
+
+	testUpstreamBodyMutationBackend = filterapi.Backend{
+		Name:   "testupstream-body-mutation",
+		Schema: openAISchema,
+		BodyMutation: &filterapi.HTTPBodyMutation{
+			Set: []filterapi.HTTPBodyField{
+				{Path: "temperature", Value: "0.5"},
+				{Path: "max_tokens", Value: "150"},
+				{Path: "custom_field", Value: "\"route-level-value\""},
+			},
+			Remove: []string{"stream_options"},
+		},
+	}
+
+	testUpstreamBodyMutationAnthropicBackend = filterapi.Backend{
+		Name:   "testupstream-body-mutation-anthropic",
+		Schema: anthropicSchema,
+		BodyMutation: &filterapi.HTTPBodyMutation{
+			Set: []filterapi.HTTPBodyField{
+				{Path: "temperature", Value: "0.7"},
+				{Path: "max_tokens", Value: "200"},
+			},
+		},
+	}
 
 	// envoyConfig is the embedded Envoy configuration template.
 	//
@@ -134,19 +159,19 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
-func startTestEnvironment(t *testing.T, extprocConfig string, okToDumpLogOnFailure bool) *testenvironment.TestEnvironment {
+func startTestEnvironment(t testing.TB, extprocConfig string, okToDumpLogOnFailure, extProcInProcess bool) *testenvironment.TestEnvironment {
 	return testenvironment.StartTestEnvironment(t,
-		requireUpstream, 8080,
-		extprocBin, extprocConfig, nil, envoyConfig, okToDumpLogOnFailure,
+		requireUpstream, map[string]int{"upstream": 8080},
+		extprocBin, extprocConfig, nil, envoyConfig, okToDumpLogOnFailure, extProcInProcess, 120*time.Second,
 	)
 }
 
 // requireUpstream starts the external processor with the given configuration.
-func requireUpstream(t *testing.T, out io.Writer, port int) {
+func requireUpstream(t testing.TB, out io.Writer, ports map[string]int) {
 	cmd := exec.CommandContext(t.Context(), testupstreamBin)
 	cmd.Env = append(os.Environ(),
 		"TESTUPSTREAM_ID=extproc_test",
-		fmt.Sprintf("LISTENER_PORT=%d", port))
+		fmt.Sprintf("LISTENER_PORT=%d", ports["upstream"]))
 
 	// wait for the ready message or exit.
 	testenvironment.StartAndAwaitReady(t, cmd, out, out, "Test upstream is ready")

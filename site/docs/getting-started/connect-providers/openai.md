@@ -4,6 +4,9 @@ title: Connect OpenAI
 sidebar_position: 2
 ---
 
+import CodeBlock from '@theme/CodeBlock';
+import vars from '../../\_vars.json';
+
 # Connect OpenAI
 
 This guide will help you configure Envoy AI Gateway to work with OpenAI's models.
@@ -24,9 +27,9 @@ Ensure you have followed the steps in [Connect Providers](../connect-providers/)
 
 ### 1. Download configuration template
 
-```shell
-curl -O https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/examples/basic/openai.yaml
-```
+<CodeBlock language="shell">
+{`curl -O https://raw.githubusercontent.com/envoyproxy/ai-gateway/${vars.aigwGitRef}/examples/basic/openai.yaml`}
+</CodeBlock>
 
 ### 2. Configure OpenAI Credentials
 
@@ -59,6 +62,8 @@ kubectl wait pods --timeout=2m \
 You should have set `$GATEWAY_URL` as part of the basic setup before connecting to providers.
 See the [Basic Usage](../basic-usage.md) page for instructions.
 
+#### Test Chat Completions
+
 ```shell
 curl -H "Content-Type: application/json" \
   -d '{
@@ -71,6 +76,22 @@ curl -H "Content-Type: application/json" \
     ]
   }' \
   $GATEWAY_URL/v1/chat/completions
+```
+
+#### Test Completions (Legacy)
+
+OpenAI supports the legacy completions endpoint with specific models:
+
+```shell
+curl -H "Content-Type: application/json" \
+  -d '{
+    "model": "babbage-002",
+    "prompt": "def fib(n):\n    if n <= 1:\n        return n\n    else:\n        return fib(n-1) + fib(n-2)",
+    "max_tokens": 25,
+    "temperature": 0.4,
+    "top_p": 0.9
+  }' \
+  $GATEWAY_URL/v1/completions
 ```
 
 ## Troubleshooting
@@ -115,9 +136,7 @@ metadata:
   name: envoy-ai-gateway-basic-openai
   namespace: default
 spec:
-  schema:
-    name: OpenAI
-  targetRefs:
+  parentRefs:
     - name: envoy-ai-gateway-basic
       kind: Gateway
       group: gateway.networking.k8s.io

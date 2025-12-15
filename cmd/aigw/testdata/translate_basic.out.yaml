@@ -79,7 +79,8 @@ metadata:
 spec:
   parentRefs:
     - name: envoy-ai-gateway-basic
-      namespace: default
+      group: gateway.networking.k8s.io
+      kind: Gateway
   rules:
     - backendRefs:
         - group: gateway.envoyproxy.io
@@ -96,6 +97,8 @@ spec:
             - name: x-ai-eg-model
               type: Exact
               value: gpt-4o-mini
+          path:
+            value: "/"
       timeouts:
         request: 60s
     - backendRefs:
@@ -113,6 +116,8 @@ spec:
             - name: x-ai-eg-model
               type: Exact
               value: llama3-2-1b-instruct-v1
+          path:
+            value: "/"
       timeouts:
         request: 60s
     - backendRefs:
@@ -130,6 +135,8 @@ spec:
             - name: x-ai-eg-model
               type: Exact
               value: some-cool-self-hosted-model
+          path:
+            value: "/"
       timeouts:
         request: 60s
     - matches:
@@ -175,8 +182,7 @@ metadata:
 spec:
   directResponse:
     body:
-      inline: No matching route found. It is likely that the model specified your
-        request is not configured in the Gateway.
+      inline: No matching route found. It is likely because the model specified in your request is not configured in the Gateway.
       type: null
     statusCode: 404
 ---
@@ -184,7 +190,6 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: envoy-ai-gateway-basic-default
-  namespace: envoy-gateway-system
 stringData:
   filter-config.yaml: |
     backends:
@@ -212,8 +217,6 @@ stringData:
       schema:
         name: OpenAI
         version: v1
-    metadataNamespace: io.envoy.ai_gateway
-    modelNameHeaderKey: x-ai-eg-model
     models:
     - CreatedAt: "2025-05-23T00:00:00Z"
       Name: gpt-4o-mini
@@ -224,10 +227,7 @@ stringData:
     - CreatedAt: "2025-05-23T00:00:00Z"
       Name: some-cool-self-hosted-model
       OwnedBy: Envoy AI Gateway
-    schema:
-      name: OpenAI
-      version: v1
-    uuid: envoy-ai-gateway-basic
+    uuid: aigw-translate
 ---
 apiVersion: v1
 kind: Secret

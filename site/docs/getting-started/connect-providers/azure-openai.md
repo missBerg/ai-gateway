@@ -4,6 +4,8 @@ title: Connect Azure OpenAI
 sidebar_position: 3
 ---
 
+import CodeBlock from '@theme/CodeBlock';
+import vars from '../../\_vars.json';
 
 # Connect Azure OpenAI
 
@@ -20,11 +22,13 @@ API Key authentication is not supported yet.
 ## Prerequisites
 
 Before you begin, you'll need:
+
 - Azure credentials with access to OpenAI service.
 - Basic setup completed from the [Basic Usage](../basic-usage.md) guide
 - Basic configuration removed as described in the [Advanced Configuration](./index.md) overview
 
 ## Azure Credential Setup
+
 1. An Azure account with OpenAI service access enabled
 2. Your Azure tenant ID, client ID, and client secret key
 3. Enabled model access to "GPT-4o"
@@ -33,13 +37,14 @@ Before you begin, you'll need:
 
 ### 1. Download configuration template
 
-```shell
-curl -O https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/examples/basic/azure_openai.yaml
-```
+<CodeBlock language="shell">
+{`curl -O https://raw.githubusercontent.com/envoyproxy/ai-gateway/${vars.aigwGitRef}/examples/basic/azure_openai.yaml`}
+</CodeBlock>
 
 ### 2. Configure Azure Credentials
 
 Edit the `azure_openai.yaml` file to replace these placeholder values:
+
 - `AZURE_TENANT_ID`: Your Azure tenant ID
 - `AZURE_CLIENT_ID`: Your Azure client ID
 - `AZURE_CLIENT_SECRET`: Your Azure client secret
@@ -48,7 +53,6 @@ Edit the `azure_openai.yaml` file to replace these placeholder values:
 Keep your Azure credentials secure and never commit them to version control.
 The credentials will be stored in Kubernetes secrets.
 :::
-
 
 ### 3. Apply Configuration
 
@@ -88,13 +92,16 @@ If you encounter issues:
 
 1. Verify your Azure credentials are correct and active
 2. Check pod status
-  ```shell
-  kubectl get pods -n envoy-gateway-system
-  ```
+
+```shell
+kubectl get pods -n envoy-gateway-system
+```
+
 3. View controller logs:
-  ```shell
-  kubectl logs -n envoy-ai-gateway-system deployment/ai-gateway-controller
-  ```
+
+```shell
+kubectl logs -n envoy-ai-gateway-system deployment/ai-gateway-controller
+```
 
 4. Common errors:
    - 401/403: Invalid credentials or insufficient permissions
@@ -112,9 +119,7 @@ metadata:
   name: envoy-ai-gateway-basic-azure
   namespace: default
 spec:
-  schema:
-    name: OpenAI
-  targetRefs:
+  parentRefs:
     - name: envoy-ai-gateway-basic
       kind: Gateway
       group: gateway.networking.k8s.io

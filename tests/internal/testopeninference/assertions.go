@@ -6,13 +6,15 @@
 package testopeninference
 
 import (
+	"cmp"
 	"encoding/json"
+	"reflect"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	gocmp "github.com/google/go-cmp/cmp"
 	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
 	tracev1 "go.opentelemetry.io/proto/otlp/trace/v1"
 	"google.golang.org/protobuf/proto"
@@ -43,7 +45,7 @@ func RequireSpanEqual(t testing.TB, expected, actual *tracev1.Span) {
 	normalizeSpanForComparison(expectedCopy)
 	normalizeSpanForComparison(actualCopy)
 
-	if diff := cmp.Diff(expectedCopy, actualCopy, protocmp.Transform()); diff != "" {
+	if diff := gocmp.Diff(expectedCopy, actualCopy, protocmp.Transform()); diff != "" {
 		t.Fatalf("spans are not equal (-expected +actual):\n%s", diff)
 	}
 }
@@ -156,17 +158,106 @@ func isZeroValue(v *commonv1.AnyValue) bool {
 	}
 }
 
-// normalizeJSON compacts JSON strings, handling invalid input as-is.
+// normalizeJSON compacts JSON strings, removing zero-value objects.
 func normalizeJSON(s string) string {
 	var v any
 	if err := json.Unmarshal([]byte(s), &v); err != nil {
 		return s
 	}
-	b, err := json.Marshal(v)
+	processedV := processValue(v)
+	b, err := json.Marshal(processedV)
 	if err != nil {
 		return s
 	}
 	return string(b)
+}
+
+// processValue recursively processes JSON values, removing zero-value objects.
+func processValue(v any) any {
+	if v == nil {
+		return nil
+	}
+
+	val := reflect.ValueOf(v)
+	switch val.Kind() {
+	case reflect.Map:
+		result := make(map[string]any)
+		allZero := true
+		for _, key := range val.MapKeys() {
+			keyStr := key.String()
+			elem := val.MapIndex(key)
+			processed := processValue(elem.Interface())
+			if !isZero(processed) {
+				allZero = false
+				result[keyStr] = processed
+			}
+		}
+		if allZero {
+			return nil
+		}
+		return result
+	case reflect.Slice:
+		result := make([]any, 0, val.Len())
+		allZero := true
+		for i := 0; i < val.Len(); i++ {
+			elem := val.Index(i)
+			processed := processValue(elem.Interface())
+			result = append(result, processed)
+			if !isZero(processed) {
+				allZero = false
+			}
+		}
+		if allZero {
+			return nil
+		}
+		return result
+	default:
+		// Return leaf values as-is; isZero checks will handle filtering at parent level
+		return v
+	}
+}
+
+// isZero checks if a JSON value is considered zero.
+func isZero(v any) bool {
+	if v == nil {
+		return true
+	}
+
+	val := reflect.ValueOf(v)
+	switch val.Kind() {
+	case reflect.Bool:
+		return !val.Bool()
+	case reflect.Float64:
+		return val.Float() == 0
+	case reflect.String:
+		return val.Len() == 0
+	case reflect.Array:
+		return true
+	case reflect.Map:
+		// Maps where all values are zero are considered zero
+		if val.Len() == 0 {
+			return true
+		}
+		for _, key := range val.MapKeys() {
+			if !isZero(val.MapIndex(key).Interface()) {
+				return false
+			}
+		}
+		return true
+	case reflect.Slice:
+		// Slices containing only nil/zero values are considered zero
+		if val.Len() == 0 {
+			return true
+		}
+		for i := 0; i < val.Len(); i++ {
+			if !isZero(val.Index(i).Interface()) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
 }
 
 // normalizeErrorMessage converts Python dicts to JSON and extracts error codes.
@@ -180,7 +271,7 @@ func normalizeErrorMessage(s string) string {
 
 // sortAttributes sorts key-value pairs by key.
 func sortAttributes(attrs []*commonv1.KeyValue) {
-	sort.Slice(attrs, func(i, j int) bool {
-		return attrs[i].Key < attrs[j].Key
+	slices.SortFunc(attrs, func(a, b *commonv1.KeyValue) int {
+		return cmp.Compare(a.Key, b.Key)
 	})
 }

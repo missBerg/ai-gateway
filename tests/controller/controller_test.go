@@ -9,10 +9,12 @@
 package controller
 
 import (
+	"cmp"
 	"fmt"
 	"log/slog"
 	"os"
-	"sort"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,6 +29,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -35,6 +38,7 @@ import (
 
 	aigv1a1 "github.com/envoyproxy/ai-gateway/api/v1alpha1"
 	"github.com/envoyproxy/ai-gateway/internal/controller"
+	"github.com/envoyproxy/ai-gateway/internal/internalapi"
 	internaltesting "github.com/envoyproxy/ai-gateway/internal/testing"
 	testsinternal "github.com/envoyproxy/ai-gateway/tests/internal"
 )
@@ -52,6 +56,8 @@ func TestStartControllers(t *testing.T) {
 		ExtProcImage:           "envoyproxy/ai-gateway-extproc:foo",
 		EnableLeaderElection:   false,
 		DisableMutatingWebhook: true,
+		RootPrefix:             "/root-prefix",
+		ExtProcMaxRecvMsgSize:  512 * 1024 * 1024, // 512MB
 	}
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
@@ -73,8 +79,9 @@ func TestStartControllers(t *testing.T) {
 				Spec: aigv1a1.AIServiceBackendSpec{
 					APISchema: defaultSchema,
 					BackendRef: gwapiv1.BackendObjectReference{
-						Name: gwapiv1.ObjectName(backend),
-						Port: ptr.To[gwapiv1.PortNumber](8080),
+						Name:  gwapiv1.ObjectName(backend),
+						Kind:  ptr.To(gwapiv1.Kind("Backend")),
+						Group: ptr.To(gwapiv1.Group("gateway.envoyproxy.io")),
 					},
 				},
 			})
@@ -92,33 +99,21 @@ func TestStartControllers(t *testing.T) {
 		},
 	}
 	t.Run("setup routes", func(t *testing.T) {
-		for i, route := range []string{"route1", "route2"} {
-			var targetRefs []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName
-			var parentRefs []gwapiv1a2.ParentReference
-			if i == 0 {
-				targetRefs = []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName{
-					{
-						LocalPolicyTargetReference: gwapiv1a2.LocalPolicyTargetReference{Name: "gtw", Kind: "Gateway", Group: "gateway.networking.k8s.io"},
-					},
-				}
-			} else {
-				parentRefs = []gwapiv1a2.ParentReference{{Name: "gtw"}}
-			}
+		for _, route := range []string{"route1", "route2"} {
+			parentRefs := []gwapiv1a2.ParentReference{{Name: "gtw"}}
 			err := c.Create(ctx, &aigv1a1.AIGatewayRoute{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: route, Namespace: "default",
 				},
 				Spec: aigv1a1.AIGatewayRouteSpec{
-					TargetRefs: targetRefs,
 					ParentRefs: parentRefs,
-					APISchema:  defaultSchema,
 					Rules: []aigv1a1.AIGatewayRouteRule{
 						{
 							Matches: []aigv1a1.AIGatewayRouteRuleMatch{
 								{
 									Headers: []gwapiv1.HTTPHeaderMatch{
 										{
-											Name:  "x-ai-eg-model",
+											Name:  internalapi.ModelNameHeaderKeyDefault,
 											Value: "foo",
 										},
 									},
@@ -187,10 +182,10 @@ func TestStartControllers(t *testing.T) {
 					t.Logf("failed to get http route %s: %v", route, err)
 					return false
 				}
-				require.Len(t, httpRoute.Spec.Rules, 2) // 1 for rule, 1 for the default backend.
+				require.Len(t, httpRoute.Spec.Rules, 2) // 1 for rule, 1 for the default rule.
 				require.Len(t, httpRoute.Spec.Rules[0].Matches, 1)
 				require.Len(t, httpRoute.Spec.Rules[0].Matches[0].Headers, 1)
-				require.Equal(t, "x-ai-eg-model", string(httpRoute.Spec.Rules[0].Matches[0].Headers[0].Name))
+				require.Equal(t, internalapi.ModelNameHeaderKeyDefault, string(httpRoute.Spec.Rules[0].Matches[0].Headers[0].Name))
 				require.Equal(t, "foo", httpRoute.Spec.Rules[0].Matches[0].Headers[0].Value)
 
 				// Check all rule has the host rewrite filter except for the last rule.
@@ -199,17 +194,98 @@ func TestStartControllers(t *testing.T) {
 					require.NotNil(t, rule.Filters[0].ExtensionRef)
 					require.Equal(t, fmt.Sprintf("ai-eg-host-rewrite-%s", route), string(rule.Filters[0].ExtensionRef.Name))
 				}
+				// Check all rules have root-prefix as the path.
+				for _, rule := range httpRoute.Spec.Rules {
+					p := rule.Matches[0].Path
+					require.NotNil(t, p)
+					require.Equal(t, "/root-prefix", *p.Value)
+				}
 				return true
 			}, 30*time.Second, 200*time.Millisecond)
 		})
 	}
 }
 
+func TestNamespaceScopedCache(t *testing.T) {
+	_, cfg, _ := testsinternal.NewEnvTest(t)
+	opts := controller.Options{EnableLeaderElection: false, DisableMutatingWebhook: true}
+
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme: controller.Scheme,
+		Cache: cache.Options{
+			// Only watch the "test" namespace, where the test will be creating resources.
+			// Also initialize the cache with an unexisting namespace to verify it doesn't fail.
+			DefaultNamespaces: map[string]cache.Config{"test": {}, "unexisting": {}},
+			DefaultTransform:  cache.TransformStripManagedFields(),
+		},
+		Controller:     config.Controller{SkipNameValidation: ptr.To(true)},
+		LeaderElection: false,
+	})
+	require.NoError(t, err)
+
+	ctx := t.Context()
+	go func() {
+		startErr := controller.StartControllers(ctx, mgr, cfg, defaultLogger(), opts)
+		require.NoError(t, startErr)
+	}()
+
+	// Create one backend in the "default" namespace and one in the "test" namespace.
+	// Only the one in the "test" namespace should be seen by the manager Client as the
+	// other namespace is not watched.
+
+	require.NoError(t, mgr.GetClient().Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: "test"},
+	}))
+	require.NoError(t, mgr.GetClient().Create(ctx, &aigv1a1.AIServiceBackend{
+		ObjectMeta: metav1.ObjectMeta{Name: "backend1", Namespace: "default"},
+		Spec: aigv1a1.AIServiceBackendSpec{
+			APISchema: defaultSchema,
+			BackendRef: gwapiv1.BackendObjectReference{
+				Name:  "backend1",
+				Kind:  ptr.To(gwapiv1.Kind("Backend")),
+				Group: ptr.To(gwapiv1.Group("gateway.envoyproxy.io")),
+			},
+		},
+	}))
+	require.NoError(t, mgr.GetClient().Create(ctx, &aigv1a1.AIServiceBackend{
+		ObjectMeta: metav1.ObjectMeta{Name: "backend2", Namespace: "test"},
+		Spec: aigv1a1.AIServiceBackendSpec{
+			APISchema: defaultSchema,
+			BackendRef: gwapiv1.BackendObjectReference{
+				Name:  "backend2",
+				Kind:  ptr.To(gwapiv1.Kind("Backend")),
+				Group: ptr.To(gwapiv1.Group("gateway.envoyproxy.io")),
+			},
+		},
+	}))
+
+	// Verify that the object in the cached namespace is seen.
+	require.Eventually(t, func() bool {
+		var aiBackend aigv1a1.AIServiceBackend
+		err = mgr.GetClient().Get(ctx, client.ObjectKey{Name: "backend2", Namespace: "test"}, &aiBackend)
+		if err != nil {
+			t.Logf("failed to get backend: %v", err)
+			return false
+		}
+		require.Equal(t, "test", aiBackend.Namespace)
+		require.Equal(t, "backend2", aiBackend.Name)
+		return true
+	}, 30*time.Second, 200*time.Millisecond)
+
+	// Verify that objects in uncached namespaces aren't seen or can't be retrieved due to the cache
+	// failing on an unknown namespace.
+	require.Never(t, func() bool {
+		var backends aigv1a1.AIServiceBackendList
+		err = mgr.GetClient().List(ctx, &backends, client.InNamespace("default"))
+		return (err != nil && !strings.Contains(err.Error(), "unknown namespace")) || len(backends.Items) > 0
+	}, 5*time.Second, 200*time.Millisecond)
+}
+
 func TestAIGatewayRouteController(t *testing.T) {
 	c, cfg, k := testsinternal.NewEnvTest(t)
 
 	eventCh := internaltesting.NewControllerEventChan[*gwapiv1.Gateway]()
-	rc := controller.NewAIGatewayRouteController(c, k, defaultLogger(), eventCh.Ch)
+	rc := controller.NewAIGatewayRouteController(c, k, defaultLogger(), eventCh.Ch, "/foobar/")
 
 	opt := ctrl.Options{Scheme: c.Scheme(), LeaderElection: false, Controller: config.Controller{SkipNameValidation: ptr.To(true)}}
 	mgr, err := ctrl.NewManager(cfg, opt)
@@ -217,11 +293,6 @@ func TestAIGatewayRouteController(t *testing.T) {
 
 	err = controller.TypedControllerBuilderForCRD(mgr, &aigv1a1.AIGatewayRoute{}).Complete(rc)
 	require.NoError(t, err)
-
-	go func() {
-		err = mgr.Start(t.Context())
-		require.NoError(t, err)
-	}()
 
 	resourceReq := &corev1.ResourceRequirements{
 		Limits: corev1.ResourceList{
@@ -250,12 +321,11 @@ func TestAIGatewayRouteController(t *testing.T) {
 	origin := &aigv1a1.AIGatewayRoute{
 		ObjectMeta: metav1.ObjectMeta{Name: "myroute", Namespace: "default"},
 		Spec: aigv1a1.AIGatewayRouteSpec{
-			APISchema: defaultSchema,
-			TargetRefs: []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName{
+			ParentRefs: []gwapiv1a2.ParentReference{
 				{
-					LocalPolicyTargetReference: gwapiv1a2.LocalPolicyTargetReference{
-						Name: gatewayName, Kind: "Gateway", Group: "gateway.networking.k8s.io",
-					},
+					Name:  gatewayName,
+					Kind:  ptr.To(gwapiv1a2.Kind("Gateway")),
+					Group: ptr.To(gwapiv1a2.Group("gateway.networking.k8s.io")),
 				},
 			},
 			Rules: []aigv1a1.AIGatewayRouteRule{
@@ -282,13 +352,19 @@ func TestAIGatewayRouteController(t *testing.T) {
 			Spec: aigv1a1.AIServiceBackendSpec{
 				APISchema: defaultSchema,
 				BackendRef: gwapiv1.BackendObjectReference{
-					Name: gwapiv1.ObjectName(b),
-					Port: ptr.To[gwapiv1.PortNumber](8080),
+					Name:  gwapiv1.ObjectName(b),
+					Kind:  ptr.To(gwapiv1.Kind("Backend")),
+					Group: ptr.To(gwapiv1.Group("gateway.envoyproxy.io")),
 				},
 			},
 		})
 		require.NoError(t, err)
 	}
+
+	// Start the manager and wait for resources to be cached before trigger a reconciler.
+	go func() { require.NoError(t, mgr.Start(t.Context())) }()
+	require.True(t, mgr.GetCache().WaitForCacheSync(t.Context()))
+
 	t.Run("create route", func(t *testing.T) {
 		err := c.Create(t.Context(), origin)
 		require.NoError(t, err)
@@ -356,8 +432,8 @@ func TestAIGatewayRouteController(t *testing.T) {
 			err := c.Get(t.Context(), client.ObjectKey{Name: "myroute", Namespace: "default"}, &r)
 			require.NoError(t, err)
 			// Check if the finalizer is set.
-			if len(r.ObjectMeta.Finalizers) == 0 || r.ObjectMeta.Finalizers[0] != "aigateway.envoyproxy.io/finalizer" {
-				t.Logf("expected finalizer not found: %v", r.ObjectMeta.Finalizers)
+			if len(r.Finalizers) == 0 || r.Finalizers[0] != "aigateway.envoyproxy.io/finalizer" {
+				t.Logf("expected finalizer not found: %v", r.Finalizers)
 				return false
 			}
 			if len(r.Status.Conditions) != 1 {
@@ -399,11 +475,6 @@ func TestBackendSecurityPolicyController(t *testing.T) {
 	err = controller.TypedControllerBuilderForCRD(mgr, &aigv1a1.BackendSecurityPolicy{}).Complete(pc)
 	require.NoError(t, err)
 
-	go func() {
-		err = mgr.Start(t.Context())
-		require.NoError(t, err)
-	}()
-
 	const backendSecurityPolicyName, backendSecurityPolicyNamespace = "bsp", "default"
 
 	originals := []*aigv1a1.AIServiceBackend{
@@ -412,13 +483,9 @@ func TestBackendSecurityPolicyController(t *testing.T) {
 			Spec: aigv1a1.AIServiceBackendSpec{
 				APISchema: defaultSchema,
 				BackendRef: gwapiv1.BackendObjectReference{
-					Name: gwapiv1.ObjectName("mybackend"),
-					Port: ptr.To[gwapiv1.PortNumber](8080),
-				},
-				BackendSecurityPolicyRef: &gwapiv1.LocalObjectReference{
-					Kind:  "BackendSecurityPolicy",
-					Group: "aigateway.envoyproxy.io",
-					Name:  gwapiv1.ObjectName(backendSecurityPolicyName),
+					Name:  gwapiv1.ObjectName("mybackend"),
+					Kind:  ptr.To(gwapiv1.Kind("Backend")),
+					Group: ptr.To(gwapiv1.Group("gateway.envoyproxy.io")),
 				},
 			},
 		},
@@ -427,13 +494,9 @@ func TestBackendSecurityPolicyController(t *testing.T) {
 			Spec: aigv1a1.AIServiceBackendSpec{
 				APISchema: defaultSchema,
 				BackendRef: gwapiv1.BackendObjectReference{
-					Name: gwapiv1.ObjectName("mybackend"),
-					Port: ptr.To[gwapiv1.PortNumber](8080),
-				},
-				BackendSecurityPolicyRef: &gwapiv1.LocalObjectReference{
-					Kind:  "BackendSecurityPolicy",
-					Group: "aigateway.envoyproxy.io",
-					Name:  gwapiv1.ObjectName(backendSecurityPolicyName),
+					Name:  gwapiv1.ObjectName("mybackend"),
+					Kind:  ptr.To(gwapiv1.Kind("Backend")),
+					Group: ptr.To(gwapiv1.Group("gateway.envoyproxy.io")),
 				},
 			},
 		},
@@ -441,6 +504,10 @@ func TestBackendSecurityPolicyController(t *testing.T) {
 	for _, backend := range originals {
 		require.NoError(t, c.Create(t.Context(), backend))
 	}
+
+	// Start the manager and wait for banckends to be cached before trigger a reconciler.
+	go func() { require.NoError(t, mgr.Start(t.Context())) }()
+	require.True(t, mgr.GetCache().WaitForCacheSync(t.Context()))
 
 	t.Run("create security policy", func(t *testing.T) {
 		origin := &aigv1a1.BackendSecurityPolicy{
@@ -455,15 +522,27 @@ func TestBackendSecurityPolicyController(t *testing.T) {
 						Name: "secret",
 					},
 				},
+				TargetRefs: []gwapiv1a2.LocalPolicyTargetReference{
+					{
+						Name:  "backend1",
+						Kind:  gwapiv1a2.Kind("AIServiceBackend"),
+						Group: "aigateway.envoyproxy.io",
+					},
+					{
+						Name:  "backend2",
+						Kind:  gwapiv1a2.Kind("AIServiceBackend"),
+						Group: "aigateway.envoyproxy.io",
+					},
+				},
 			},
 		}
 		require.NoError(t, c.Create(t.Context(), origin))
 		// Verify that they are the same.
 		backends := eventCh.RequireItemsEventually(t, 2)
-		sort.Slice(backends, func(i, j int) bool {
-			backends[i].TypeMeta = metav1.TypeMeta{}
-			backends[j].TypeMeta = metav1.TypeMeta{}
-			return backends[i].Name < backends[j].Name
+		slices.SortFunc(backends, func(a, b *aigv1a1.AIServiceBackend) int {
+			a.TypeMeta = metav1.TypeMeta{}
+			b.TypeMeta = metav1.TypeMeta{}
+			return cmp.Compare(a.Name, b.Name)
 		})
 		require.Equal(t, originals, backends)
 	})
@@ -490,10 +569,10 @@ func TestBackendSecurityPolicyController(t *testing.T) {
 
 		// Verify that they are the same.
 		backends := eventCh.RequireItemsEventually(t, 2)
-		sort.Slice(backends, func(i, j int) bool {
-			backends[i].TypeMeta = metav1.TypeMeta{}
-			backends[j].TypeMeta = metav1.TypeMeta{}
-			return backends[i].Name < backends[j].Name
+		slices.SortFunc(backends, func(a, b *aigv1a1.AIServiceBackend) int {
+			a.TypeMeta = metav1.TypeMeta{}
+			b.TypeMeta = metav1.TypeMeta{}
+			return cmp.Compare(a.Name, b.Name)
 		})
 		require.Equal(t, originals, backends)
 	})
@@ -504,8 +583,8 @@ func TestBackendSecurityPolicyController(t *testing.T) {
 			err = c.Get(t.Context(), client.ObjectKey{Name: backendSecurityPolicyName, Namespace: backendSecurityPolicyNamespace}, &r)
 			require.NoError(t, err)
 			// Check if the finalizer is set.
-			if len(r.ObjectMeta.Finalizers) == 0 || r.ObjectMeta.Finalizers[0] != "aigateway.envoyproxy.io/finalizer" {
-				t.Logf("expected finalizer not found: %v", r.ObjectMeta.Finalizers)
+			if len(r.Finalizers) == 0 || r.Finalizers[0] != "aigateway.envoyproxy.io/finalizer" {
+				t.Logf("expected finalizer not found: %v", r.Finalizers)
 				return false
 			}
 			if len(r.Status.Conditions) != 1 {
@@ -533,10 +612,10 @@ func TestBackendSecurityPolicyController(t *testing.T) {
 			}
 			// On deletion, the event should be sent to the event channel to propagate the deletion to the Gateway.
 			backends := eventCh.RequireItemsEventually(t, 2)
-			sort.Slice(backends, func(i, j int) bool {
-				backends[i].TypeMeta = metav1.TypeMeta{}
-				backends[j].TypeMeta = metav1.TypeMeta{}
-				return backends[i].Name < backends[j].Name
+			slices.SortFunc(backends, func(a, b *aigv1a1.AIServiceBackend) int {
+				a.TypeMeta = metav1.TypeMeta{}
+				b.TypeMeta = metav1.TypeMeta{}
+				return cmp.Compare(a.Name, b.Name)
 			})
 			require.Equal(t, originals, backends)
 			return true
@@ -558,23 +637,17 @@ func TestAIServiceBackendController(t *testing.T) {
 	err = controller.TypedControllerBuilderForCRD(mgr, &aigv1a1.AIServiceBackend{}).Complete(bc)
 	require.NoError(t, err)
 
-	go func() {
-		err = mgr.Start(t.Context())
-		require.NoError(t, err)
-	}()
-
 	const aiServiceBackendName, aiServiceBackendNamespace = "mybackend", "default"
 	// Create an AIGatewayRoute to be referenced by the AIServiceBackend.
 	originals := []*aigv1a1.AIGatewayRoute{
 		{
 			ObjectMeta: metav1.ObjectMeta{Name: "myroute", Namespace: aiServiceBackendNamespace},
 			Spec: aigv1a1.AIGatewayRouteSpec{
-				APISchema: defaultSchema,
-				TargetRefs: []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName{
+				ParentRefs: []gwapiv1a2.ParentReference{
 					{
-						LocalPolicyTargetReference: gwapiv1a2.LocalPolicyTargetReference{
-							Name: "gtw", Kind: "Gateway", Group: "gateway.networking.k8s.io",
-						},
+						Name:  "gtw",
+						Kind:  ptr.To(gwapiv1a2.Kind("Gateway")),
+						Group: ptr.To(gwapiv1a2.Group("gateway.networking.k8s.io")),
 					},
 				},
 				Rules: []aigv1a1.AIGatewayRouteRule{
@@ -588,12 +661,11 @@ func TestAIServiceBackendController(t *testing.T) {
 		{
 			ObjectMeta: metav1.ObjectMeta{Name: "myroute2", Namespace: aiServiceBackendNamespace},
 			Spec: aigv1a1.AIGatewayRouteSpec{
-				APISchema: defaultSchema,
-				TargetRefs: []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName{
+				ParentRefs: []gwapiv1a2.ParentReference{
 					{
-						LocalPolicyTargetReference: gwapiv1a2.LocalPolicyTargetReference{
-							Name: "gtw", Kind: "Gateway", Group: "gateway.networking.k8s.io",
-						},
+						Name:  "gtw",
+						Kind:  ptr.To(gwapiv1a2.Kind("Gateway")),
+						Group: ptr.To(gwapiv1a2.Group("gateway.networking.k8s.io")),
 					},
 				},
 				Rules: []aigv1a1.AIGatewayRouteRule{
@@ -609,14 +681,19 @@ func TestAIServiceBackendController(t *testing.T) {
 		require.NoError(t, c.Create(t.Context(), route))
 	}
 
+	// Start the manager and wait for routes to be cached before trigger a reconciler.
+	go func() { require.NoError(t, mgr.Start(t.Context())) }()
+	require.True(t, mgr.GetCache().WaitForCacheSync(t.Context()))
+
 	t.Run("create backend", func(t *testing.T) {
 		origin := &aigv1a1.AIServiceBackend{
 			ObjectMeta: metav1.ObjectMeta{Name: aiServiceBackendName, Namespace: aiServiceBackendNamespace},
 			Spec: aigv1a1.AIServiceBackendSpec{
 				APISchema: defaultSchema,
 				BackendRef: gwapiv1.BackendObjectReference{
-					Name: gwapiv1.ObjectName("mybackend"),
-					Port: ptr.To[gwapiv1.PortNumber](8080),
+					Name:  gwapiv1.ObjectName("mybackend"),
+					Kind:  ptr.To(gwapiv1.Kind("Backend")),
+					Group: ptr.To(gwapiv1.Group("gateway.envoyproxy.io")),
 				},
 			},
 		}
@@ -625,10 +702,10 @@ func TestAIServiceBackendController(t *testing.T) {
 
 		// Verify that they are the same.
 		routes := eventCh.RequireItemsEventually(t, 2)
-		sort.Slice(routes, func(i, j int) bool {
-			routes[i].TypeMeta = metav1.TypeMeta{}
-			routes[j].TypeMeta = metav1.TypeMeta{}
-			return routes[i].Name < routes[j].Name
+		slices.SortFunc(routes, func(a, b *aigv1a1.AIGatewayRoute) int {
+			a.TypeMeta = metav1.TypeMeta{}
+			b.TypeMeta = metav1.TypeMeta{}
+			return cmp.Compare(a.Name, b.Name)
 		})
 		require.Equal(t, originals, routes)
 	})
@@ -638,16 +715,16 @@ func TestAIServiceBackendController(t *testing.T) {
 			var origin aigv1a1.AIServiceBackend
 			err = c.Get(t.Context(), client.ObjectKey{Name: aiServiceBackendName, Namespace: aiServiceBackendNamespace}, &origin)
 			require.NoError(t, err)
-			origin.Spec.BackendRef.Port = ptr.To[gwapiv1.PortNumber](9090)
+			origin.Spec.BackendRef.Name = "mybackend-updated"
 			return c.Update(t.Context(), &origin)
 		})
 		require.NoError(t, err)
 		// Verify that they are the same.
 		routes := eventCh.RequireItemsEventually(t, 2)
-		sort.Slice(routes, func(i, j int) bool {
-			routes[i].TypeMeta = metav1.TypeMeta{}
-			routes[j].TypeMeta = metav1.TypeMeta{}
-			return routes[i].Name < routes[j].Name
+		slices.SortFunc(routes, func(a, b *aigv1a1.AIGatewayRoute) int {
+			a.TypeMeta = metav1.TypeMeta{}
+			b.TypeMeta = metav1.TypeMeta{}
+			return cmp.Compare(a.Name, b.Name)
 		})
 		require.Equal(t, originals, routes)
 	})
@@ -658,8 +735,8 @@ func TestAIServiceBackendController(t *testing.T) {
 			err = c.Get(t.Context(), client.ObjectKey{Name: aiServiceBackendName, Namespace: aiServiceBackendNamespace}, &r)
 			require.NoError(t, err)
 			// Check if the finalizer is set.
-			if len(r.ObjectMeta.Finalizers) == 0 || r.ObjectMeta.Finalizers[0] != "aigateway.envoyproxy.io/finalizer" {
-				t.Logf("expected finalizer not found: %v", r.ObjectMeta.Finalizers)
+			if len(r.Finalizers) == 0 || r.Finalizers[0] != "aigateway.envoyproxy.io/finalizer" {
+				t.Logf("expected finalizer not found: %v", r.Finalizers)
 				return false
 			}
 
@@ -688,10 +765,10 @@ func TestAIServiceBackendController(t *testing.T) {
 			}
 			// On deletion, the event should be sent to the event channel to propagate the deletion to the Gateway.
 			routes := eventCh.RequireItemsEventually(t, 2)
-			sort.Slice(routes, func(i, j int) bool {
-				routes[i].TypeMeta = metav1.TypeMeta{}
-				routes[j].TypeMeta = metav1.TypeMeta{}
-				return routes[i].Name < routes[j].Name
+			slices.SortFunc(routes, func(a, b *aigv1a1.AIGatewayRoute) int {
+				a.TypeMeta = metav1.TypeMeta{}
+				b.TypeMeta = metav1.TypeMeta{}
+				return cmp.Compare(a.Name, b.Name)
 			})
 			require.Equal(t, originals, routes)
 			return true
@@ -713,8 +790,6 @@ func TestSecretController(t *testing.T) {
 	err = ctrl.NewControllerManagedBy(mgr).For(&corev1.Secret{}).Complete(sc)
 	require.NoError(t, err)
 	require.NoError(t, controller.ApplyIndexing(t.Context(), mgr.GetFieldIndexer().IndexField))
-
-	go func() { require.NoError(t, mgr.Start(t.Context())) }()
 
 	// Create a bsp that references the secret.
 	originals := []*aigv1a1.BackendSecurityPolicy{
@@ -739,7 +814,13 @@ func TestSecretController(t *testing.T) {
 	for _, bsp := range originals {
 		require.NoError(t, c.Create(t.Context(), bsp))
 	}
-	sort.Slice(originals, func(i, j int) bool { return originals[i].Name < originals[j].Name })
+	slices.SortFunc(originals, func(a, b *aigv1a1.BackendSecurityPolicy) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+
+	// Start the manager and wait for bsps to be cached before trigger a reconciler.
+	go func() { require.NoError(t, mgr.Start(t.Context())) }()
+	require.True(t, mgr.GetCache().WaitForCacheSync(t.Context()))
 
 	t.Run("create secret", func(t *testing.T) {
 		err = c.Create(t.Context(), &corev1.Secret{
@@ -750,10 +831,10 @@ func TestSecretController(t *testing.T) {
 
 		// Verify that they are the same.
 		bsps := eventCh.RequireItemsEventually(t, 2)
-		sort.Slice(bsps, func(i, j int) bool {
-			bsps[i].TypeMeta = metav1.TypeMeta{}
-			bsps[j].TypeMeta = metav1.TypeMeta{}
-			return bsps[i].Name < bsps[j].Name
+		slices.SortFunc(bsps, func(a, b *aigv1a1.BackendSecurityPolicy) int {
+			a.TypeMeta = metav1.TypeMeta{}
+			b.TypeMeta = metav1.TypeMeta{}
+			return cmp.Compare(a.Name, b.Name)
 		})
 		require.Equal(t, originals, bsps)
 	})
@@ -767,10 +848,10 @@ func TestSecretController(t *testing.T) {
 
 		// Verify that they are the same.
 		bsps := eventCh.RequireItemsEventually(t, 2)
-		sort.Slice(bsps, func(i, j int) bool {
-			bsps[i].TypeMeta = metav1.TypeMeta{}
-			bsps[j].TypeMeta = metav1.TypeMeta{}
-			return bsps[i].Name < bsps[j].Name
+		slices.SortFunc(bsps, func(a, b *aigv1a1.BackendSecurityPolicy) int {
+			a.TypeMeta = metav1.TypeMeta{}
+			b.TypeMeta = metav1.TypeMeta{}
+			return cmp.Compare(a.Name, b.Name)
 		})
 		require.Equal(t, originals, bsps)
 	})

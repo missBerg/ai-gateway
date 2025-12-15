@@ -2,12 +2,15 @@
 
 ## Release Cycles
 
-Since Envoy AI Gateway depends on the Envoy Gateway and Envoy Proxy, we will follow the release cycle of the Envoy Gateway.
-
+Since Envoy AI Gateway depends on the Envoy Gateway and Envoy Proxy, we will normally follow the release cycle of the Envoy Gateway.
 In other words, we aim to cut the release of the Envoy AI Gateway a few days or a week after the new version of the Envoy Gateway is released. Therefore, the release cycle of the Envoy AI Gateway will be approximately every 2-3 months.
 
-We increment the major version number when we have a major architectural change or a major feature addition.
+However, given the rapidly changing nature of the AI ecosystem, we aim to release frequently, as soon as features are available.
+The main branch of Envoy AI Gateway is tested against both the latest stable version of Envoy Gateway and its main branch, allowing us to confidently release the Envoy AI Gateway at any time if needed.
 
+## Versioning
+
+We increment the major version number when we have a major architectural change or a major feature addition.
 Especially when we have a first stable control plane API, we will cut the major v1.0.0 release. Until then, we will use the version number v0.3.x, v0.4.y, etc. See the [support policy](#Support-Policy) for more details.
 
 The patch version will be incremented when we have a bug fix or a security fix. The end of life for the version will be 2 releases after the release of the version. For example, if we release the version v0.1.0, the end of life for the version will be when we release the version v0.3.0.
@@ -20,18 +23,20 @@ This document focuses on compatibility concerns of those using Envoy AI Gateway.
 It is important to note that the support policy is subject to change at any time. The support policy is as follows:
 
 First of all, there are four areas of compatibility that we are concerned with:
-* [Using envoyproxy/ai-gateway as a Go package](#public-go-package).
-* [Deploying the Envoy AI Gateway controller through the Kubernetes Custom Resource Definition (CRD)](#Custom-Resource-Definitions).
-* [Upgrading the Envoy AI Gateway controller](#Upgrading-the-Envoy-AI-Gateway-controller).
-* [Envoy Gateway vs Envoy AI Gateway compatibility](#Envoy-Gateway-vs-Envoy-AI-Gateway-compatibility).
+
+- [Using envoyproxy/ai-gateway as a Go package](#public-go-package).
+- [Deploying the Envoy AI Gateway controller through the Kubernetes Custom Resource Definition (CRD)](#Custom-Resource-Definitions).
+- [Upgrading the Envoy AI Gateway controller](#Upgrading-the-Envoy-AI-Gateway-controller).
+- [Envoy Gateway vs Envoy AI Gateway compatibility](#Envoy-Gateway-vs-Envoy-AI-Gateway-compatibility).
 
 ### Public Go package
 
-Since we do not envision this repository ends up as a transitive dependency, i.e. only used as a direct dependency such as in a custom control plane, etc., we assume that any consumer of the project should have the full control over the source code depending on the project. This allows us to declare deprecation and introduce the breaking changes in the version after the next one since they can migrate the code at their discretion. For example, any public API that is marked as deprecated in the version N will be removed in the version N+2. We document how users should migrate to the new API will be documented in the release notes if applicable, but we do not guarantee that the migration path will be provided.
+We do not guarantee any compatibility at Go level except for the api package as described below.
+Any other public Go package is solely intended for the internal use, e.g. for testing purpose.
 
-### Custom Resource Definitions
+### Custom Resource Definitions (CRDs) / `api` package
 
-The Custom Resource Definitions (CRDs) are defined in api/${version}/*.go files. The CRDs are versioned as v1alpha1, v1alpha2, etc.
+The Custom Resource Definitions (CRDs) are defined in `api/${version}/*.go` files. The CRDs are versioned as v1alpha1, v1alpha2, etc.
 
 **For alpha versions**, we simply employ the same deprecation policy as the Go package. In other words, the APIs will be marked as deprecated in the version N and will be removed in the version N+2 but without any guarantee of migration path.
 
@@ -62,32 +67,34 @@ This section is for maintainers of the project. Let's say we are going to releas
 Each non-patch release should start with Release Candidate (RC) phase as follows:
 
 1. First, notify the community that we are going to cut the release candidate and therefore the main branch is frozen.
-  The main branch should only accept the bug fixes, the security fixes, and documentation changes.
-  The release candidate should always be cut from the main branch.
+   The main branch should only accept the bug fixes, the security fixes, and documentation changes.
+   The release candidate should always be cut from the main branch.
 
 2. Cut the request candidate tag from the main branch. The tag should be v0.50.0-rc1. Assuming the remote `origin` is the main envoyproxy/ai-gateway repository,
-  the command to cut the tag is:
-    ```
-    git fetch origin # make sure you have the latest main branch locally.
-    git tag v0.50.0-rc1 origin/main
-    git push origin v0.50.0-rc1
-    ```
+   the command to cut the tag is:
+
+   ```
+   git fetch origin # make sure you have the latest main branch locally.
+   git tag v0.50.0-rc1 origin/main
+   git push origin v0.50.0-rc1
+   ```
+
    Pushing a tag will trigger the pipeline to build the release candidate image and the helm chart tagged with the release candidate tag.
    The release candidate image will be available in the Docker Hub.
 
 3. The release candidate should be tested by the maintainers and the community. If there is any issue, the issue should be fixed in the main branch
-  and the new rc tag should be created. For example, if there is an issue in the release candidate v0.50.0-rc1, replace `v0.50.0-rc1` with `v0.50.0-rc2`
-  in the above command and repeat the process.
+   and the new rc tag should be created. For example, if there is an issue in the release candidate v0.50.0-rc1, replace `v0.50.0-rc1` with `v0.50.0-rc2`
+   in the above command and repeat the process.
 
 ### Release Phase
 
 1. Once the release candidate is stable, we will cut the release from the main branch, assuming that's exactly the same as the last release candidate.
-  The command to cut the release is exactly the same as the release candidate:
-    ```
-    git fetch origin # make sure you have the latest main branch locally.
-    git tag v0.50.0 origin/main
-    git push origin v0.50.0
-    ```
+   The command to cut the release is exactly the same as the release candidate:
+   ```
+   git fetch origin # make sure you have the latest main branch locally.
+   git tag v0.50.0 origin/main
+   git push origin v0.50.0
+   ```
    Pushing a tag will trigger the pipeline to build the release image and the helm chart tagged with the release tag.
    The release image will be available in the Docker Hub.
 2. The draft release note will be created in the GitHub repository after the pipeline is completed.
@@ -102,15 +109,15 @@ Each non-patch release should start with Release Candidate (RC) phase as follows
 2. Once the PR is merged, the maintainers will decide when to cut the patch release. There's no need to wait for multiple backports to cut the patch release, etc.
    Do not cut the tag until all CI passes on the release/v0.50 branch.
 3. The patch release should be cut from the `release/v0.50` branch. The command to cut the patch release is exactly the same as normal release:
-    ```
-    git fetch origin # make sure you have the latest release/v0.50 branch locally.
-    git tag v0.50.1 origin/release/v0.50
-    git push origin v0.50.1
-    ```
+   ```
+   git fetch origin # make sure you have the latest release/v0.50 branch locally.
+   git tag v0.50.1 origin/release/v0.50
+   git push origin v0.50.1
+   ```
    Pushing a tag will trigger the pipeline to build the patch release image and the helm chart tagged with the patch release tag.
    The patch release image will be available in the Docker Hub.
 4. The draft release note will be created in the GitHub repository after the pipeline is completed.
    Edit the release note nicely by hand to reflect the changes in the release.
 5. Update the documentation on the main branch to reflect the new version. This has the following items:
-   * Change `v0.50.0` to `v0.50.1` in site/versioned_docs/version-0.50 directory.
-   * Update the site/src/pages/release-notes.md to add the new release note.
+   - Change `v0.50.0` to `v0.50.1` in site/versioned_docs/version-0.50 directory.
+   - Update the site/src/pages/release-notes.md to add the new release note.

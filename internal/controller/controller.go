@@ -8,14 +8,19 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	egv1a1 "github.com/envoyproxy/gateway/api/v1alpha1"
 	"github.com/go-logr/logr"
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -29,8 +34,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	gwaiev1a2 "sigs.k8s.io/gateway-api-inference-extension/api/v1alpha2"
+	gwaiev1 "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwapiv1a3 "sigs.k8s.io/gateway-api/apis/v1alpha3"
 	gwapiv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	aigv1a1 "github.com/envoyproxy/ai-gateway/api/v1alpha1"
@@ -42,8 +48,9 @@ func init() {
 	utilruntime.Must(apiextensionsv1.AddToScheme(Scheme))
 	utilruntime.Must(egv1a1.AddToScheme(Scheme))
 	utilruntime.Must(gwapiv1.Install(Scheme))
+	utilruntime.Must(gwapiv1a3.Install(Scheme))
 	utilruntime.Must(gwapiv1b1.Install(Scheme))
-	utilruntime.Must(gwaiev1a2.Install(Scheme))
+	utilruntime.Must(gwaiev1.Install(Scheme))
 }
 
 // Scheme contains the necessary schemes for the AI Gateway.
@@ -62,14 +69,32 @@ type Options struct {
 	// EnableLeaderElection enables leader election for the controller manager.
 	// Enabling this ensures there is only one active controller manager.
 	EnableLeaderElection bool
-	// EnvoyGatewayNamespace is the namespace where the Envoy Gateway system resources are deployed.
-	EnvoyGatewayNamespace string
 	// UDSPath is the path to the UDS socket for the external processor.
 	UDSPath string
 	// DisableMutatingWebhook disables the mutating webhook for the Gateway for testing purposes.
 	DisableMutatingWebhook bool
-	// MetricsRequestHeaderLabels is the comma-separated key-value pairs for mapping HTTP request headers to Prometheus metric labels.
-	MetricsRequestHeaderLabels string
+	// MetricsRequestHeaderAttributes is the comma-separated key-value pairs for mapping HTTP request headers to Otel metric attributes.
+	MetricsRequestHeaderAttributes string
+	// TracingRequestHeaderAttributes is the comma-separated key-value pairs for mapping HTTP request headers to otel span attributes.
+	TracingRequestHeaderAttributes string
+	// RootPrefix is the root prefix for all the routes handled by the AI Gateway.
+	RootPrefix string
+	// ExtProcExtraEnvVars is the semicolon-separated key=value pairs for extra environment variables in extProc container.
+	ExtProcExtraEnvVars string
+	// ExtProcImagePullSecrets is the semicolon-separated list of image pull secret names for extProc container.
+	ExtProcImagePullSecrets string
+	// ExtProcMaxRecvMsgSize is the maximum message size in bytes that the gRPC server can receive for extProc.
+	ExtProcMaxRecvMsgSize int
+	// MCPSessionEncryptionSeed is the seed used to derive the encryption key for MCP session encryption.
+	MCPSessionEncryptionSeed string
+	// MCPSessionEncryptionIterations is the number of iterations to use for PBKDF2 key derivation for MCP session encryption.
+	MCPSessionEncryptionIterations int
+	// MCPFallbackSessionEncryptionSeed is the optional fallback seed used for MCP session key rotation.
+	MCPFallbackSessionEncryptionSeed string
+	// MCPFallbackSessionEncryptionIterations is the number of iterations used in the fallback PBKDF2 key derivation for MCP session encryption.
+	MCPFallbackSessionEncryptionIterations int
+	// EndpointPrefixes is the comma-separated key-value pairs for endpoint prefixes.
+	EndpointPrefixes string
 }
 
 // StartControllers starts the controllers for the AI Gateway.
@@ -82,13 +107,17 @@ func StartControllers(ctx context.Context, mgr manager.Manager, config *rest.Con
 	if err = ApplyIndexing(ctx, indexer.IndexField); err != nil {
 		return fmt.Errorf("failed to apply indexing: %w", err)
 	}
+	var versionInfo *version.Info
+	kube := kubernetes.NewForConfigOrDie(config)
+	versionInfo, err = kube.Discovery().ServerVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get server version: %w", err)
+	}
 
 	gatewayEventChan := make(chan event.GenericEvent, 100)
 	gatewayC := NewGatewayController(c, kubernetes.NewForConfigOrDie(config),
-		logger.WithName("gateway"), options.EnvoyGatewayNamespace, options.UDSPath, options.ExtProcImage)
+		logger.WithName("gateway"), options.ExtProcImage, false, uuid.NewString, isKubernetes133OrLater(versionInfo, logger))
 	if err = TypedControllerBuilderForCRD(mgr, &gwapiv1.Gateway{}).
-		// We need the annotation change event to reconcile the Gateway referenced by AIGatewayRoutes.
-		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{})).
 		WatchesRawSource(source.Channel(
 			gatewayEventChan,
 			&handler.EnqueueRequestForObject{},
@@ -99,7 +128,7 @@ func StartControllers(ctx context.Context, mgr manager.Manager, config *rest.Con
 
 	aiGatewayRouteEventChan := make(chan event.GenericEvent, 100)
 	routeC := NewAIGatewayRouteController(c, kubernetes.NewForConfigOrDie(config), logger.WithName("ai-gateway-route"),
-		gatewayEventChan,
+		gatewayEventChan, options.RootPrefix,
 	)
 	if err = TypedControllerBuilderForCRD(mgr, &aigv1a1.AIGatewayRoute{}).
 		Owns(&gwapiv1.HTTPRoute{}).
@@ -137,6 +166,32 @@ func StartControllers(ctx context.Context, mgr manager.Manager, config *rest.Con
 		return fmt.Errorf("failed to create controller for BackendSecurityPolicy: %w", err)
 	}
 
+	// Check if InferencePool CRD exists before creating the controller.
+	crdClient, err := apiextensionsclientset.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("failed to create CRD client for inference extension: %w", err)
+	}
+	const inferencePoolCRD = "inferencepools.inference.networking.k8s.io"
+	if _, crdErr := crdClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, inferencePoolCRD, metav1.GetOptions{}); crdErr != nil {
+		if apierrors.IsNotFound(crdErr) {
+			logger.Info("InferencePool CRD not found, skipping InferencePool controller. " +
+				"If you need it, please install the Gateway API Inference Extension CRDs.")
+		} else {
+			return fmt.Errorf("failed to query InferencePool CRD: %w", crdErr)
+		}
+	} else {
+		// CRD exists, create the controller.
+		inferencePoolC := NewInferencePoolController(c, kubernetes.NewForConfigOrDie(config), logger.
+			WithName("inference-pool"))
+		if err = TypedControllerBuilderForCRD(mgr, &gwaiev1.InferencePool{}).
+			Watches(&gwapiv1.Gateway{}, handler.EnqueueRequestsFromMapFunc(inferencePoolC.gatewayEventHandler)).
+			Watches(&aigv1a1.AIGatewayRoute{}, handler.EnqueueRequestsFromMapFunc(inferencePoolC.aiGatewayRouteEventHandler)).
+			Watches(&gwapiv1.HTTPRoute{}, handler.EnqueueRequestsFromMapFunc(inferencePoolC.httpRouteEventHandler)).
+			Complete(inferencePoolC); err != nil {
+			return fmt.Errorf("failed to create controller for InferencePool: %w", err)
+		}
+	}
+
 	secretC := NewSecretController(c, kubernetes.NewForConfigOrDie(config), logger.
 		WithName("secret"), backendSecurityPolicyEventChan)
 	// Do not use TypedControllerBuilderForCRD for secret, as changing a secret content doesn't change the generation.
@@ -146,15 +201,42 @@ func StartControllers(ctx context.Context, mgr manager.Manager, config *rest.Con
 		return fmt.Errorf("failed to create controller for Secret: %w", err)
 	}
 
+	mcpRouteC := NewMCPRouteController(c, kubernetes.NewForConfigOrDie(config), logger.WithName("ai-gateway-mcp-route"),
+		gatewayEventChan,
+	)
+	if err = TypedControllerBuilderForCRD(mgr, &aigv1a1.MCPRoute{}).
+		Owns(&gwapiv1.HTTPRoute{}).
+		Owns(&egv1a1.Backend{}).
+		Complete(mcpRouteC); err != nil {
+		return fmt.Errorf("failed to create controller for MCPRoute: %w", err)
+	}
+
+	// ReferenceGrant controller for cross-namespace access validation
+	referenceGrantC := NewReferenceGrantController(c, logger.WithName("reference-grant"), aiGatewayRouteEventChan)
+	if err = TypedControllerBuilderForCRD(mgr, &gwapiv1b1.ReferenceGrant{}).
+		Complete(referenceGrantC); err != nil {
+		return fmt.Errorf("failed to create controller for ReferenceGrant: %w", err)
+	}
+
 	if !options.DisableMutatingWebhook {
-		h := admission.WithCustomDefaulter(Scheme, &corev1.Pod{}, newGatewayMutator(c, kubernetes.NewForConfigOrDie(config),
+		h := admission.WithCustomDefaulter(Scheme, &corev1.Pod{}, newGatewayMutator(c, kube,
 			logger.WithName("gateway-mutator"),
 			options.ExtProcImage,
 			options.ExtProcImagePullPolicy,
 			options.ExtProcLogLevel,
-			options.EnvoyGatewayNamespace,
 			options.UDSPath,
-			options.MetricsRequestHeaderLabels,
+			options.MetricsRequestHeaderAttributes,
+			options.TracingRequestHeaderAttributes,
+			options.RootPrefix,
+			options.EndpointPrefixes,
+			options.ExtProcExtraEnvVars,
+			options.ExtProcImagePullSecrets,
+			options.ExtProcMaxRecvMsgSize,
+			isKubernetes133OrLater(versionInfo, logger),
+			options.MCPSessionEncryptionSeed,
+			options.MCPSessionEncryptionIterations,
+			options.MCPFallbackSessionEncryptionSeed,
+			options.MCPFallbackSessionEncryptionIterations,
 		))
 		mgr.GetWebhookServer().Register("/mutate", &webhook.Admission{Handler: h})
 	}
@@ -178,6 +260,8 @@ func TypedControllerBuilderForCRD(mgr ctrl.Manager, obj client.Object) *ctrl.Bui
 }
 
 const (
+	// Indexes for AI Gateway
+	//
 	// k8sClientIndexAIGatewayRouteToAttachedGateway is the index name that maps from a Gateway to the
 	// AIGatewayRoute that attaches to it.
 	k8sClientIndexAIGatewayRouteToAttachedGateway = "GWAPIGatewayToReferencingAIGatewayRoute"
@@ -187,12 +271,19 @@ const (
 	// k8sClientIndexBackendToReferencingAIGatewayRoute is the index name that maps from a Backend to the
 	// AIGatewayRoute that references it.
 	k8sClientIndexBackendToReferencingAIGatewayRoute = "BackendToReferencingAIGatewayRoute"
-	// k8sClientIndexBackendSecurityPolicyToReferencingAIServiceBackend is the index name that maps from a BackendSecurityPolicy
-	// to the AIServiceBackend that references it.
-	k8sClientIndexBackendSecurityPolicyToReferencingAIServiceBackend = "BackendSecurityPolicyToReferencingAIServiceBackend"
 	// k8sClientIndexAIServiceBackendToTargetingBackendSecurityPolicy is the index name that maps from an AIServiceBackend
 	// to the BackendSecurityPolicy whose targetRefs contains the AIServiceBackend.
 	k8sClientIndexAIServiceBackendToTargetingBackendSecurityPolicy = "AIServiceBackendToTargetingBackendSecurityPolicy"
+
+	// k8sClientIndexReferenceGrantToTargetKind is the index name that maps from namespace/kind to ReferenceGrants, enabling efficient lookup of grants
+	// allowing access to specific resource types in specific namespaces.
+	k8sClientIndexReferenceGrantToTargetKind = "ReferenceGrantToTargetKind"
+
+	// Indexes for MCP Gateway
+	//
+	// k8sClientIndexMCPRouteToAttachedGateway is the index name that maps from a Gateway to the
+	// MCPRoute that attaches to it.
+	k8sClientIndexMCPRouteToAttachedGateway = "GWAPIGatewayToReferencingMCPRoute"
 )
 
 // ApplyIndexing applies indexing to the given indexer. This is exported for testing purposes.
@@ -207,11 +298,6 @@ func ApplyIndexing(ctx context.Context, indexer func(ctx context.Context, obj cl
 	if err != nil {
 		return fmt.Errorf("failed to create index from Gateway to AIGatewayRoute: %w", err)
 	}
-	err = indexer(ctx, &aigv1a1.AIServiceBackend{},
-		k8sClientIndexBackendSecurityPolicyToReferencingAIServiceBackend, aiServiceBackendIndexFunc)
-	if err != nil {
-		return fmt.Errorf("failed to create index from BackendSecurityPolicy to AIServiceBackend: %w", err)
-	}
 	err = indexer(ctx, &aigv1a1.BackendSecurityPolicy{},
 		k8sClientIndexSecretToReferencingBackendSecurityPolicy, backendSecurityPolicyIndexFunc)
 	if err != nil {
@@ -222,17 +308,47 @@ func ApplyIndexing(ctx context.Context, indexer func(ctx context.Context, obj cl
 	if err != nil {
 		return fmt.Errorf("failed to index field for BackendSecurityPolicy targetRefs: %w", err)
 	}
+
+	// Apply indexes for ReferenceGrant.
+	err = indexer(ctx, &gwapiv1b1.ReferenceGrant{},
+		k8sClientIndexReferenceGrantToTargetKind, referenceGrantToTargetKindIndexFunc)
+	if err != nil {
+		return fmt.Errorf("failed to create index from target kind to ReferenceGrant: %w", err)
+	}
+
+	// Apply indexes to MCP Gateways.
+	err = indexer(ctx, &aigv1a1.MCPRoute{},
+		k8sClientIndexMCPRouteToAttachedGateway, mcpRouteToAttachedGatewayIndexFunc)
+	if err != nil {
+		return fmt.Errorf("failed to create index from Gateway to MCPRoute: %w", err)
+	}
 	return nil
+}
+
+func mcpRouteToAttachedGatewayIndexFunc(o client.Object) []string {
+	mcpRoute := o.(*aigv1a1.MCPRoute)
+	var ret []string
+	for _, ref := range mcpRoute.Spec.ParentRefs {
+		// Use the namespace from parentRef if specified, otherwise use the route's namespace.
+		namespace := mcpRoute.Namespace
+		if ref.Namespace != nil && *ref.Namespace != "" {
+			namespace = string(*ref.Namespace)
+		}
+		ret = append(ret, fmt.Sprintf("%s.%s", ref.Name, namespace))
+	}
+	return ret
 }
 
 func aiGatewayRouteToAttachedGatewayIndexFunc(o client.Object) []string {
 	aiGatewayRoute := o.(*aigv1a1.AIGatewayRoute)
 	var ret []string
-	for _, ref := range aiGatewayRoute.Spec.TargetRefs {
-		ret = append(ret, fmt.Sprintf("%s.%s", ref.Name, aiGatewayRoute.Namespace))
-	}
 	for _, ref := range aiGatewayRoute.Spec.ParentRefs {
-		ret = append(ret, fmt.Sprintf("%s.%s", ref.Name, aiGatewayRoute.Namespace))
+		// Use the namespace from parentRef if specified, otherwise use the route's namespace.
+		namespace := aiGatewayRoute.Namespace
+		if ref.Namespace != nil && *ref.Namespace != "" {
+			namespace = string(*ref.Namespace)
+		}
+		ret = append(ret, fmt.Sprintf("%s.%s", ref.Name, namespace))
 	}
 	return ret
 }
@@ -242,18 +358,11 @@ func aiGatewayRouteIndexFunc(o client.Object) []string {
 	var ret []string
 	for _, rule := range aiGatewayRoute.Spec.Rules {
 		for _, backend := range rule.BackendRefs {
-			key := fmt.Sprintf("%s.%s", backend.Name, aiGatewayRoute.Namespace)
+			// Use the namespace from the backend reference, or default to the route's namespace
+			backendNamespace := backend.GetNamespace(aiGatewayRoute.Namespace)
+			key := fmt.Sprintf("%s.%s", backend.Name, backendNamespace)
 			ret = append(ret, key)
 		}
-	}
-	return ret
-}
-
-func aiServiceBackendIndexFunc(o client.Object) []string {
-	aiServiceBackend := o.(*aigv1a1.AIServiceBackend)
-	var ret []string
-	if ref := aiServiceBackend.Spec.BackendSecurityPolicyRef; ref != nil {
-		ret = append(ret, fmt.Sprintf("%s.%s", ref.Name, aiServiceBackend.Namespace))
 	}
 	return ret
 }
@@ -270,6 +379,24 @@ func backendSecurityPolicyIndexFunc(o client.Object) []string {
 		if awsCreds.CredentialsFile != nil {
 			key = getSecretNameAndNamespace(awsCreds.CredentialsFile.SecretRef, backendSecurityPolicy.Namespace)
 		} else if awsCreds.OIDCExchangeToken != nil {
+			key = backendSecurityPolicyKey(backendSecurityPolicy.Namespace, backendSecurityPolicy.Name)
+		}
+	case aigv1a1.BackendSecurityPolicyTypeGCPCredentials:
+		gcpCreds := backendSecurityPolicy.Spec.GCPCredentials
+		if gcpCreds.CredentialsFile != nil {
+			key = getSecretNameAndNamespace(gcpCreds.CredentialsFile.SecretRef, backendSecurityPolicy.Namespace)
+		}
+	case aigv1a1.BackendSecurityPolicyTypeAzureAPIKey:
+		apiKey := backendSecurityPolicy.Spec.AzureAPIKey
+		key = getSecretNameAndNamespace(apiKey.SecretRef, backendSecurityPolicy.Namespace)
+	case aigv1a1.BackendSecurityPolicyTypeAnthropicAPIKey:
+		apiKey := backendSecurityPolicy.Spec.AnthropicAPIKey
+		key = getSecretNameAndNamespace(apiKey.SecretRef, backendSecurityPolicy.Namespace)
+	case aigv1a1.BackendSecurityPolicyTypeAzureCredentials:
+		azureCreds := backendSecurityPolicy.Spec.AzureCredentials
+		if azureCreds.ClientSecretRef != nil {
+			key = getSecretNameAndNamespace(azureCreds.ClientSecretRef, backendSecurityPolicy.Namespace)
+		} else if azureCreds.OIDCExchangeToken != nil {
 			key = backendSecurityPolicyKey(backendSecurityPolicy.Namespace, backendSecurityPolicy.Name)
 		}
 	}
@@ -290,6 +417,20 @@ func getSecretNameAndNamespace(secretRef *gwapiv1.SecretObjectReference, namespa
 		return fmt.Sprintf("%s.%s", secretRef.Name, *secretRef.Namespace)
 	}
 	return fmt.Sprintf("%s.%s", secretRef.Name, namespace)
+}
+
+func getReferenceGrantIndexKey(namespace, kind string) string {
+	return fmt.Sprintf("%s.%s", namespace, kind)
+}
+
+func referenceGrantToTargetKindIndexFunc(o client.Object) []string {
+	referenceGrant := o.(*gwapiv1b1.ReferenceGrant)
+	var keys []string
+	for _, to := range referenceGrant.Spec.To {
+		key := getReferenceGrantIndexKey(referenceGrant.Namespace, string(to.Kind))
+		keys = append(keys, key)
+	}
+	return keys
 }
 
 // newConditions creates a new condition with the given type and message.
@@ -356,4 +497,20 @@ func handleFinalizer[objType client.Object](
 		}
 	}
 	return true
+}
+
+// isKubernetes133OrLater returns true if the Kubernetes version is 1.33 or later.
+func isKubernetes133OrLater(versionInfo *version.Info, logger logr.Logger) bool {
+	major, minor := versionInfo.Major, versionInfo.Minor
+	majorInt, err := strconv.Atoi(major)
+	if err != nil {
+		logger.Error(err, "failed to parse major version", "major", major)
+		return false
+	}
+	minorInt, err := strconv.Atoi(minor)
+	if err != nil {
+		logger.Error(err, "failed to parse minor version", "minor", minor)
+		return false
+	}
+	return majorInt >= 1 && minorInt >= 33
 }

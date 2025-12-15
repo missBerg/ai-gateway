@@ -24,74 +24,31 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	"github.com/envoyproxy/ai-gateway/filterapi"
+	"github.com/envoyproxy/ai-gateway/internal/filterapi"
 	"github.com/envoyproxy/ai-gateway/internal/internalapi"
-	"github.com/envoyproxy/ai-gateway/internal/llmcostcel"
+	internaltesting "github.com/envoyproxy/ai-gateway/internal/testing"
 )
 
 func requireNewServerWithMockProcessor(t *testing.T) (*Server, *mockProcessor) {
 	s, err := NewServer(slog.Default())
 	require.NoError(t, err)
 	require.NotNil(t, s)
-	s.config = &processorConfig{}
+	s.config = &filterapi.RuntimeConfig{}
 
 	m := newMockProcessor(s.config, s.logger)
-	s.Register("/", func(*processorConfig, map[string]string, *slog.Logger, bool) (Processor, error) { return m, nil })
+	s.Register("/", func(*filterapi.RuntimeConfig, map[string]string, *slog.Logger, bool) (Processor, error) {
+		return m, nil
+	})
 
 	return s, m.(*mockProcessor)
 }
 
 func TestServer_LoadConfig(t *testing.T) {
-	now := time.Now()
-
-	t.Run("ok", func(t *testing.T) {
-		config := &filterapi.Config{
-			MetadataNamespace: "ns",
-			LLMRequestCosts: []filterapi.LLMRequestCost{
-				{MetadataKey: "key", Type: filterapi.LLMRequestCostTypeOutputToken},
-				{MetadataKey: "cel_key", Type: filterapi.LLMRequestCostTypeCEL, CEL: "1 + 1"},
-			},
-			Schema:             filterapi.VersionedAPISchema{Name: filterapi.APISchemaOpenAI},
-			ModelNameHeaderKey: "x-model-name",
-			Backends: []filterapi.Backend{
-				{Name: "kserve", Schema: filterapi.VersionedAPISchema{Name: filterapi.APISchemaOpenAI}},
-				{Name: "awsbedrock", Schema: filterapi.VersionedAPISchema{Name: filterapi.APISchemaAWSBedrock}},
-				{Name: "openai", Schema: filterapi.VersionedAPISchema{Name: filterapi.APISchemaOpenAI}},
-			},
-			Models: []filterapi.Model{
-				{
-					Name:      "llama3.3333",
-					OwnedBy:   "meta",
-					CreatedAt: now,
-				},
-				{
-					Name:      "gpt4.4444",
-					OwnedBy:   "openai",
-					CreatedAt: now,
-				},
-			},
-		}
-		s, _ := requireNewServerWithMockProcessor(t)
-		err := s.LoadConfig(t.Context(), config)
-		require.NoError(t, err)
-
-		require.NotNil(t, s.config)
-		require.Equal(t, "ns", s.config.metadataNamespace)
-		require.Equal(t, s.config.schema, config.Schema)
-		require.Equal(t, "x-model-name", s.config.modelNameHeaderKey)
-
-		require.Len(t, s.config.requestCosts, 2)
-		require.Equal(t, filterapi.LLMRequestCostTypeOutputToken, s.config.requestCosts[0].Type)
-		require.Equal(t, "key", s.config.requestCosts[0].MetadataKey)
-		require.Equal(t, filterapi.LLMRequestCostTypeCEL, s.config.requestCosts[1].Type)
-		require.Equal(t, "1 + 1", s.config.requestCosts[1].CEL)
-		prog := s.config.requestCosts[1].celProg
-		require.NotNil(t, prog)
-		val, err := llmcostcel.EvaluateProgram(prog, "", "", 1, 1, 1)
-		require.NoError(t, err)
-		require.Equal(t, uint64(2), val)
-		require.Equal(t, config.Models, s.config.declaredModels)
-	})
+	config := &filterapi.Config{}
+	s := &Server{}
+	err := s.LoadConfig(t.Context(), config)
+	require.NoError(t, err)
+	require.NotNil(t, s.config)
 }
 
 func TestServer_Check(t *testing.T) {
@@ -123,7 +80,7 @@ func TestServer_List(t *testing.T) {
 func TestServer_processMsg(t *testing.T) {
 	t.Run("unknown request type", func(t *testing.T) {
 		s, p := requireNewServerWithMockProcessor(t)
-		_, err := s.processMsg(t.Context(), slog.Default(), p, &extprocv3.ProcessingRequest{})
+		_, err := s.processMsg(t.Context(), slog.Default(), p, &extprocv3.ProcessingRequest{}, "test-req-id", false)
 		require.ErrorContains(t, err, "unknown request type")
 	})
 	t.Run("request headers", func(t *testing.T) {
@@ -137,7 +94,7 @@ func TestServer_processMsg(t *testing.T) {
 		req := &extprocv3.ProcessingRequest{
 			Request: &extprocv3.ProcessingRequest_RequestHeaders{RequestHeaders: &extprocv3.HttpHeaders{Headers: hm}},
 		}
-		resp, err := s.processMsg(t.Context(), slog.Default(), p, req)
+		resp, err := s.processMsg(t.Context(), slog.Default(), p, req, "test-req-id", false)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		require.Equal(t, expResponse, resp)
@@ -153,7 +110,7 @@ func TestServer_processMsg(t *testing.T) {
 		req := &extprocv3.ProcessingRequest{
 			Request: &extprocv3.ProcessingRequest_RequestBody{RequestBody: reqBody},
 		}
-		resp, err := s.processMsg(t.Context(), slog.Default(), p, req)
+		resp, err := s.processMsg(t.Context(), slog.Default(), p, req, "test-req-id", false)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		require.Equal(t, expResponse, resp)
@@ -169,7 +126,7 @@ func TestServer_processMsg(t *testing.T) {
 		req := &extprocv3.ProcessingRequest{
 			Request: &extprocv3.ProcessingRequest_ResponseHeaders{ResponseHeaders: &extprocv3.HttpHeaders{Headers: hm}},
 		}
-		resp, err := s.processMsg(t.Context(), slog.Default(), p, req)
+		resp, err := s.processMsg(t.Context(), slog.Default(), p, req, "test-req-id", false)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		require.Equal(t, expResponse, resp)
@@ -185,7 +142,7 @@ func TestServer_processMsg(t *testing.T) {
 		req := &extprocv3.ProcessingRequest{
 			Request: &extprocv3.ProcessingRequest_ResponseHeaders{ResponseHeaders: &extprocv3.HttpHeaders{Headers: hm}},
 		}
-		resp, err := s.processMsg(t.Context(), slog.Default(), p, req)
+		resp, err := s.processMsg(t.Context(), slog.Default(), p, req, "test-req-id", false)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		require.Equal(t, expResponse, resp)
@@ -201,7 +158,7 @@ func TestServer_processMsg(t *testing.T) {
 		req := &extprocv3.ProcessingRequest{
 			Request: &extprocv3.ProcessingRequest_ResponseBody{ResponseBody: reqBody},
 		}
-		resp, err := s.processMsg(t.Context(), slog.Default(), p, req)
+		resp, err := s.processMsg(t.Context(), slog.Default(), p, req, "test-req-id", false)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		require.Equal(t, expResponse, resp)
@@ -239,7 +196,7 @@ func TestServer_Process(t *testing.T) {
 	t.Run("upstream filter", func(t *testing.T) {
 		s, p := requireNewServerWithMockProcessor(t)
 
-		hm := &corev3.HeaderMap{Headers: []*corev3.HeaderValue{{Key: originalPathHeader, Value: "/"}, {Key: "foo", Value: "bar"}}}
+		hm := &corev3.HeaderMap{Headers: []*corev3.HeaderValue{{Key: originalPathHeader, Value: "/"}, {Key: internalReqIDHeader, Value: "test-req-id-123"}, {Key: "foo", Value: "bar"}}}
 		p.t = t
 		p.expHeaderMap = hm
 		req := &extprocv3.ProcessingRequest{
@@ -291,7 +248,9 @@ func TestServer_setBackend(t *testing.T) {
 		md     *corev3.Metadata
 		errStr string
 	}{
-		{md: &corev3.Metadata{}, errStr: "missing aigateway.envoy.io metadata"},
+		{md: &corev3.Metadata{
+			FilterMetadata: map[string]*structpb.Struct{"foo": {}},
+		}, errStr: "missing aigateway.envoy.io metadata"},
 		{
 			md:     &corev3.Metadata{FilterMetadata: map[string]*structpb.Struct{internalapi.InternalEndpointMetadataNamespace: {}}},
 			errStr: "missing per_route_rule_backend_name in endpoint metadata",
@@ -317,8 +276,11 @@ func TestServer_setBackend(t *testing.T) {
 			t.Run(fmt.Sprintf("errors/%s/isEndpointPicker=%t", tc.errStr, isEndpointPicker), func(t *testing.T) {
 				str, err := prototext.Marshal(tc.md)
 				require.NoError(t, err)
+				// Test the breaking-change scenario where the metadata is prefixed with "google/debugproto".
+				// See the comment in setBackend for more details.
+				str = append([]byte("goo.gle/debugproto "), str...)
 				s, _ := requireNewServerWithMockProcessor(t)
-				s.config.backends = map[string]*processorConfigBackend{"openai": {b: &filterapi.Backend{Name: "openai"}}}
+				s.config.Backends = map[string]*filterapi.RuntimeBackend{"openai": {Backend: &filterapi.Backend{Name: "openai", HeaderMutation: &filterapi.HTTPHeaderMutation{Set: []filterapi.HTTPHeader{{Name: "x-foo", Value: "foo"}}}}}}
 				mockProc := &mockProcessor{}
 
 				// Use the correct metadata field key based on isEndpointPicker.
@@ -346,15 +308,15 @@ func TestServer_ProcessorSelection(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	s.config = &processorConfig{}
-	s.Register("/one", func(*processorConfig, map[string]string, *slog.Logger, bool) (Processor, error) {
+	s.config = &filterapi.RuntimeConfig{}
+	s.Register("/one", func(*filterapi.RuntimeConfig, map[string]string, *slog.Logger, bool) (Processor, error) {
 		// Returning nil guarantees that the test will fail if this processor is selected.
 		return nil, nil
 	})
-	s.Register("/two", func(*processorConfig, map[string]string, *slog.Logger, bool) (Processor, error) {
+	s.Register("/two", func(*filterapi.RuntimeConfig, map[string]string, *slog.Logger, bool) (Processor, error) {
 		return &mockProcessor{
 			t:                     t,
-			expHeaderMap:          &corev3.HeaderMap{Headers: []*corev3.HeaderValue{{Key: ":path", Value: "/two"}}},
+			expHeaderMap:          &corev3.HeaderMap{Headers: []*corev3.HeaderValue{{Key: ":path", Value: "/two"}, {Key: "x-request-id", Value: "original-req-id"}}},
 			retProcessingResponse: &extprocv3.ProcessingResponse{Response: &extprocv3.ProcessingResponse_RequestHeaders{}},
 		}, nil
 	})
@@ -391,11 +353,36 @@ func TestServer_ProcessorSelection(t *testing.T) {
 		req := &extprocv3.ProcessingRequest{
 			Request: &extprocv3.ProcessingRequest_RequestHeaders{
 				RequestHeaders: &extprocv3.HttpHeaders{
-					Headers: &corev3.HeaderMap{Headers: []*corev3.HeaderValue{{Key: ":path", Value: "/two"}}},
+					Headers: &corev3.HeaderMap{Headers: []*corev3.HeaderValue{
+						{Key: ":path", Value: "/two"},
+						{Key: "x-request-id", Value: "original-req-id"},
+					}},
 				},
 			},
 		}
-		expResponse := &extprocv3.ProcessingResponse{Response: &extprocv3.ProcessingResponse_RequestHeaders{}}
+		expResponse := &extprocv3.ProcessingResponse{
+			Response: &extprocv3.ProcessingResponse_RequestHeaders{
+				RequestHeaders: &extprocv3.HeadersResponse{
+					Response: &extprocv3.CommonResponse{
+						HeaderMutation: &extprocv3.HeaderMutation{
+							SetHeaders: []*corev3.HeaderValueOption{
+								{
+									Header: &corev3.HeaderValue{
+										Key:      internalReqIDHeader,
+										RawValue: []byte("original-req-id-test-internal-req-id"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		s.uuidFn = func() string {
+			return "test-internal-req-id"
+		}
+
 		ms := &mockExternalProcessingStream{t: t, ctx: ctx, retRecv: req, expResponseOnSend: expResponse}
 
 		err = s.Process(ms)
@@ -423,7 +410,10 @@ func Test_filterSensitiveHeadersForLogging(t *testing.T) {
 }
 
 func Test_filterSensitiveBodyForLogging(t *testing.T) {
-	logger, buf := newTestLoggerWithBuffer()
+	buf := internaltesting.CaptureOutput("test")[0]
+	logger := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
 	resp := &extprocv3.ProcessingResponse{
 		Response: &extprocv3.ProcessingResponse_RequestBody{
 			RequestBody: &extprocv3.BodyResponse{
@@ -484,4 +474,132 @@ func Test_headersToMap(t *testing.T) {
 	}
 	m := headersToMap(hm)
 	require.Equal(t, map[string]string{"foo": "bar", "dog": "cat"}, m)
+}
+
+func TestServer_ProcessorForPath_QueryParameterStripping(t *testing.T) {
+	s, err := NewServer(slog.Default())
+	require.NoError(t, err)
+	require.NotNil(t, s)
+
+	s.config = &filterapi.RuntimeConfig{}
+
+	// Register processors for different base paths.
+	mockProc := &mockProcessor{}
+	s.Register("/v1/messages", func(*filterapi.RuntimeConfig, map[string]string, *slog.Logger, bool) (Processor, error) {
+		return mockProc, nil
+	})
+	s.Register("/anthropic/v1/messages", func(*filterapi.RuntimeConfig, map[string]string, *slog.Logger, bool) (Processor, error) {
+		return mockProc, nil
+	})
+
+	tests := []struct {
+		name           string
+		requestHeaders map[string]string
+		isUpstream     bool
+		expectSuccess  bool
+		expectedError  string
+	}{
+		{
+			name: "path_without_query_params",
+			requestHeaders: map[string]string{
+				":path": "/v1/messages",
+			},
+			isUpstream:    false,
+			expectSuccess: true,
+		},
+		{
+			name: "path_with_beta_query_param",
+			requestHeaders: map[string]string{
+				":path": "/v1/messages?beta=true",
+			},
+			isUpstream:    false,
+			expectSuccess: true,
+		},
+		{
+			name: "path_with_multiple_query_params",
+			requestHeaders: map[string]string{
+				":path": "/v1/messages?beta=true&stream=false&version=2",
+			},
+			isUpstream:    false,
+			expectSuccess: true,
+		},
+		{
+			name: "anthropic_path_with_beta_param",
+			requestHeaders: map[string]string{
+				":path": "/anthropic/v1/messages?beta=true",
+			},
+			isUpstream:    false,
+			expectSuccess: true,
+		},
+		{
+			name: "unknown_path_without_query_params",
+			requestHeaders: map[string]string{
+				":path": "/unknown/path",
+			},
+			isUpstream:    false,
+			expectSuccess: false,
+			expectedError: "no processor registered for the given path: /unknown/path",
+		},
+		{
+			name: "unknown_path_with_query_params",
+			requestHeaders: map[string]string{
+				":path": "/unknown/path?param=value",
+			},
+			isUpstream:    false,
+			expectSuccess: false,
+			expectedError: "no processor registered for the given path: /unknown/path",
+		},
+		{
+			name: "upstream_filter_with_original_path_header",
+			requestHeaders: map[string]string{
+				originalPathHeader: "/v1/messages?beta=true&other=param",
+			},
+			isUpstream:    true,
+			expectSuccess: true,
+		},
+		{
+			name: "empty_path",
+			requestHeaders: map[string]string{
+				":path": "",
+			},
+			isUpstream:    false,
+			expectSuccess: false,
+			expectedError: "no processor registered for the given path: ",
+		},
+		{
+			name: "path_with_only_query_params",
+			requestHeaders: map[string]string{
+				":path": "?beta=true",
+			},
+			isUpstream:    false,
+			expectSuccess: false,
+			expectedError: "no processor registered for the given path: ",
+		},
+		{
+			name: "path_with_fragment_and_query",
+			requestHeaders: map[string]string{
+				":path": "/v1/messages?beta=true#fragment",
+			},
+			isUpstream:    false,
+			expectSuccess: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			processor, err := s.processorForPath(tt.requestHeaders, tt.isUpstream)
+
+			if tt.expectSuccess {
+				require.NoError(t, err)
+				require.NotNil(t, processor)
+				require.Equal(t, mockProc, processor)
+			} else {
+				require.Error(t, err)
+				require.Nil(t, processor)
+				if tt.expectedError != "" {
+					require.Contains(t, err.Error(), tt.expectedError)
+				}
+			}
+		})
+	}
 }

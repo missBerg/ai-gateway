@@ -19,6 +19,8 @@ import (
 // HTTPRouteSpec defined in the AIGatewayRoute), the ai-gateway will generate the necessary configuration to do
 // the backend specific logic in the final HTTPRoute.
 //
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[-1:].type`
@@ -33,6 +35,7 @@ type AIServiceBackend struct {
 
 // AIServiceBackendList contains a list of AIServiceBackends.
 //
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 type AIServiceBackendList struct {
 	metav1.TypeMeta `json:",inline"`
@@ -54,24 +57,72 @@ type AIServiceBackendSpec struct {
 	// BackendRef is the reference to the Backend resource that this AIServiceBackend corresponds to.
 	//
 	// A backend must be a Backend resource of Envoy Gateway. Note that k8s Service will be supported
-	// as a backend in the future.
+	// as a backend in the future. See https://github.com/envoyproxy/ai-gateway/issues/902 for more details.
 	//
 	// This is required to be set.
 	//
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="has(self.kind) && self.kind == 'Backend' && has(self.group) && self.group == 'gateway.envoyproxy.io'",message="BackendRef must be a Backend resource of Envoy Gateway. See https://github.com/envoyproxy/ai-gateway/issues/902 for more details."
 	BackendRef gwapiv1.BackendObjectReference `json:"backendRef"`
 
-	// BackendSecurityPolicyRef is the name of the BackendSecurityPolicy resources this backend
-	// is being attached to.
-	//
-	// Deprecated: Use BackendSecurityPolicy.spec.targetRefs instead. This field will be dropped after Envoy AI Gateway v0.3 release.
-	// When this field is set, the BackendSecurityPolicy.spec.targetRefs will be ignored. To migrate to the new field,
-	// set the targetRefs in the BackendSecurityPolicy to point to this AIServiceBackend first, apply the change,
-	// and then remove this field from the AIServiceBackend.
-	//
+	// HeaderMutation defines the mutation of HTTP headers that will be applied to the request
+	// before sending it to the backend.
 	// +optional
-	BackendSecurityPolicyRef *gwapiv1.LocalObjectReference `json:"backendSecurityPolicyRef,omitempty"`
+	HeaderMutation *HTTPHeaderMutation `json:"headerMutation,omitempty"`
+
+	// BodyMutation defines the mutation of HTTP request body JSON fields that will be applied to the request
+	// before sending it to the backend.
+	// +optional
+	BodyMutation *HTTPBodyMutation `json:"bodyMutation,omitempty"`
 
 	// TODO: maybe add backend-level LLMRequestCost configuration that overrides the AIGatewayRoute-level LLMRequestCost.
 	// 	That may be useful for the backend that has a different cost calculation logic.
+}
+
+// HTTPHeaderMutation defines the mutation of HTTP headers that will be applied to the request
+type HTTPHeaderMutation struct {
+	// Set overwrites/adds the request with the given header (name, value)
+	// before the action.
+	//
+	// Input:
+	//   GET /foo HTTP/1.1
+	//   my-header: foo
+	//
+	// Config:
+	//   set:
+	//   - name: "my-header"
+	//     value: "bar"
+	//
+	// Output:
+	//   GET /foo HTTP/1.1
+	//   my-header: bar
+	//
+	// +optional
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MaxItems=16
+	Set []gwapiv1.HTTPHeader `json:"set,omitempty"`
+
+	// Remove the given header(s) from the HTTP request before the action. The
+	// value of Remove is a list of HTTP header names. Note that the header
+	// names are case-insensitive (see
+	// https://datatracker.ietf.org/doc/html/rfc2616#section-4.2).
+	//
+	// Input:
+	//   GET /foo HTTP/1.1
+	//   my-header1: foo
+	//   my-header2: bar
+	//   my-header3: baz
+	//
+	// Config:
+	//   remove: ["my-header1", "my-header3"]
+	//
+	// Output:
+	//   GET /foo HTTP/1.1
+	//   my-header2: bar
+	//
+	// +optional
+	// +listType=set
+	// +kubebuilder:validation:MaxItems=16
+	Remove []string `json:"remove,omitempty"`
 }

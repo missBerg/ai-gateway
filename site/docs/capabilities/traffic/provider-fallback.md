@@ -31,8 +31,6 @@ metadata:
   name: provider-fallback
   namespace: default
 spec:
-  schema:
-    name: OpenAI
   parentRefs:
     - name: provider-fallback
       kind: Gateway
@@ -44,9 +42,9 @@ spec:
               name: x-ai-eg-model
               value: us.meta.llama3-2-1b-instruct-v1:0
       backendRefs:
-        - name: provider-fallback-always-failing-upstream  # Primary backend (expected to fail)
+        - name: provider-fallback-always-failing-upstream # Primary backend (expected to fail)
           priority: 0
-        - name: provider-fallback-aws                      # Fallback backend
+        - name: provider-fallback-aws # Fallback backend
           priority: 1
 ```
 
@@ -91,6 +89,9 @@ spec:
       kind: HTTPRoute
       name: provider-fallback # HTTPRoute is created with the same name as AIGatewayRoute
   retry:
+    # This ensures that only one attempt is made per priority.
+    # For example, if the primary backend fails, it will not retry on the same backend.
+    numAttemptsPerPriority: 1
     numRetries: 5
     perRetry:
       backOff:
@@ -98,9 +99,6 @@ spec:
         maxInterval: 10s
       timeout: 30s
     retryOn:
-      # This ensures that only one attempt is made per priority.
-      # For example, if the primary backend fails, it will not retry on the same backend.
-      numAttemptsPerPriority: 1
       httpStatusCodes:
         - 500
       triggers:

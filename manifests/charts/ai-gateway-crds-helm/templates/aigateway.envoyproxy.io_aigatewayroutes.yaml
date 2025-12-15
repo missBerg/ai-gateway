@@ -32,19 +32,12 @@ spec:
           This serves as a way to define a "unified" AI API for a Gateway which allows downstream
           clients to use a single schema API to interact with multiple AI backends.
 
-          The schema field is used to determine the structure of the requests that the Gateway will
-          receive. And then the Gateway will route the traffic to the appropriate AIServiceBackend based
-          on the output schema of the AIServiceBackend while doing the other necessary jobs like
-          upstream authentication, rate limit, etc.
-
           Envoy AI Gateway will generate the following k8s resources corresponding to the AIGatewayRoute:
 
             - HTTPRoute of the Gateway API as a top-level resource to bind all backends.
               The name of the HTTPRoute is the same as the AIGatewayRoute.
-            - EnvoyExtensionPolicy of the Envoy Gateway API to attach the AI Gateway filter into the target Gateways.
-              This will be created per Gateway, and its name is `ai-eg-eep-${gateway-name}`.
             - HTTPRouteFilter of the Envoy Gateway API per namespace for automatic hostname rewrite.
-              The name of the HTTPRouteFilter is `ai-eg-host-rewrite`.
+              The name of the HTTPRouteFilter is `ai-eg-host-rewrite-${AIGatewayRoute.Name}`.
 
           All of these resources are created in the same namespace as the AIGatewayRoute. Note that this is the implementation
           detail subject to change. If you want to customize the default behavior of the Envoy AI Gateway, you can use these
@@ -101,7 +94,7 @@ spec:
                               Claims lists the names of resources, defined in spec.resourceClaims,
                               that are used by this container.
 
-                              This is an alpha field and requires enabling the
+                              This field depends on the
                               DynamicResourceAllocation feature gate.
 
                               This field is immutable. It can only be set for containers.
@@ -174,7 +167,8 @@ spec:
                   example, let's say we have the following LLMRequestCosts configuration:\n```yaml\n\tllmRequestCosts:\n\t-
                   metadataKey: llm_input_token\n\t  type: InputToken\n\t- metadataKey:
                   llm_output_token\n\t  type: OutputToken\n\t- metadataKey: llm_total_token\n\t
-                  \ type: TotalToken\n```\nThen, with the following BackendTrafficPolicy
+                  \ type: TotalToken\n\t- metadataKey: llm_cached_input_token\n\t
+                  \ type: CachedInputToken\n```\nThen, with the following BackendTrafficPolicy
                   of Envoy Gateway, you can have three\nrate limit buckets for each
                   unique x-user-id header value. One bucket is for the input token,\nthe
                   other is for the output token, and the last one is for the total
@@ -227,14 +221,17 @@ spec:
                         model: the model name extracted from the request content.
                         Type: string.\n\t* backend: the backend name in the form of
                         \"name.namespace\". Type: string.\n\t* input_tokens: the number
-                        of input tokens. Type: unsigned integer.\n\t* output_tokens:
-                        the number of output tokens. Type: unsigned integer.\n\t*
-                        total_tokens: the total number of tokens. Type: unsigned integer.\n\nFor
-                        example, the following expressions are valid:\n\n\t* \"model
-                        == 'llama' ?  input_tokens + output_token * 0.5 : total_tokens\"\n\t*
-                        \"backend == 'foo.default' ?  input_tokens + output_tokens
-                        : total_tokens\"\n\t* \"input_tokens + output_tokens + total_tokens\"\n\t*
-                        \"input_tokens * output_tokens\""
+                        of input tokens. Type: unsigned integer.\n\t* cached_input_tokens:
+                        the number of cached input tokens. Type: unsigned integer.\n\t*
+                        output_tokens: the number of output tokens. Type: unsigned
+                        integer.\n\t* total_tokens: the total number of tokens. Type:
+                        unsigned integer.\n\nFor example, the following expressions
+                        are valid:\n\n\t* \"model == 'llama' ?  input_tokens + output_token
+                        * 0.5 : total_tokens\"\n\t* \"backend == 'foo.default' ?  input_tokens
+                        + output_tokens : total_tokens\"\n\t* \"backend == 'bar.default'
+                        ?  (input_tokens - cached_input_tokens) + cached_input_tokens
+                        * 0.1 + output_tokens : total_tokens\"\n\t* \"input_tokens
+                        + output_tokens + total_tokens\"\n\t* \"input_tokens * output_tokens\""
                       type: string
                     metadataKey:
                       description: MetadataKey is the key of the metadata to store
@@ -248,6 +245,7 @@ spec:
                       enum:
                       - OutputToken
                       - InputToken
+                      - CachedInputToken
                       - TotalToken
                       - CEL
                       type: string
@@ -260,8 +258,7 @@ spec:
               parentRefs:
                 description: |-
                   ParentRefs are the names of the Gateway resources this AIGatewayRoute is being attached to.
-                  Cross namespace references are not supported. In other words, the Gateway resources must be in the
-                  same namespace as the AIGatewayRoute. Currently, each reference's Kind must be Gateway.
+                  Currently, each reference's Kind must be Gateway.
                 items:
                   description: |-
                     ParentReference identifies an API object (usually a Gateway) that can be considered
@@ -438,7 +435,11 @@ spec:
                         BackendRefs is the list of backends that this rule will route the traffic to.
                         Each backend can have a weight that determines the traffic distribution.
 
-                        The namespace of each backend is "local", i.e. the same namespace as the AIGatewayRoute.
+                        The namespace of each backend defaults to the same namespace as the AIGatewayRoute when not specified.
+                        Cross-namespace references are supported by specifying the namespace field.
+                        When a namespace different than the AIGatewayRoute's namespace is specified,
+                        a ReferenceGrant object is required in the referent namespace to allow that
+                        namespace's owner to accept the reference.
 
                         BackendRefs can reference either AIServiceBackend resources (default) or InferencePool resources
                         from the Gateway API Inference Extension. When referencing InferencePool resources:
@@ -455,14 +456,183 @@ spec:
                           AIGatewayRouteRuleBackendRef is a reference to a backend with a weight.
                           It can reference either an AIServiceBackend or an InferencePool resource.
                         properties:
+                          bodyMutation:
+                            description: |-
+                              BodyMutation defines the request body mutation to be applied to this backend.
+                              This allows modification of JSON fields in the request body before sending to the backend.
+                              When both route-level and backend-level BodyMutation are defined,
+                              route-level takes precedence over backend-level for conflicting operations.
+                              This field is ignored when referencing InferencePool resources.
+                            properties:
+                              remove:
+                                description: |-
+                                  Remove the given JSON field(s) from the HTTP request body before sending to the backend.
+                                  The value of Remove is a list of top-level field names to remove.
+
+                                  Input:
+                                    {
+                                      "model": "gpt-4",
+                                      "service_tier": "default",
+                                      "internal_flag": true
+                                    }
+
+                                  Config:
+                                    remove: ["service_tier", "internal_flag"]
+
+                                  Output:
+                                    {
+                                      "model": "gpt-4"
+                                    }
+                                items:
+                                  type: string
+                                maxItems: 16
+                                type: array
+                                x-kubernetes-list-type: set
+                              set:
+                                description: |-
+                                  Set overwrites/adds the request body with the given JSON field (name, value)
+                                  before sending to the backend. Only top-level fields are currently supported.
+
+                                  Input:
+                                    {
+                                      "model": "gpt-4",
+                                      "service_tier": "default"
+                                    }
+
+                                  Config:
+                                    set:
+                                    - path: "service_tier"
+                                      value: "scale"
+
+                                  Output:
+                                    {
+                                      "model": "gpt-4",
+                                      "service_tier": "scale"
+                                    }
+                                items:
+                                  description: HTTPBodyField represents a JSON field
+                                    name and value for body mutation
+                                  properties:
+                                    path:
+                                      description: |-
+                                        Path is the top-level field name to set in the request body.
+                                        Examples: "service_tier", "max_tokens", "temperature"
+                                      minLength: 1
+                                      type: string
+                                    value:
+                                      description: |-
+                                        Value is the JSON value to set at the specified field. This can be any valid JSON value:
+                                        string, number, boolean, object, array, or null.
+                                        The value will be parsed as JSON and inserted at the specified field.
+
+                                        Examples:
+                                          - "\"scale\"" (string)
+                                          - "42" (number)
+                                          - "true" (boolean)
+                                          - "{\"key\": \"value\"}" (object)
+                                          - "[1, 2, 3]" (array)
+                                          - "null" (null)
+                                      type: string
+                                  required:
+                                  - path
+                                  - value
+                                  type: object
+                                maxItems: 16
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - path
+                                x-kubernetes-list-type: map
+                            type: object
                           group:
                             description: |-
                               Group is the group of the backend resource.
                               When not specified, defaults to aigateway.envoyproxy.io (AIServiceBackend).
-                              Currently, only "inference.networking.x-k8s.io" is supported for InferencePool resources.
+                              Currently, only "inference.networking.k8s.io" is supported for InferencePool resources.
                             maxLength: 253
                             pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                             type: string
+                          headerMutation:
+                            description: |-
+                              HeaderMutation defines the request header mutation to be applied to this backend.
+                              When both route-level and backend-level HeaderMutation are defined,
+                              route-level takes precedence over backend-level for conflicting operations.
+                              This field is ignored when referencing InferencePool resources.
+                            properties:
+                              remove:
+                                description: |-
+                                  Remove the given header(s) from the HTTP request before the action. The
+                                  value of Remove is a list of HTTP header names. Note that the header
+                                  names are case-insensitive (see
+                                  https://datatracker.ietf.org/doc/html/rfc2616#section-4.2).
+
+                                  Input:
+                                    GET /foo HTTP/1.1
+                                    my-header1: foo
+                                    my-header2: bar
+                                    my-header3: baz
+
+                                  Config:
+                                    remove: ["my-header1", "my-header3"]
+
+                                  Output:
+                                    GET /foo HTTP/1.1
+                                    my-header2: bar
+                                items:
+                                  type: string
+                                maxItems: 16
+                                type: array
+                                x-kubernetes-list-type: set
+                              set:
+                                description: |-
+                                  Set overwrites/adds the request with the given header (name, value)
+                                  before the action.
+
+                                  Input:
+                                    GET /foo HTTP/1.1
+                                    my-header: foo
+
+                                  Config:
+                                    set:
+                                    - name: "my-header"
+                                      value: "bar"
+
+                                  Output:
+                                    GET /foo HTTP/1.1
+                                    my-header: bar
+                                items:
+                                  description: HTTPHeader represents an HTTP Header
+                                    name and value as defined by RFC 7230.
+                                  properties:
+                                    name:
+                                      description: |-
+                                        Name is the name of the HTTP Header to be matched. Name matching MUST be
+                                        case-insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2).
+
+                                        If multiple entries specify equivalent header names, the first entry with
+                                        an equivalent name MUST be considered for a match. Subsequent entries
+                                        with an equivalent header name MUST be ignored. Due to the
+                                        case-insensitivity of header names, "foo" and "Foo" are considered
+                                        equivalent.
+                                      maxLength: 256
+                                      minLength: 1
+                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                      type: string
+                                    value:
+                                      description: Value is the value of HTTP Header
+                                        to be matched.
+                                      maxLength: 4096
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - name
+                                  - value
+                                  type: object
+                                maxItems: 16
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - name
+                                x-kubernetes-list-type: map
+                            type: object
                           kind:
                             description: |-
                               Kind is the kind of the backend resource.
@@ -482,6 +652,19 @@ spec:
                               When Group and Kind are not specified, this refers to an AIServiceBackend.
                               When Group and Kind are specified, this refers to the resource of the specified type.
                             minLength: 1
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace is the namespace of the backend resource.
+                              When unspecified (or empty string), this refers to the local namespace of the AIGatewayRoute.
+
+                              Note that when a namespace different than the local namespace is specified,
+                              a ReferenceGrant object is required in the referent namespace to allow that
+                              namespace's owner to accept the reference. See the ReferenceGrant
+                              documentation for details.
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                             type: string
                           priority:
                             default: 0
@@ -513,9 +696,9 @@ spec:
                         - message: group and kind must be specified together
                           rule: '!has(self.group) && !has(self.kind) || (has(self.group)
                             && has(self.kind))'
-                        - message: only InferencePool from inference.networking.x-k8s.io
+                        - message: only InferencePool from inference.networking.k8s.io
                             group is supported
-                          rule: '!has(self.group) || (self.group == ''inference.networking.x-k8s.io''
+                          rule: '!has(self.group) || (self.group == ''inference.networking.k8s.io''
                             && self.kind == ''InferencePool'')'
                       maxItems: 128
                       type: array
@@ -694,111 +877,9 @@ spec:
                       || size(self.backendRefs) == 1'
                 maxItems: 128
                 type: array
-              schema:
-                description: |-
-                  APISchema specifies the API schema of the input that the target Gateway(s) will receive.
-                  Based on this schema, the ai-gateway will perform the necessary transformation to the
-                  output schema specified in the selected AIServiceBackend during the routing process.
-
-                  Currently, the only supported schema is OpenAI as the input schema.
-                properties:
-                  name:
-                    description: Name is the name of the API schema of the AIGatewayRoute
-                      or AIServiceBackend.
-                    enum:
-                    - OpenAI
-                    - AWSBedrock
-                    - AzureOpenAI
-                    - GCPVertexAI
-                    - GCPAnthropic
-                    type: string
-                  version:
-                    description: |-
-                      Version is the version of the API schema.
-
-                      When the name is set to "OpenAI", this equals to the prefix of the OpenAI API endpoints. This defaults to "v1"
-                      if not set or empty string. For example, "chat completions" API endpoint will be "/v1/chat/completions"
-                      if the version is set to "v1".
-
-                      This is especially useful when routing to the backend that has an OpenAI compatible API but has a different
-                      versioning scheme. For example, Gemini OpenAI compatible API (https://ai.google.dev/gemini-api/docs/openai) uses
-                      "/v1beta/openai" version prefix. Another example is that Cohere AI (https://docs.cohere.com/v2/docs/compatibility-api)
-                      uses "/compatibility/v1" version prefix. On the other hand, DeepSeek (https://api-docs.deepseek.com/) doesn't
-                      use version prefix, so the version can be set to an empty string.
-
-                      When the name is set to AzureOpenAI, this version maps to "API Version" in the
-                      Azure OpenAI API documentation (https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#rest-api-versioning).
-                    type: string
-                required:
-                - name
-                type: object
-                x-kubernetes-validations:
-                - rule: self.name == 'OpenAI'
-              targetRefs:
-                description: |-
-                  TargetRefs are the names of the Gateway resources this AIGatewayRoute is being attached to.
-
-                  Deprecated: use the ParentRefs field instead. This field will be dropped in Envoy AI Gateway v0.4.0.
-                items:
-                  description: |-
-                    LocalPolicyTargetReferenceWithSectionName identifies an API object to apply a
-                    direct policy to. This should be used as part of Policy resources that can
-                    target single resources. For more information on how this policy attachment
-                    mode works, and a sample Policy resource, refer to the policy attachment
-                    documentation for Gateway API.
-
-                    Note: This should only be used for direct policy attachment when references
-                    to SectionName are actually needed. In all other cases,
-                    LocalPolicyTargetReference should be used.
-                  properties:
-                    group:
-                      description: Group is the group of the target resource.
-                      maxLength: 253
-                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                      type: string
-                    kind:
-                      description: Kind is kind of the target resource.
-                      maxLength: 63
-                      minLength: 1
-                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                      type: string
-                    name:
-                      description: Name is the name of the target resource.
-                      maxLength: 253
-                      minLength: 1
-                      type: string
-                    sectionName:
-                      description: |-
-                        SectionName is the name of a section within the target resource. When
-                        unspecified, this targetRef targets the entire resource. In the following
-                        resources, SectionName is interpreted as the following:
-
-                        * Gateway: Listener name
-                        * HTTPRoute: HTTPRouteRule name
-                        * Service: Port name
-
-                        If a SectionName is specified, but does not exist on the targeted object,
-                        the Policy must fail to attach, and the policy implementation should record
-                        a `ResolvedRefs` or similar Condition in the Policy's status.
-                      maxLength: 253
-                      minLength: 1
-                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                      type: string
-                  required:
-                  - group
-                  - kind
-                  - name
-                  type: object
-                maxItems: 128
-                type: array
             required:
             - rules
-            - schema
             type: object
-            x-kubernetes-validations:
-            - message: targetRefs is deprecated, use parentRefs only
-              rule: '!has(self.parentRefs) || !has(self.targetRefs) || size(self.targetRefs)
-                == 0'
           status:
             description: Status defines the status details of the AIGatewayRoute.
             properties:

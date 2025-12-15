@@ -15,6 +15,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,18 +56,25 @@ type AIGatewayRouteController struct {
 	logger logr.Logger
 	// gatewayEventChan is a channel to send events to the gateway controller.
 	gatewayEventChan chan event.GenericEvent
+	// rootPrefix is the prefix for the root path of the AI Gateway.
+	rootPrefix string
+	// referenceGrantValidator validates cross-namespace references using ReferenceGrant.
+	referenceGrantValidator *referenceGrantValidator
 }
 
 // NewAIGatewayRouteController creates a new reconcile.TypedReconciler[reconcile.Request] for the AIGatewayRoute resource.
 func NewAIGatewayRouteController(
 	client client.Client, kube kubernetes.Interface, logger logr.Logger,
 	gatewayEventChan chan event.GenericEvent,
+	rootPrefix string,
 ) *AIGatewayRouteController {
 	return &AIGatewayRouteController{
-		client:           client,
-		kube:             kube,
-		logger:           logger,
-		gatewayEventChan: gatewayEventChan,
+		client:                  client,
+		kube:                    kube,
+		logger:                  logger,
+		gatewayEventChan:        gatewayEventChan,
+		rootPrefix:              rootPrefix,
+		referenceGrantValidator: newReferenceGrantValidator(client),
 	}
 }
 
@@ -138,7 +146,7 @@ func generateHTTPRouteFilters(aiGatewayRoute *aigv1a1.AIGatewayRoute) []*egv1a1.
 					Body: &egv1a1.CustomResponseBody{
 						Inline: ptr.To(
 							// "Likely" since the matching rule can be arbitrary, not necessarily matching on the model name.
-							`No matching route found. It is likely that the model specified your request is not configured in the Gateway.`,
+							`No matching route found. It is likely because the model specified in your request is not configured in the Gateway.`,
 						),
 					},
 				},
@@ -183,10 +191,22 @@ func (c *AIGatewayRouteController) syncAIGatewayRoute(ctx context.Context, aiGat
 		// This means that this AIGatewayRoute is a new one.
 		httpRoute = gwapiv1.HTTPRoute{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      aiGatewayRoute.Name,
-				Namespace: aiGatewayRoute.Namespace,
+				Name:        aiGatewayRoute.Name,
+				Namespace:   aiGatewayRoute.Namespace,
+				Labels:      make(map[string]string),
+				Annotations: make(map[string]string),
 			},
 			Spec: gwapiv1.HTTPRouteSpec{},
+		}
+
+		// Copy labels from AIGatewayRoute to HTTPRoute.
+		for k, v := range aiGatewayRoute.Labels {
+			httpRoute.Labels[k] = v
+		}
+
+		// Copy non-controller annotations from AIGatewayRoute to HTTPRoute.
+		for k, v := range aiGatewayRoute.Annotations {
+			httpRoute.Annotations[k] = v
 		}
 		if err = ctrlutil.SetControllerReference(aiGatewayRoute, &httpRoute, c.client.Scheme()); err != nil {
 			panic(fmt.Errorf("BUG: failed to set controller reference for HTTPRoute: %w", err))
@@ -235,7 +255,8 @@ func (c *AIGatewayRouteController) newHTTPRoute(ctx context.Context, dst *gwapiv
 		var backendRefs []gwapiv1.HTTPBackendRef
 		for j := range rule.BackendRefs {
 			br := &rule.BackendRefs[j]
-			dstName := fmt.Sprintf("%s.%s", br.Name, aiGatewayRoute.Namespace)
+			backendNamespace := br.GetNamespace(aiGatewayRoute.Namespace)
+			dstName := fmt.Sprintf("%s.%s", br.Name, backendNamespace)
 
 			if br.IsInferencePool() {
 				// Handle InferencePool backend reference.
@@ -251,14 +272,28 @@ func (c *AIGatewayRouteController) newHTTPRoute(ctx context.Context, dst *gwapiv
 					}},
 				)
 			} else {
-				// Handle AIServiceBackend reference.
-				backend, err := c.backend(ctx, aiGatewayRoute.Namespace, br.Name)
+				// Handle AIServiceBackend reference with cross-namespace validation.
+				backend, err := c.validateAndGetBackend(ctx, aiGatewayRoute, br)
 				if err != nil {
-					return fmt.Errorf("AIServiceBackend %s not found", dstName)
+					return fmt.Errorf("failed to get AIServiceBackend %s: %w", dstName, err)
 				}
+
+				// Copy the BackendObjectReference from the AIServiceBackend.
+				backendObjRef := backend.Spec.BackendRef
+
+				// Ensure the namespace is explicitly set in the BackendObjectReference
+				// only for cross-namespace references.
+				// If the AIServiceBackend is in a different namespace than the AIGatewayRoute,
+				// the Backend it references is also in that namespace, and we need to set
+				// the namespace explicitly in the HTTPRoute's backendRef.
+				if backendObjRef.Namespace == nil && backend.Namespace != "" && backend.Namespace != aiGatewayRoute.Namespace {
+					ns := gwapiv1.Namespace(backend.Namespace)
+					backendObjRef.Namespace = &ns
+				}
+
 				backendRefs = append(backendRefs,
 					gwapiv1.HTTPBackendRef{BackendRef: gwapiv1.BackendRef{
-						BackendObjectReference: backend.Spec.BackendRef,
+						BackendObjectReference: backendObjRef,
 						Weight:                 br.Weight,
 					}},
 				)
@@ -266,7 +301,10 @@ func (c *AIGatewayRouteController) newHTTPRoute(ctx context.Context, dst *gwapiv
 		}
 		var matches []gwapiv1.HTTPRouteMatch
 		for j := range rule.Matches {
-			matches = append(matches, gwapiv1.HTTPRouteMatch{Headers: rule.Matches[j].Headers})
+			matches = append(matches, gwapiv1.HTTPRouteMatch{
+				Headers: rule.Matches[j].Headers,
+				Path:    &gwapiv1.HTTPPathMatch{Value: &c.rootPrefix},
+			})
 		}
 		rules = append(rules, gwapiv1.HTTPRouteRule{
 			BackendRefs: backendRefs,
@@ -278,7 +316,7 @@ func (c *AIGatewayRouteController) newHTTPRoute(ctx context.Context, dst *gwapiv
 
 	rules = append(rules, gwapiv1.HTTPRouteRule{
 		Name:    ptr.To[gwapiv1.SectionName]("route-not-found"),
-		Matches: []gwapiv1.HTTPRouteMatch{{Path: &gwapiv1.HTTPPathMatch{Value: ptr.To("/")}}},
+		Matches: []gwapiv1.HTTPRouteMatch{{Path: &gwapiv1.HTTPPathMatch{Value: &c.rootPrefix}}},
 		Filters: []gwapiv1.HTTPRouteFilter{{
 			Type: gwapiv1.HTTPRouteFilterExtensionRef,
 			ExtensionRef: &gwapiv1.LocalObjectReference{
@@ -291,37 +329,40 @@ func (c *AIGatewayRouteController) newHTTPRoute(ctx context.Context, dst *gwapiv
 
 	dst.Spec.Rules = rules
 
-	if dst.ObjectMeta.Annotations == nil {
-		dst.ObjectMeta.Annotations = make(map[string]string)
+	// Initialize labels and annotations maps if they don't exist.
+	if dst.Labels == nil {
+		dst.Labels = make(map[string]string)
 	}
-	// HACK: We need to set an annotation so that Envoy Gateway reconciles the HTTPRoute when the backend refs change.
-	dst.ObjectMeta.Annotations[httpRouteBackendRefPriorityAnnotationKey] = buildPriorityAnnotation(aiGatewayRoute.Spec.Rules)
-	dst.ObjectMeta.Annotations[httpRouteAnnotationForAIGatewayGeneratedIndication] = "true"
+	if dst.Annotations == nil {
+		dst.Annotations = make(map[string]string)
+	}
 
-	egNs := gwapiv1.Namespace(aiGatewayRoute.Namespace)
-	parentRefs := aiGatewayRoute.Spec.ParentRefs
-	for _, egRef := range aiGatewayRoute.Spec.TargetRefs {
-		egName := egRef.Name
-		var namespace *gwapiv1.Namespace
-		if egNs != "" { // This path is only for the `aigw translate`.
-			namespace = ptr.To(egNs)
-		}
-		parentRefs = append(parentRefs, gwapiv1.ParentReference{
-			Name:      egName,
-			Namespace: namespace,
-		})
+	// Copy labels from AIGatewayRoute to HTTPRoute.
+	for k, v := range aiGatewayRoute.Labels {
+		dst.Labels[k] = v
 	}
-	dst.Spec.CommonRouteSpec.ParentRefs = parentRefs
+
+	// Copy non-controller annotations from AIGatewayRoute to HTTPRoute.
+	for k, v := range aiGatewayRoute.Annotations {
+		dst.Annotations[k] = v
+	}
+
+	// HACK: We need to set an annotation so that Envoy Gateway reconciles the HTTPRoute when the backend refs change.
+	dst.Annotations[httpRouteBackendRefPriorityAnnotationKey] = buildPriorityAnnotation(aiGatewayRoute.Spec.Rules)
+	dst.Annotations[httpRouteAnnotationForAIGatewayGeneratedIndication] = "true"
+
+	dst.Spec.ParentRefs = aiGatewayRoute.Spec.ParentRefs
 	return nil
 }
 
 // syncGateways synchronizes the gateways referenced by the AIGatewayRoute by sending events to the gateway controller.
 func (c *AIGatewayRouteController) syncGateways(ctx context.Context, aiGatewayRoute *aigv1a1.AIGatewayRoute) error {
-	for _, t := range aiGatewayRoute.Spec.TargetRefs {
-		c.syncGateway(ctx, aiGatewayRoute.Namespace, string(t.Name))
-	}
 	for _, p := range aiGatewayRoute.Spec.ParentRefs {
-		c.syncGateway(ctx, aiGatewayRoute.Namespace, string(p.Name))
+		gwNamespace := aiGatewayRoute.Namespace
+		if p.Namespace != nil {
+			gwNamespace = string(*p.Namespace)
+		}
+		c.syncGateway(ctx, gwNamespace, string(p.Name))
 	}
 	return nil
 }
@@ -349,10 +390,50 @@ func (c *AIGatewayRouteController) backend(ctx context.Context, namespace, name 
 	return backend, nil
 }
 
+// validateAndGetBackend validates a backend reference (including cross-namespace ReferenceGrant check)
+// and returns the AIServiceBackend if valid.
+func (c *AIGatewayRouteController) validateAndGetBackend(
+	ctx context.Context,
+	aiGatewayRoute *aigv1a1.AIGatewayRoute,
+	backendRef *aigv1a1.AIGatewayRouteRuleBackendRef,
+) (*aigv1a1.AIServiceBackend, error) {
+	backendNamespace := backendRef.GetNamespace(aiGatewayRoute.Namespace)
+
+	// Validate cross-namespace reference if applicable
+	if backendRef.IsCrossNamespace(aiGatewayRoute.Namespace) {
+		if err := c.referenceGrantValidator.validateAIServiceBackendReference(
+			ctx,
+			aiGatewayRoute.Namespace,
+			backendNamespace,
+			backendRef.Name,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	// Get the backend
+	backend, err := c.backend(ctx, backendNamespace, backendRef.Name)
+	if err != nil {
+		return nil, fmt.Errorf("AIServiceBackend %s.%s not found", backendRef.Name, backendNamespace)
+	}
+
+	return backend, nil
+}
+
 // updateAIGatewayRouteStatus updates the status of the AIGatewayRoute.
 func (c *AIGatewayRouteController) updateAIGatewayRouteStatus(ctx context.Context, route *aigv1a1.AIGatewayRoute, conditionType string, message string) {
-	route.Status.Conditions = newConditions(conditionType, message)
-	if err := c.client.Status().Update(ctx, route); err != nil {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := c.client.Get(ctx, client.ObjectKey{Name: route.Name, Namespace: route.Namespace}, route); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
+
+		route.Status.Conditions = newConditions(conditionType, message)
+		return c.client.Status().Update(ctx, route)
+	})
+	if err != nil {
 		c.logger.Error(err, "failed to update AIGatewayRoute status")
 	}
 }

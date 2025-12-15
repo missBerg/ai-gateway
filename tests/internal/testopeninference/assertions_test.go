@@ -240,6 +240,56 @@ func TestRequireSpanEqual(t *testing.T) {
 			},
 			shouldFail: false,
 		},
+		{
+			name: "nested zero structs in JSON value",
+			expected: &tracev1.Span{
+				Attributes: []*commonv1.KeyValue{
+					{
+						Key: "output.value",
+						Value: &commonv1.AnyValue{
+							Value: &commonv1.AnyValue_StringValue{
+								StringValue: `{
+                            "usage": {
+                                "completion_tokens": 9,
+                                "prompt_tokens": 19,
+                                "total_tokens": 28
+                            }
+                        }`,
+							},
+						},
+					},
+				},
+			},
+			actual: &tracev1.Span{
+				Attributes: []*commonv1.KeyValue{
+					{
+						Key: "output.value",
+						Value: &commonv1.AnyValue{
+							Value: &commonv1.AnyValue_StringValue{
+								StringValue: `{
+                            "usage": {
+                                "completion_tokens": 9,
+                                "prompt_tokens": 19,
+                                "total_tokens": 28,
+                                "completion_tokens_details": {
+                                    "accepted_prediction_tokens": 0,
+                                    "audio_tokens": 0,
+                                    "reasoning_tokens": 0,
+                                    "rejected_prediction_tokens": 0
+                                },
+                                "prompt_tokens_details": {
+                                    "audio_tokens": 0,
+                                    "cached_tokens": 0
+                                }
+                            }
+                        }`,
+							},
+						},
+					},
+				},
+			},
+			shouldFail: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -273,7 +323,7 @@ func (m *mockT) Helper() {
 	// No-op for testing.
 }
 
-func (m *mockT) Fatalf(format string, args ...interface{}) {
+func (m *mockT) Fatalf(format string, args ...any) {
 	m.failed = true
 	m.errorMsg = strings.TrimSpace(fmt.Sprintf(format, args...))
 }
@@ -287,7 +337,7 @@ func TestNormalizeJSON(t *testing.T) {
 		{
 			name:     "normalizes JSON formatting",
 			input:    `{"choices": [{"logprobs": {}, "message": {"content": "Hello"}}]}`,
-			expected: `{"choices":[{"logprobs":{},"message":{"content":"Hello"}}]}`,
+			expected: `{"choices":[{"message":{"content":"Hello"}}]}`,
 		},
 		{
 			name:     "handles whitespace",
@@ -298,6 +348,56 @@ func TestNormalizeJSON(t *testing.T) {
 			name:     "invalid JSON returns original",
 			input:    "not valid json",
 			expected: "not valid json",
+		},
+		{
+			name:     "removes arrays with only null values",
+			input:    `{"model":"gpt-4","object":"chat.completion","prompt_filter_results":[null],"usage":{"total_tokens":10}}`,
+			expected: `{"model":"gpt-4","object":"chat.completion","usage":{"total_tokens":10}}`,
+		},
+		{
+			name:     "removes arrays with objects containing only zero values",
+			input:    `{"model":"gpt-4","prompt_filter_results":[{"prompt_index":0,"content_filter_results":{}}],"usage":{"total_tokens":10}}`,
+			expected: `{"model":"gpt-4","usage":{"total_tokens":10}}`,
+		},
+		{
+			name:     "preserves arrays with non-zero values",
+			input:    `{"model":"gpt-4","prompt_filter_results":[{"prompt_index":0,"content_filter_results":{"hate":{"filtered":true}}}],"usage":{"total_tokens":10}}`,
+			expected: `{"model":"gpt-4","prompt_filter_results":[{"content_filter_results":{"hate":{"filtered":true}}}],"usage":{"total_tokens":10}}`,
+		},
+		{
+			name:     "removes nested maps with all zero values",
+			input:    `{"model":"gpt-4","metadata":{"foo":"","bar":0,"baz":false},"usage":{"total_tokens":10}}`,
+			expected: `{"model":"gpt-4","usage":{"total_tokens":10}}`,
+		},
+		{
+			name:     "preserves nested maps with non-zero values",
+			input:    `{"model":"gpt-4","metadata":{"foo":"value","bar":0},"usage":{"total_tokens":10}}`,
+			expected: `{"metadata":{"foo":"value"},"model":"gpt-4","usage":{"total_tokens":10}}`,
+		},
+		{
+			name:     "removes empty arrays",
+			input:    `{"model":"gpt-4","empty_list":[],"usage":{"total_tokens":10}}`,
+			expected: `{"model":"gpt-4","usage":{"total_tokens":10}}`,
+		},
+		{
+			name:     "preserves arrays with mixed zero and non-zero values",
+			input:    `{"model":"gpt-4","items":[0,"value",false],"usage":{"total_tokens":10}}`,
+			expected: `{"items":[0,"value",false],"model":"gpt-4","usage":{"total_tokens":10}}`,
+		},
+		{
+			name:     "handles deeply nested zero structures",
+			input:    `{"model":"gpt-4","deep":{"level1":{"level2":{"level3":{"empty":""}}}},"usage":{"total_tokens":10}}`,
+			expected: `{"model":"gpt-4","usage":{"total_tokens":10}}`,
+		},
+		{
+			name:     "preserves non-zero boolean true",
+			input:    `{"model":"gpt-4","stream":true,"usage":{"total_tokens":10}}`,
+			expected: `{"model":"gpt-4","stream":true,"usage":{"total_tokens":10}}`,
+		},
+		{
+			name:     "removes boolean false",
+			input:    `{"model":"gpt-4","stream":false,"usage":{"total_tokens":10}}`,
+			expected: `{"model":"gpt-4","usage":{"total_tokens":10}}`,
 		},
 	}
 

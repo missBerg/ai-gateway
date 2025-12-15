@@ -10,6 +10,7 @@ package openai
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,7 +19,11 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v2"
+	"github.com/tidwall/gjson"
 	"google.golang.org/genai"
+
+	"github.com/envoyproxy/ai-gateway/internal/apischema/awsbedrock"
 )
 
 // Chat message role defined by the OpenAI API.
@@ -33,15 +38,30 @@ const (
 
 // Model names for testing.
 const (
-	// ModelGPT41Nano is the cheapest model usable with /chat/completions.
-	ModelGPT41Nano = "gpt-4.1-nano"
-	// ModelO3Mini is the cheapest reasoning model usable with /chat/completions.
-	ModelO3Mini = "o3-mini"
+	// ModelBabbage002 is the cheapest model usable with /completions (legacy).
+	// It uses cl100k_base tokenizer.
+	ModelBabbage002 = "babbage-002"
+	// ModelGPT35TurboInstruct is a completion model that supports the suffix parameter.
+	// It uses cl100k_base tokenizer.
+	ModelGPT35TurboInstruct = "gpt-3.5-turbo-instruct"
+	// ModelGPT5Nano is the cheapest model usable with /chat/completions.
+	// Note: gpt-5-nano is also the cheapest reasoning model.
+	ModelGPT5Nano = "gpt-5-nano"
 	// ModelGPT4oMiniAudioPreview is the cheapest audio synthesis model usable with /chat/completions.
 	ModelGPT4oMiniAudioPreview = "gpt-4o-mini-audio-preview"
-	// ModelGPT4oAudioPreview s the cheapest audio transcription model usable with /chat/completions.
+	// ModelGPT4oAudioPreview is the cheapest audio transcription model usable with /chat/completions.
 	// Note: gpt-4o-mini-transcribe is NOT a chat model, so cannot be used with /v1/chat/completions.
 	ModelGPT4oAudioPreview = "gpt-4o-audio-preview"
+	// ModelGPT4oMiniSearchPreview is the cheapest web search model usable with /chat/completions.
+	// Note: gpt-5 series supports web search, but only in the /responses API.
+	ModelGPT4oMiniSearchPreview = "gpt-4o-mini-search-preview"
+
+	// ModelTextEmbedding3Small is the cheapest model usable with /embeddings.
+	ModelTextEmbedding3Small = "text-embedding-3-small"
+
+	// ModelGPTImage1Mini is the smallest/cheapest Images model usable with
+	// /v1/images/generations. Use with size "1024x1024" and quality "low".
+	ModelGPTImage1Mini = "gpt-image-1-mini"
 )
 
 // ChatCompletionContentPartRefusalType The type of the content part.
@@ -56,11 +76,15 @@ type ChatCompletionContentPartTextType string
 // ChatCompletionContentPartImageType The type of the content part.
 type ChatCompletionContentPartImageType string
 
+// ChatCompletionContentPartFileType The type of the content part.
+type ChatCompletionContentPartFileType string
+
 const (
 	ChatCompletionContentPartTextTypeText             ChatCompletionContentPartTextType       = "text"
 	ChatCompletionContentPartRefusalTypeRefusal       ChatCompletionContentPartRefusalType    = "refusal"
 	ChatCompletionContentPartInputAudioTypeInputAudio ChatCompletionContentPartInputAudioType = "input_audio"
 	ChatCompletionContentPartImageTypeImageURL        ChatCompletionContentPartImageType      = "image_url"
+	ChatCompletionContentPartFileTypeFile             ChatCompletionContentPartFileType       = "file"
 )
 
 // ChatCompletionContentPartTextParam Learn about
@@ -69,7 +93,8 @@ type ChatCompletionContentPartTextParam struct {
 	// The text content.
 	Text string `json:"text"`
 	// The type of the content part.
-	Type string `json:"type"`
+	Type                    string `json:"type"`
+	*AnthropicContentFields `json:",inline,omitempty"`
 }
 
 type ChatCompletionContentPartRefusalParam struct {
@@ -83,7 +108,8 @@ type ChatCompletionContentPartRefusalParam struct {
 type ChatCompletionContentPartInputAudioParam struct {
 	InputAudio ChatCompletionContentPartInputAudioInputAudioParam `json:"input_audio"`
 	// The type of the content part. Always `input_audio`.
-	Type ChatCompletionContentPartInputAudioType `json:"type"`
+	Type                    ChatCompletionContentPartInputAudioType `json:"type"`
+	*AnthropicContentFields `json:",inline,omitempty"`
 }
 
 // ChatCompletionContentPartInputAudioInputAudioFormat The format of the encoded audio data. Currently supports "wav" and "mp3".
@@ -106,7 +132,9 @@ type ChatCompletionContentPartImageImageURLDetail string
 const (
 	ChatCompletionContentPartImageImageURLDetailAuto ChatCompletionContentPartImageImageURLDetail = "auto"
 	ChatCompletionContentPartImageImageURLDetailLow  ChatCompletionContentPartImageImageURLDetail = "low"
-	ChatCompletionContentPartImageImageURLDetailHigh ChatCompletionContentPartImageImageURLDetail = "high"
+	// medium is only supported in gemini-3
+	ChatCompletionContentPartImageImageURLDetailMedium ChatCompletionContentPartImageImageURLDetail = "medium"
+	ChatCompletionContentPartImageImageURLDetailHigh   ChatCompletionContentPartImageImageURLDetail = "high"
 )
 
 type ChatCompletionContentPartImageImageURLParam struct {
@@ -121,46 +149,74 @@ type ChatCompletionContentPartImageImageURLParam struct {
 type ChatCompletionContentPartImageParam struct {
 	ImageURL ChatCompletionContentPartImageImageURLParam `json:"image_url"`
 	// The type of the content part.
-	Type ChatCompletionContentPartImageType `json:"type"`
+	Type                    ChatCompletionContentPartImageType `json:"type"`
+	*AnthropicContentFields `json:",inline,omitempty"`
+}
+
+type ChatCompletionContentPartFileFileParam struct {
+	// The base64 encoded file data, used when passing the file to the model as a
+	// string.
+	FileData string `json:"file_data,omitzero"`
+	// The ID of an uploaded file to use as input.
+	FileID string `json:"file_id,omitzero"`
+	// The name of the file, used when passing the file to the model as a string.
+	Filename string `json:"filename,omitzero"`
+}
+
+// ChatCompletionContentPartFileParam .
+type ChatCompletionContentPartFileParam struct {
+	File ChatCompletionContentPartFileFileParam `json:"file,omitzero"`
+	// The type of the content part. Always `file`.
+	//
+	// This field can be elided, and will marshal its zero value as "file".
+	Type                    ChatCompletionContentPartFileType `json:"type"`
+	*AnthropicContentFields `json:",inline,omitempty"`
 }
 
 // ChatCompletionContentPartUserUnionParam Learn about
 // [text inputs](https://platform.openai.com/docs/guides/text-generation).
 type ChatCompletionContentPartUserUnionParam struct {
-	TextContent       *ChatCompletionContentPartTextParam
-	InputAudioContent *ChatCompletionContentPartInputAudioParam
-	ImageContent      *ChatCompletionContentPartImageParam
+	OfText       *ChatCompletionContentPartTextParam       `json:",omitzero,inline"`
+	OfInputAudio *ChatCompletionContentPartInputAudioParam `json:",omitzero,inline"`
+	OfImageURL   *ChatCompletionContentPartImageParam      `json:",omitzero,inline"`
+	OfFile       *ChatCompletionContentPartFileParam       `json:",omitzero,inline"`
 }
 
 func (c *ChatCompletionContentPartUserUnionParam) UnmarshalJSON(data []byte) error {
-	var chatContentPart map[string]interface{}
-	if err := json.Unmarshal(data, &chatContentPart); err != nil {
-		return err
+	typeResult := gjson.GetBytes(data, "type")
+	if !typeResult.Exists() {
+		return errors.New("chat content does not have type")
 	}
-	var contentType string
-	var ok bool
-	if contentType, ok = chatContentPart["type"].(string); !ok {
-		return fmt.Errorf("chat content does not have type")
-	}
+
+	// Based on the 'type' field, unmarshal into the correct struct.
+	contentType := typeResult.String()
+
 	switch contentType {
 	case string(ChatCompletionContentPartTextTypeText):
 		var textContent ChatCompletionContentPartTextParam
 		if err := json.Unmarshal(data, &textContent); err != nil {
 			return err
 		}
-		c.TextContent = &textContent
+		c.OfText = &textContent
 	case string(ChatCompletionContentPartInputAudioTypeInputAudio):
 		var audioContent ChatCompletionContentPartInputAudioParam
 		if err := json.Unmarshal(data, &audioContent); err != nil {
 			return err
 		}
-		c.InputAudioContent = &audioContent
+		c.OfInputAudio = &audioContent
 	case string(ChatCompletionContentPartImageTypeImageURL):
 		var imageContent ChatCompletionContentPartImageParam
 		if err := json.Unmarshal(data, &imageContent); err != nil {
 			return err
 		}
-		c.ImageContent = &imageContent
+		c.OfImageURL = &imageContent
+	case string(ChatCompletionContentPartFileTypeFile):
+		var fileContent ChatCompletionContentPartFileParam
+		if err := json.Unmarshal(data, &fileContent); err != nil {
+			return err
+		}
+		c.OfFile = &fileContent
+
 	default:
 		return fmt.Errorf("unknown ChatCompletionContentPartUnionParam type: %v", contentType)
 	}
@@ -168,20 +224,20 @@ func (c *ChatCompletionContentPartUserUnionParam) UnmarshalJSON(data []byte) err
 }
 
 func (c ChatCompletionContentPartUserUnionParam) MarshalJSON() ([]byte, error) {
-	if c.TextContent != nil {
-		return json.Marshal(c.TextContent)
+	if c.OfText != nil {
+		return json.Marshal(c.OfText)
 	}
-	if c.InputAudioContent != nil {
-		return json.Marshal(c.InputAudioContent)
+	if c.OfInputAudio != nil {
+		return json.Marshal(c.OfInputAudio)
 	}
-	if c.ImageContent != nil {
-		return json.Marshal(c.ImageContent)
+	if c.OfImageURL != nil {
+		return json.Marshal(c.OfImageURL)
 	}
 	return nil, errors.New("no content to marshal")
 }
 
 type StringOrAssistantRoleContentUnion struct {
-	Value interface{}
+	Value any
 }
 
 func (s *StringOrAssistantRoleContentUnion) UnmarshalJSON(data []byte) error {
@@ -199,6 +255,13 @@ func (s *StringOrAssistantRoleContentUnion) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
+	var singleContent ChatCompletionAssistantMessageParamContent
+	err = json.Unmarshal(data, &singleContent)
+	if err == nil {
+		s.Value = singleContent
+		return nil
+	}
+
 	return errors.New("cannot unmarshal JSON data as string or assistant content parts")
 }
 
@@ -206,43 +269,68 @@ func (s StringOrAssistantRoleContentUnion) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.Value)
 }
 
-type StringOrArray struct {
-	Value interface{}
+// ContentUnion represents content fields in system, developer, and tool
+// messages.
+//
+// Note: This does not include user or assistant messages which have their own
+// unions due to supporting more types.
+//
+// According to OpenAI API spec, these accept either:
+// - string: plain text content
+// - []ChatCompletionContentPartTextParam: array of text content parts (only text type supported)
+type ContentUnion struct {
+	Value any
 }
 
-func (s *StringOrArray) UnmarshalJSON(data []byte) error {
-	var str string
-	err := json.Unmarshal(data, &str)
-	if err == nil {
-		s.Value = str
-		return nil
+// UnmarshalJSON is tuned to be faster with substantially reduced allocations
+// vs openai-go which has heavy use of reflection.
+func (c *ContentUnion) UnmarshalJSON(data []byte) error {
+	// Skip leading whitespace
+	idx, err := skipLeadingWhitespace("content", data, 0)
+	if err != nil {
+		return err
 	}
 
-	// Try to unmarshal as array of strings (for embeddings).
-	var strArr []string
-	err = json.Unmarshal(data, &strArr)
-	if err == nil {
-		s.Value = strArr
+	switch data[idx] {
+	case '"':
+		c.Value, err = unquoteOrUnmarshalJSONString("content", data)
+		return err
+	case '[':
+		var arr []ChatCompletionContentPartTextParam
+		if err := json.Unmarshal(data, &arr); err != nil {
+			return fmt.Errorf("cannot unmarshal content as []ChatCompletionContentPartTextParam: %w", err)
+		}
+		c.Value = arr
 		return nil
+	default:
+		return fmt.Errorf("invalid content type (must be string or array of ChatCompletionContentPartTextParam)")
 	}
-
-	// Try to unmarshal as array of ChatCompletionContentPartTextParam (for chat completion).
-	var arr []ChatCompletionContentPartTextParam
-	err = json.Unmarshal(data, &arr)
-	if err == nil {
-		s.Value = arr
-		return nil
-	}
-
-	return fmt.Errorf("cannot unmarshal JSON data as string or array of string")
 }
 
-func (s StringOrArray) MarshalJSON() ([]byte, error) {
+func (c ContentUnion) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c.Value)
+}
+
+// EmbeddingRequestInput is the EmbeddingRequest.Input type.
+type EmbeddingRequestInput struct {
+	Value any
+}
+
+func (s *EmbeddingRequestInput) UnmarshalJSON(data []byte) (err error) {
+	// reuse the nested union implementation vs creating a new one.
+	s.Value, err = unmarshalJSONNestedUnion("input", data)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func (s EmbeddingRequestInput) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.Value)
 }
 
 type StringOrUserRoleContentUnion struct {
-	Value interface{}
+	Value any
 }
 
 func (s *StringOrUserRoleContentUnion) UnmarshalJSON(data []byte) error {
@@ -267,60 +355,60 @@ func (s StringOrUserRoleContentUnion) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.Value)
 }
 
+// AnthropicContentFields contains Anthropic model-specific fields that can be added to messages.
+type AnthropicContentFields struct {
+	CacheControl anthropic.CacheControlEphemeralParam `json:"cache_control,omitzero"`
+}
+
+// Function message is deprecated and we do not allow it.
 type ChatCompletionMessageParamUnion struct {
-	Value interface{}
-	Type  string
+	OfDeveloper *ChatCompletionDeveloperMessageParam `json:",omitzero,inline"`
+	OfSystem    *ChatCompletionSystemMessageParam    `json:",omitzero,inline"`
+	OfUser      *ChatCompletionUserMessageParam      `json:",omitzero,inline"`
+	OfAssistant *ChatCompletionAssistantMessageParam `json:",omitzero,inline"`
+	OfTool      *ChatCompletionToolMessageParam      `json:",omitzero,inline"`
 }
 
 func (c *ChatCompletionMessageParamUnion) UnmarshalJSON(data []byte) error {
-	var chatMessage map[string]interface{}
-	if err := json.Unmarshal(data, &chatMessage); err != nil {
-		return err
+	roleResult := gjson.GetBytes(data, "role")
+	if !roleResult.Exists() {
+		return errors.New("chat message does not have role")
 	}
-	if _, ok := chatMessage["role"]; !ok {
-		return fmt.Errorf("chat message does not have role")
-	}
-	var role string
-	var ok bool
-	if role, ok = chatMessage["role"].(string); !ok {
-		return fmt.Errorf("chat message role is not string: %s", role)
-	}
+
+	// Based on the 'role' field, unmarshal into the correct struct.
+	role := roleResult.String()
+
 	switch role {
 	case ChatMessageRoleUser:
 		var userMessage ChatCompletionUserMessageParam
 		if err := json.Unmarshal(data, &userMessage); err != nil {
 			return err
 		}
-		c.Value = userMessage
-		c.Type = ChatMessageRoleUser
+		c.OfUser = &userMessage
 	case ChatMessageRoleAssistant:
 		var assistantMessage ChatCompletionAssistantMessageParam
 		if err := json.Unmarshal(data, &assistantMessage); err != nil {
 			return err
 		}
-		c.Value = assistantMessage
-		c.Type = ChatMessageRoleAssistant
+		c.OfAssistant = &assistantMessage
 	case ChatMessageRoleSystem:
 		var systemMessage ChatCompletionSystemMessageParam
 		if err := json.Unmarshal(data, &systemMessage); err != nil {
 			return err
 		}
-		c.Value = systemMessage
-		c.Type = ChatMessageRoleSystem
+		c.OfSystem = &systemMessage
 	case ChatMessageRoleDeveloper:
 		var developerMessage ChatCompletionDeveloperMessageParam
 		if err := json.Unmarshal(data, &developerMessage); err != nil {
 			return err
 		}
-		c.Value = developerMessage
-		c.Type = ChatMessageRoleDeveloper
+		c.OfDeveloper = &developerMessage
 	case ChatMessageRoleTool:
 		var toolMessage ChatCompletionToolMessageParam
 		if err := json.Unmarshal(data, &toolMessage); err != nil {
 			return err
 		}
-		c.Value = toolMessage
-		c.Type = ChatMessageRoleTool
+		c.OfTool = &toolMessage
 	default:
 		return fmt.Errorf("unknown ChatCompletionMessageParam type: %v", role)
 	}
@@ -328,7 +416,23 @@ func (c *ChatCompletionMessageParamUnion) UnmarshalJSON(data []byte) error {
 }
 
 func (c ChatCompletionMessageParamUnion) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c.Value)
+	if c.OfUser != nil {
+		return json.Marshal(c.OfUser)
+	}
+	if c.OfAssistant != nil {
+		return json.Marshal(c.OfAssistant)
+	}
+	if c.OfSystem != nil {
+		return json.Marshal(c.OfSystem)
+	}
+	if c.OfDeveloper != nil {
+		return json.Marshal(c.OfDeveloper)
+	}
+	if c.OfTool != nil {
+		return json.Marshal(c.OfTool)
+	}
+
+	return nil, errors.New("no message to marshal")
 }
 
 // ChatCompletionUserMessageParam Messages sent by an end user, containing prompts or additional context
@@ -343,12 +447,14 @@ type ChatCompletionUserMessageParam struct {
 	Name string `json:"name,omitempty"`
 }
 
-// ChatCompletionSystemMessageParam Developer-provided instructions that the model should follow, regardless of
+// ChatCompletionSystemMessageParam represents a system message.
+// Developer-provided instructions that the model should follow, regardless of
 // messages sent by the user. With o1 models and newer, use `developer` messages
 // for this purpose instead.
+// Docs: https://platform.openai.com/docs/api-reference/chat/create#messages
 type ChatCompletionSystemMessageParam struct {
-	// The contents of the system message.
-	Content StringOrArray `json:"content"`
+	// Content: The contents of the system message.
+	Content ContentUnion `json:"content"`
 	// The role of the messages author, in this case `system`.
 	Role string `json:"role"`
 	// An optional name for the participant. Provides the model information to
@@ -356,12 +462,14 @@ type ChatCompletionSystemMessageParam struct {
 	Name string `json:"name,omitempty"`
 }
 
-// ChatCompletionDeveloperMessageParam Developer-provided instructions that the model should follow, regardless of
-// messages sent by the user. With o1 models and newer, use `developer` messages
-// for this purpose instead.
+// ChatCompletionDeveloperMessageParam represents a developer message.
+// Developer-provided instructions that the model should follow, regardless of
+// messages sent by the user. With o1 models and newer, `developer` messages
+// replace the previous `system` messages.
+// Docs: https://platform.openai.com/docs/api-reference/chat/create#messages
 type ChatCompletionDeveloperMessageParam struct {
-	// The contents of the developer message.
-	Content StringOrArray `json:"content"`
+	// Content: The contents of the developer message.
+	Content ContentUnion `json:"content"`
 	// The role of the messages author, in this case `developer`.
 	Role string `json:"role"`
 	// An optional name for the participant. Provides the model information to
@@ -369,9 +477,11 @@ type ChatCompletionDeveloperMessageParam struct {
 	Name string `json:"name,omitempty"`
 }
 
+// ChatCompletionToolMessageParam represents a tool message.
+// Docs: https://platform.openai.com/docs/api-reference/chat/create#messages
 type ChatCompletionToolMessageParam struct {
-	// The contents of the tool message.
-	Content StringOrArray `json:"content"`
+	// Content: The contents of the tool message.
+	Content ContentUnion `json:"content"`
 	// The role of the messages author, in this case `tool`.
 	Role string `json:"role"`
 	// Tool call that this message is responding to.
@@ -389,8 +499,10 @@ type ChatCompletionAssistantMessageParamAudio struct {
 type ChatCompletionAssistantMessageParamContentType string
 
 const (
-	ChatCompletionAssistantMessageParamContentTypeText    ChatCompletionAssistantMessageParamContentType = "text"
-	ChatCompletionAssistantMessageParamContentTypeRefusal ChatCompletionAssistantMessageParamContentType = "refusal"
+	ChatCompletionAssistantMessageParamContentTypeText             ChatCompletionAssistantMessageParamContentType = "text"
+	ChatCompletionAssistantMessageParamContentTypeRefusal          ChatCompletionAssistantMessageParamContentType = "refusal"
+	ChatCompletionAssistantMessageParamContentTypeThinking         ChatCompletionAssistantMessageParamContentType = "thinking"
+	ChatCompletionAssistantMessageParamContentTypeRedactedThinking ChatCompletionAssistantMessageParamContentType = "redacted_thinking"
 )
 
 // ChatCompletionAssistantMessageParamContent Learn about
@@ -402,6 +514,11 @@ type ChatCompletionAssistantMessageParamContent struct {
 	Refusal *string `json:"refusal,omitempty"`
 	// The text content.
 	Text *string `json:"text,omitempty"`
+
+	// The signature for a thinking block.
+	Signature               *string               `json:"signature,omitempty"`
+	RedactedContent         *RedactedContentUnion `json:"redactedContent,omitempty"`
+	*AnthropicContentFields `json:",inline,omitempty"`
 }
 
 // ChatCompletionAssistantMessageParam Messages sent by the model in response to user messages.
@@ -443,50 +560,144 @@ type ChatCompletionMessageToolCallFunctionParam struct {
 
 type ChatCompletionMessageToolCallParam struct {
 	// The ID of the tool call.
-	ID string `json:"id"`
+	ID *string `json:"id"`
 	// The function that the model called.
 	Function ChatCompletionMessageToolCallFunctionParam `json:"function"`
 	// The type of the tool. Currently, only `function` is supported.
-	Type ChatCompletionMessageToolCallType `json:"type"`
+	Type                    ChatCompletionMessageToolCallType `json:"type,omitempty"`
+	*AnthropicContentFields `json:",inline,omitempty"`
+}
+
+// extractMessageRole extracts role from OpenAI message union types.
+func (c ChatCompletionMessageParamUnion) ExtractMessgaeRole() string {
+	switch {
+	case c.OfDeveloper != nil:
+		return c.OfDeveloper.Role
+	case c.OfSystem != nil:
+		return c.OfSystem.Role
+	case c.OfAssistant != nil:
+		return c.OfAssistant.Role
+	case c.OfTool != nil:
+		return c.OfTool.Role
+	case c.OfUser != nil:
+		return c.OfUser.Role
+	// Add other cases here for any other message types in the union.
+	default:
+		return "[unknown message type]"
+	}
 }
 
 type ChatCompletionResponseFormatType string
 
+// Constants for the different response formats.
 const (
-	ChatCompletionResponseFormatTypeJSONObject ChatCompletionResponseFormatType = "json_object"
-	ChatCompletionResponseFormatTypeJSONSchema ChatCompletionResponseFormatType = "json_schema"
 	ChatCompletionResponseFormatTypeText       ChatCompletionResponseFormatType = "text"
+	ChatCompletionResponseFormatTypeJSONSchema ChatCompletionResponseFormatType = "json_schema"
+	ChatCompletionResponseFormatTypeJSONObject ChatCompletionResponseFormatType = "json_object"
 )
 
-type ChatCompletionResponseFormat struct {
-	Type       ChatCompletionResponseFormatType        `json:"type,omitempty"`
-	JSONSchema *ChatCompletionResponseFormatJSONSchema `json:"json_schema,omitempty"` //nolint:tagliatelle //follow openai api
+// Only one field can be non-empty.
+type ChatCompletionResponseFormatUnion struct {
+	OfText       *ChatCompletionResponseFormatTextParam       `json:",omitempty,inline"`
+	OfJSONSchema *ChatCompletionResponseFormatJSONSchema      `json:",omitempty,inline"`
+	OfJSONObject *ChatCompletionResponseFormatJSONObjectParam `json:",omitempty,inline"`
 }
 
+type ChatCompletionResponseFormatTextParam struct {
+	// The type of response format being defined. Always `text`.
+	Type ChatCompletionResponseFormatType `json:"type"`
+}
+
+// JSON Schema response format. Used to generate structured JSON responses. Learn
+// more about
+// [Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs).
+// The properties JSONSchema, Type are required.
 type ChatCompletionResponseFormatJSONSchema struct {
-	Name        string `json:"name"`
+	// Structured Outputs configuration options, including a JSON Schema.
+	JSONSchema ChatCompletionResponseFormatJSONSchemaJSONSchema `json:"json_schema,omitzero"`
+	// The type of response format being defined. Always `json_schema`.
+	//
+	// This field can be elided, and will marshal its zero value as "json_schema".
+	Type ChatCompletionResponseFormatType `json:"type"`
+}
+
+// ChatCompletionResponseFormatJSONSchema Structured Outputs configuration options, including a JSON Schema.
+type ChatCompletionResponseFormatJSONSchemaJSONSchema struct {
+	// The name of the response format. Must be a-z, A-Z, 0-9, or contain underscores
+	// and dashes, with a maximum length of 64.
+	Name string `json:"name"`
+	// A description of what the response format is for, used by the model to determine
+	// how to respond in the format.
 	Description string `json:"description,omitempty"`
-	Schema      any    `json:"schema"` // See detail in https://github.com/openai/openai-go/blob/28c93a9fa58bb622b5d23b3262af7d4fdd2ebde9/shared/shared.go#L519C6-L519C30
-	Strict      bool   `json:"strict"`
+	// The schema for the response format, described as a JSON Schema object. Learn how
+	// to build JSON schemas [here](https://json-schema.org/).
+	Schema json.RawMessage `json:"schema"`
+	// Whether to enable strict schema adherence when generating the output. If set to
+	// true, the model will always follow the exact schema defined in the `schema`
+	// field. Only a subset of JSON Schema is supported when `strict` is `true`. To
+	// learn more, read the
+	// [Structured Outputs guide](https://platform.openai.com/docs/guides/structured-outputs).
+	Strict bool `json:"strict,omitempty"`
 }
 
-// Reasoning represents the reasoning options for o-series models.
-// Docs: https://platform.openai.com/docs/api-reference/responses/create#responses-create-reasoning
-type Reasoning struct {
-	// Effort constrains effort on reasoning for reasoning models.
-	// Supported values: "low", "medium", "high". Defaults to "medium".
-	Effort *string `json:"effort,omitempty"`
-
-	// GenerateSummary is deprecated. Use Summary instead.
-	// Supported values: "auto", "concise", "detailed".
-	GenerateSummary *string `json:"generate_summary,omitempty"`
-
-	// Summary of the reasoning performed by the model.
-	// Supported values: "auto", "concise", "detailed".
-	Summary *string `json:"summary,omitempty"`
+// JSON object response format. An older method of generating JSON responses. Using
+// `json_schema` is recommended for models that support it. Note that the model
+// will not generate JSON without a system or user message instructing it to do so.
+type ChatCompletionResponseFormatJSONObjectParam struct {
+	// The type of response format being defined. Always `json_object`.
+	Type ChatCompletionResponseFormatType `json:"type"`
 }
 
-// ChatCompletionRequest represents a request structure for chat completion API.
+func (c ChatCompletionResponseFormatUnion) MarshalJSON() ([]byte, error) {
+	if c.OfText != nil {
+		return json.Marshal(c.OfText)
+	}
+	if c.OfJSONSchema != nil {
+		return json.Marshal(c.OfJSONSchema)
+	}
+	if c.OfJSONObject != nil {
+		return json.Marshal(c.OfJSONObject)
+	}
+	return nil, errors.New("no content to marshal")
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface for ChatCompletionResponseFormatUnion.
+func (c *ChatCompletionResponseFormatUnion) UnmarshalJSON(data []byte) error {
+	typeResult := gjson.GetBytes(data, "type")
+	if !typeResult.Exists() {
+		return errors.New("response format does not have type")
+	}
+
+	// Based on the 'type' field, unmarshal into the correct struct.
+	responseFormatType := ChatCompletionResponseFormatType(typeResult.String())
+
+	switch responseFormatType {
+	case ChatCompletionResponseFormatTypeText:
+		var textParam ChatCompletionResponseFormatTextParam
+		if err := json.Unmarshal(data, &textParam); err != nil {
+			return err
+		}
+		c.OfText = &textParam
+	case ChatCompletionResponseFormatTypeJSONSchema:
+		var jsonSchemaParam ChatCompletionResponseFormatJSONSchema
+		if err := json.Unmarshal(data, &jsonSchemaParam); err != nil {
+			return err
+		}
+		c.OfJSONSchema = &jsonSchemaParam
+	case ChatCompletionResponseFormatTypeJSONObject:
+		var jsonObjectParam ChatCompletionResponseFormatJSONObjectParam
+		if err := json.Unmarshal(data, &jsonObjectParam); err != nil {
+			return err
+		}
+		c.OfJSONObject = &jsonObjectParam
+	default:
+		// If the type is unknown, return an error.
+		return errors.New("unsupported ChatCompletionResponseFormatType")
+	}
+
+	return nil
+}
+
 // ChatCompletionModality represents the output types that the model can generate.
 type ChatCompletionModality string
 
@@ -557,12 +768,121 @@ const (
 	PredictionContentTypeContent PredictionContentType = "content"
 )
 
-// PredictionContent represents static predicted output content, such as the content of a text file that is being regenerated.
+// PredictionContent represents static predicted output content, such as the content
+// of a text file that is being regenerated.
+// Docs: https://platform.openai.com/docs/guides/predicted-outputs
 type PredictionContent struct {
-	// Type is the type of the predicted content you want to provide. This type is currently always content.
+	// Type: The type of the predicted content you want to provide.
+	// This type is currently always "content".
 	Type PredictionContentType `json:"type"`
-	// Content is the content that should be matched when generating a model response. If generated tokens would match this content, the entire model response can be returned much more quickly.
-	Content StringOrArray `json:"content"`
+
+	// Content: The content that should be matched when generating a model response.
+	// If generated tokens would match this content, the entire model response
+	// can be returned much more quickly.
+	Content ContentUnion `json:"content"`
+}
+
+// WebSearchContextSize represents the context size for web search.
+type WebSearchContextSize string
+
+const (
+	// WebSearchContextSizeLow provides minimal context from search results.
+	WebSearchContextSizeLow WebSearchContextSize = "low"
+	// WebSearchContextSizeMedium provides moderate context from search results.
+	WebSearchContextSizeMedium WebSearchContextSize = "medium"
+	// WebSearchContextSizeHigh provides maximum context from search results.
+	WebSearchContextSizeHigh WebSearchContextSize = "high"
+)
+
+// WebSearchOptions configures the web search tool behavior.
+type WebSearchOptions struct {
+	// UserLocation provides approximate location parameters for the search.
+	UserLocation *WebSearchUserLocation `json:"user_location,omitempty"` //nolint:tagliatelle //follow openai api
+	// SearchContextSize controls how much context to include from search results.
+	SearchContextSize WebSearchContextSize `json:"search_context_size,omitempty"` //nolint:tagliatelle //follow openai api
+}
+
+// WebSearchUserLocation represents approximate location for web search.
+type WebSearchUserLocation struct {
+	// Type is the type of location approximation. Always "approximate".
+	Type string `json:"type"`
+	// Approximate contains the approximate location details.
+	Approximate WebSearchLocation `json:"approximate"`
+}
+
+// WebSearchLocation contains location details for web search.
+type WebSearchLocation struct {
+	// City is the approximate city name.
+	City string `json:"city,omitempty"`
+	// Region is the approximate region or state.
+	Region string `json:"region,omitempty"`
+	// Country is the approximate country.
+	Country string `json:"country,omitempty"`
+}
+
+// ThinkingConfig contains thinking config for reasoning models
+type ThinkingUnion struct {
+	OfEnabled  *ThinkingEnabled  `json:",omitzero,inline"`
+	OfDisabled *ThinkingDisabled `json:",omitzero,inline"`
+}
+
+type ThinkingEnabled struct {
+	// Determines how many tokens the model can use for its internal reasoning process.
+	// Larger budgets can enable more thorough analysis for complex problems, improving
+	// response quality.
+	BudgetTokens int64 `json:"budget_tokens"`
+	// This field can be elided, and will marshal its zero value as "enabled".
+	Type string `json:"type"`
+
+	// Optional. Indicates the thinking budget in tokens.
+	IncludeThoughts bool `json:"includeThoughts,omitempty"`
+}
+
+type ThinkingDisabled struct {
+	Type string `json:"type,"`
+}
+
+// MarshalJSON implements the json.Marshaler interface for ThinkingUnion.
+func (t *ThinkingUnion) MarshalJSON() ([]byte, error) {
+	if t.OfEnabled != nil {
+		return json.Marshal(t.OfEnabled)
+	}
+	if t.OfDisabled != nil {
+		return json.Marshal(t.OfDisabled)
+	}
+	// If both are nil, return an empty object or an error, depending on your desired behavior.
+	return []byte(`{}`), nil
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface for ThinkingUnion.
+func (t *ThinkingUnion) UnmarshalJSON(data []byte) error {
+	// Use a temporary struct to determine the type
+	typeResult := gjson.GetBytes(data, "type")
+	if !typeResult.Exists() {
+		return errors.New("thinking config does not have a type")
+	}
+
+	// Based on the 'type' field, unmarshal into the correct struct.
+	typeVal := typeResult.String()
+
+	switch typeVal {
+	case "enabled":
+		var enabled ThinkingEnabled
+		if err := json.Unmarshal(data, &enabled); err != nil {
+			return err
+		}
+		t.OfEnabled = &enabled
+	case "disabled":
+		var disabled ThinkingDisabled
+		if err := json.Unmarshal(data, &disabled); err != nil {
+			return err
+		}
+		t.OfDisabled = &disabled
+	default:
+		return fmt.Errorf("invalid thinking union type: %s", typeVal)
+	}
+
+	return nil
 }
 
 type ChatCompletionRequest struct {
@@ -571,6 +891,8 @@ type ChatCompletionRequest struct {
 	// like text, images, and audio.
 	// Docs: https://platform.openai.com/docs/api-reference/chat/create#chat-create-messages
 	Messages []ChatCompletionMessageParamUnion `json:"messages"`
+	// ^^ not omitempty because OpenAI requires either ('messages' and 'model')
+	// or ('messages', 'model' and 'stream') arguments to be given.
 
 	// Model: ID of the model to use
 	// Docs: https://platform.openai.com/docs/api-reference/chat/create#chat-create-model
@@ -618,14 +940,17 @@ type ChatCompletionRequest struct {
 	// Docs: https://platform.openai.com/docs/api-reference/chat/create#chat-create-presence_penalty
 	PresencePenalty *float32 `json:"presence_penalty,omitempty"` //nolint:tagliatelle //follow openai api
 
-	// Reasoning
-	// o-series models only
-	// refs: https://platform.openai.com/docs/api-reference/responses/create#responses-create-reasoning
-	Reasoning *Reasoning `json:"reasoning,omitempty"`
-
-	// ResponseFormat is only for GPT models.
-	// Docs: https://platform.openai.com/docs/api-reference/chat/create#chat-create-response_format
-	ResponseFormat *ChatCompletionResponseFormat `json:"response_format,omitempty"` //nolint:tagliatelle //follow openai api
+	// An object specifying the format that the model must output.
+	//
+	// Setting to `{ "type": "json_schema", "json_schema": {...} }` enables Structured
+	// Outputs which ensures the model will match your supplied JSON schema. Learn more
+	// in the
+	// [Structured Outputs guide](https://platform.openai.com/docs/guides/structured-outputs).
+	//
+	// Setting to `{ "type": "json_object" }` enables the older JSON mode, which
+	// ensures the message the model generates is valid JSON. Using `json_schema` is
+	// preferred for models that support it.
+	ResponseFormat *ChatCompletionResponseFormatUnion `json:"response_format,omitempty"` //nolint:tagliatelle //follow openai api
 
 	// Seed: This feature is in Beta. If specified, our system will make a best effort to
 	// sample deterministically, such that repeated requests with the same `seed` and
@@ -635,6 +960,15 @@ type ChatCompletionRequest struct {
 	// Docs: https://platform.openai.com/docs/api-reference/chat/create#chat-create-seed
 	Seed *int `json:"seed,omitempty"`
 
+	// Constrains effort on reasoning for
+	// [reasoning models](https://platform.openai.com/docs/guides/reasoning). Currently
+	// supported values are `minimal`, `low`, `medium`, and `high`. Reducing reasoning
+	// effort can result in faster responses and fewer tokens used on reasoning in a
+	// response.
+	//
+	// Any of "minimal", "low", "medium", "high".
+	ReasoningEffort openai.ReasoningEffort `json:"reasoning_effort,omitzero"`
+
 	// ServiceTier:string or null - Defaults to auto
 	// Specifies the processing type used for serving the request.
 	// If set to 'auto', then the request will be processed with the service tier configured in the Project settings. Unless otherwise configured, the Project will use 'default'.
@@ -643,12 +977,20 @@ type ChatCompletionRequest struct {
 	// When the service_tier parameter is set, the response body will include the service_tier value based on the processing mode actually used to serve the request.
 	// This response value may be different from the value set in the parameter.
 	// Docs: https://platform.openai.com/docs/api-reference/chat/create#chat-create-service_tier
-	ServiceTier *string `json:"service_tier,omitempty"`
+	// Any of "auto", "default", "flex", "scale", "priority".
+	ServiceTier openai.ChatCompletionNewParamsServiceTier `json:"service_tier,omitzero"`
+
+	// Constrains the verbosity of the model's response. Lower values will result in
+	// more concise responses, while higher values will result in more verbose
+	// responses. Currently supported values are `low`, `medium`, and `high`.
+	//
+	// Any of "low", "medium", "high".
+	Verbosity openai.ChatCompletionNewParamsVerbosity `json:"verbosity,omitzero"`
 
 	// Stop string / array / null Defaults to null
 	// Up to 4 sequences where the API will stop generating further tokens.
 	// Docs: https://platform.openai.com/docs/api-reference/chat/create#chat-create-stop
-	Stop interface{} `json:"stop,omitempty"`
+	Stop openai.ChatCompletionNewParamsStopUnion `json:"stop,omitzero"`
 
 	// Stream: If set, partial message deltas will be sent, like in ChatGPT.
 	// Docs: https://platform.openai.com/docs/api-reference/chat/create#chat-create-stream
@@ -679,7 +1021,7 @@ type ChatCompletionRequest struct {
 	// Specifying a particular tool via `{"type": "function", "function": {"name": "my_function"}}` forces the model to call that tool.
 	// `none` is the default when no tools are present. `auto` is the default if tools are present.
 	// Docs: https://platform.openai.com/docs/api-reference/chat/create#chat-create-tool_choice
-	ToolChoice ChatCompletionToolChoice `json:"tool_choice,omitempty"` //nolint:tagliatelle //follow openai api
+	ToolChoice *ChatCompletionToolChoiceUnion `json:"tool_choice,omitempty"` //nolint:tagliatelle //follow openai api
 
 	// ParallelToolCalls enables multiple tools to be returned by the model.
 	// Docs: https://platform.openai.com/docs/guides/function-calling/parallel-function-calling
@@ -698,8 +1040,25 @@ type ChatCompletionRequest struct {
 	// PredictionContent provides configuration for a Predicted Output, which can greatly improve response times when large parts of the model response are known ahead of time.
 	PredictionContent *PredictionContent `json:"prediction,omitempty"`
 
+	// WebSearchOptions configures web search tool for models that support it.
+	// This tool searches the web for relevant results to use in a response.
+	// Docs: https://platform.openai.com/docs/guides/tools-web-search?api-mode=chat
+	WebSearchOptions *WebSearchOptions `json:"web_search_options,omitempty"` //nolint:tagliatelle //follow openai api
+
+	// GCPVertexAIVendorFields configures the GCP VertexAI specific fields during schema translation.
 	*GCPVertexAIVendorFields `json:",inline,omitempty"`
-	*AnthropicVendorFields   `json:",inline,omitempty"`
+
+	// GuidedChoice: The output will be exactly one of the choices.
+	GuidedChoice []string `json:"guided_choice,omitzero"`
+
+	// GuidedRegex: The output will follow the regex pattern.
+	GuidedRegex string `json:"guided_regex,omitzero"`
+
+	// GuidedJSON: The output will follow the JSON schema.
+	GuidedJSON json.RawMessage `json:"guided_json,omitzero"`
+
+	// Thinking: The thinking config for reasoning models
+	Thinking *ThinkingUnion `json:"thinking,omitzero"`
 }
 
 type StreamOptions struct {
@@ -713,24 +1072,14 @@ type StreamOptions struct {
 type ToolType string
 
 const (
-	ToolTypeFunction        ToolType = "function"
-	ToolTypeImageGeneration ToolType = "image_generation"
+	ToolTypeFunction            ToolType = "function"
+	ToolTypeImageGeneration     ToolType = "image_generation"
+	ToolTypeEnterpriseWebSearch ToolType = "enterprise_search"
 )
 
 type Tool struct {
 	Type     ToolType            `json:"type"`
 	Function *FunctionDefinition `json:"function,omitempty"`
-}
-
-// ToolChoice represents the choice of tool.
-type ToolChoice struct {
-	Type     ToolType     `json:"type"`
-	Function ToolFunction `json:"function,omitempty"`
-}
-
-// ToolFunction represents the function to call.
-type ToolFunction struct {
-	Name string `json:"name"`
 }
 
 // ToolChoiceType represents the type of tool choice.
@@ -747,14 +1096,38 @@ const (
 	ToolChoiceTypeFunction ToolChoiceType = "function"
 )
 
-// ChatCompletionToolChoice represents the tool choice for chat completions.
+// ChatCompletionToolChoiceUnion represents the tool choice for chat completions.
 // It can be either a string (none, auto, required) or a ChatCompletionNamedToolChoice object.
-type ChatCompletionToolChoice interface{}
+type ChatCompletionToolChoiceUnion struct {
+	Value any
+}
+
+func (c ChatCompletionToolChoiceUnion) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c.Value)
+}
+
+func (c *ChatCompletionToolChoiceUnion) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as string.
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		c.Value = str
+		return nil
+	}
+
+	// Try to unmarshal as ChatCompletionNamedToolChoice.
+	var namedChoice ChatCompletionNamedToolChoice
+	if err := json.Unmarshal(data, &namedChoice); err == nil {
+		c.Value = namedChoice
+		return nil
+	}
+
+	return errors.New("tool choice must be either string or ChatCompletionNamedToolChoice")
+}
 
 // ChatCompletionNamedToolChoice specifies a tool the model should use. Use to force the model to call a specific function.
 type ChatCompletionNamedToolChoice struct {
 	// Type is the type of the tool. Currently, only `function` is supported.
-	Type ToolChoiceType `json:"type"`
+	Type ToolType `json:"type"`
 	// Function specifies the function to call.
 	Function ChatCompletionNamedToolChoiceFunction `json:"function"`
 }
@@ -777,7 +1150,8 @@ type FunctionDefinition struct {
 	// or you can pass in a struct which serializes to the proper JSON schema.
 	// The jsonschema package is provided for convenience, but you should
 	// consider another specialized library if you require more complex schemas.
-	Parameters any `json:"parameters"`
+	Parameters              any `json:"parameters"`
+	*AnthropicContentFields `json:",inline,omitempty"`
 }
 
 // Deprecated: use FunctionDefinition instead.
@@ -832,7 +1206,12 @@ type ChatCompletionResponse struct {
 
 	// Usage is described in the OpenAI API documentation:
 	// https://platform.openai.com/docs/api-reference/chat/object#chat/object-usage
-	Usage ChatCompletionResponseUsage `json:"usage,omitempty"`
+	Usage Usage `json:"usage,omitzero"`
+
+	// Obfuscation are random characters that normalize payload sizes as a
+	// mitigation to certain side-channel attacks.
+	// https://platform.openai.com/docs/api-reference/responses/get#responses_get-include_obfuscation
+	Obfuscation string `json:"obfuscation,omitempty"`
 }
 
 // ChatCompletionChoicesFinishReason The reason the model stopped generating tokens. This will be `stop` if the model
@@ -903,7 +1282,7 @@ type ChatCompletionResponseChoice struct {
 	// The index of the choice in the list of choices.
 	Index int64 `json:"index"`
 	// Log probability information for the choice.
-	Logprobs ChatCompletionChoicesLogprobs `json:"logprobs,omitempty"`
+	Logprobs ChatCompletionChoicesLogprobs `json:"logprobs,omitzero"`
 	// Message is described in the OpenAI API documentation:
 	// https://platform.openai.com/docs/api-reference/chat/object#chat/object-choices
 	Message ChatCompletionResponseChoiceMessage `json:"message,omitempty"`
@@ -920,23 +1299,66 @@ type ChatCompletionResponseChoiceMessage struct {
 
 	// The tool calls generated by the model, such as function calls.
 	ToolCalls []ChatCompletionMessageToolCallParam `json:"tool_calls,omitempty"`
+
+	// Annotations for the message, when applicable, as when using the web search tool.
+	Annotations *[]Annotation `json:"annotations,omitempty"`
+
+	// Audio is the audio response generated by the model, if applicable.
+	Audio *ChatCompletionResponseChoiceMessageAudio `json:"audio,omitempty"`
+
+	// ReasoningContent is used to hold any non-standard fields from the backend which supports reasoning,
+	// like "reasoningContent" from AWS Bedrock.
+	ReasoningContent *ReasoningContentUnion `json:"reasoning_content,omitempty"`
+
+	// GCPVertexAI specific fields.
+
+	// SafetyRatings contains safety ratings copied from the GCP Vertex AI response as-is.
+	// List of ratings for the safety of a response candidate. There is at most one rating per category.
+	// https://cloud.google.com/vertex-ai/generative-ai/docs/reference/rest/v1/GenerateContentResponse#SafetyRating
+	SafetyRatings []*genai.SafetyRating `json:"safety_ratings,omitempty"`
+
+	// GroundingMetadata specifies sources used to ground generated content.
+	// https://docs.cloud.google.com/vertex-ai/generative-ai/docs/reference/rest/v1beta1/GroundingMetadata
+	GroundingMetadata *genai.GroundingMetadata `json:"grounding_metadata,omitempty"`
 }
 
-// ChatCompletionResponseUsage is described in the OpenAI API documentation:
-// https://platform.openai.com/docs/api-reference/chat/object#chat/object-usage
-type ChatCompletionResponseUsage struct {
-	// Number of tokens in the generated completion.
-	CompletionTokens int `json:"completion_tokens,omitzero"`
-	// Number of tokens in the prompt.
-	PromptTokens int `json:"prompt_tokens,omitzero"`
-	// Total number of tokens used in the request (prompt + completion).
-	TotalTokens             int                      `json:"total_tokens,omitzero"`
-	CompletionTokensDetails *CompletionTokensDetails `json:"completion_tokens_details,omitzero"`
-	PromptTokensDetails     *PromptTokensDetails     `json:"prompt_tokens_details,omitzero"`
+// URLCitation contains citation information for web search results.
+// Docs: https://platform.openai.com/docs/guides/tools-web-search?api-mode=chat
+type URLCitation struct {
+	// EndIndex is the index of the last character of the URL citation in the message.
+	EndIndex int `json:"end_index"`
+	// StartIndex is the index of the first character of the URL citation in the message.
+	StartIndex int `json:"start_index"`
+	// URL is the URL of the web resource.
+	URL string `json:"url"`
+	// Title is the title of the web resource.
+	Title string `json:"title"`
+}
+
+// Annotation represents a URL citation when using web search.
+// The annotation appears in message content when the model cites web sources.
+// Docs: https://platform.openai.com/docs/guides/tools-web-search?api-mode=chat
+type Annotation struct {
+	// Type is the type of the annotation. Always "url_citation" for web search.
+	Type string `json:"type"`
+	// URLCitation contains the citation details when type is "url_citation".
+	URLCitation *URLCitation `json:"url_citation,omitempty"` //nolint:tagliatelle //follow openai api
+}
+
+// ChatCompletionResponseChoiceMessageAudio is described in the OpenAI API documentation.
+type ChatCompletionResponseChoiceMessageAudio struct {
+	Data       string `json:"data"`
+	ExpiresAt  int64  `json:"expires_at"`
+	ID         string `json:"id"`
+	Transcript string `json:"transcript"`
 }
 
 // CompletionTokensDetails breakdown of tokens used in a completion.
 type CompletionTokensDetails struct {
+	// Text input tokens present in the prompt.
+	TextTokens int `json:"text_tokens,omitzero"`
+	// ^^  TODO: no idea why this is undocumented on the official OpenAI API docs.
+
 	// When using Predicted Outputs, the number of tokens in the prediction that appeared in the completion.
 	AcceptedPredictionTokens int `json:"accepted_prediction_tokens,omitzero"`
 	// Audio input tokens generated by the model.
@@ -951,6 +1373,10 @@ type CompletionTokensDetails struct {
 
 // PromptTokensDetails breakdown of tokens used in the prompt.
 type PromptTokensDetails struct {
+	// Text input tokens present in the prompt.
+	TextTokens int `json:"text_tokens,omitzero"`
+	// ^^  TODO: no idea why this is undocumented on the official OpenAI API docs.
+
 	// Audio input tokens present in the prompt.
 	AudioTokens int `json:"audio_tokens,omitzero"`
 	// Cached tokens present in the prompt.
@@ -984,7 +1410,12 @@ type ChatCompletionResponseChunk struct {
 
 	// Usage is described in the OpenAI API documentation:
 	// https://platform.openai.com/docs/api-reference/chat/streaming#chat/streaming-usage
-	Usage *ChatCompletionResponseUsage `json:"usage,omitempty"`
+	Usage *Usage `json:"usage,omitempty"`
+
+	// Obfuscation are random characters that normalize payload sizes as a
+	// mitigation to certain side-channel attacks.
+	// https://platform.openai.com/docs/api-reference/responses/get#responses_get-include_obfuscation
+	Obfuscation string `json:"obfuscation,omitempty"`
 }
 
 // String implements fmt.Stringer.
@@ -996,16 +1427,30 @@ func (c *ChatCompletionResponseChunk) String() string {
 // ChatCompletionResponseChunkChoice is described in the OpenAI API documentation:
 // https://platform.openai.com/docs/api-reference/chat/streaming#chat/streaming-choices
 type ChatCompletionResponseChunkChoice struct {
-	Delta        *ChatCompletionResponseChunkChoiceDelta `json:"delta,omitempty"`
+	Index        int64                                   `json:"index"`
+	Delta        *ChatCompletionResponseChunkChoiceDelta `json:"delta,omitzero"`
+	Logprobs     *ChatCompletionChoicesLogprobs          `json:"logprobs,omitzero"`
 	FinishReason ChatCompletionChoicesFinishReason       `json:"finish_reason,omitempty"`
+}
+
+type ChatCompletionChunkChoiceDeltaToolCall struct {
+	Index int64 `json:"index"`
+	// The ID of the tool call.
+	ID *string `json:"id"`
+	// The function that the model called.
+	Function ChatCompletionMessageToolCallFunctionParam `json:"function"`
+	// The type of the tool. Currently, only `function` is supported.
+	Type ChatCompletionMessageToolCallType `json:"type,omitempty"`
 }
 
 // ChatCompletionResponseChunkChoiceDelta is described in the OpenAI API documentation:
 // https://platform.openai.com/docs/api-reference/chat/streaming#chat/streaming-choices
 type ChatCompletionResponseChunkChoiceDelta struct {
-	Content   *string                              `json:"content,omitempty"`
-	Role      string                               `json:"role"`
-	ToolCalls []ChatCompletionMessageToolCallParam `json:"tool_calls,omitempty"`
+	Content          *string                                  `json:"content,omitempty"`
+	Role             string                                   `json:"role,omitempty"`
+	ToolCalls        []ChatCompletionChunkChoiceDeltaToolCall `json:"tool_calls,omitempty"`
+	Annotations      *[]Annotation                            `json:"annotations,omitempty"`
+	ReasoningContent *StreamReasoningContent                  `json:"reasoning_content,omitempty"`
 }
 
 // Error is described in the OpenAI API documentation
@@ -1061,7 +1506,7 @@ type EmbeddingRequest struct {
 	// The input must not exceed the max input tokens for the model (8192 tokens for text-embedding-ada-002),
 	// cannot be an empty string, and any array must be 2048 dimensions or less.
 	// Docs: https://platform.openai.com/docs/api-reference/embeddings/create#embeddings-create-input
-	Input StringOrArray `json:"input"`
+	Input EmbeddingRequestInput `json:"input"`
 
 	// Model: ID of the model to use.
 	// Docs: https://platform.openai.com/docs/api-reference/embeddings/create#embeddings-create-model
@@ -1107,11 +1552,78 @@ type Embedding struct {
 	// Object: The object type, which is always "embedding".
 	Object string `json:"object"`
 
-	// Embedding: The embedding vector, which is a list of floats. The length of vector depends on the model as listed in the embedding guide.
-	Embedding []float64 `json:"embedding"`
+	// Embedding: The embedding vector, which can be a list of floats or a string.
+	// The length of vector depends on the model as listed in the embedding guide.
+	Embedding EmbeddingUnion `json:"embedding"`
 
 	// Index: The index of the embedding in the list of embeddings.
 	Index int `json:"index"`
+}
+
+// EmbeddingUnion is a union type that can handle both []float64 and string formats.
+type EmbeddingUnion struct {
+	Value any
+}
+
+// UnmarshalJSON implements json.Unmarshaler to handle both []float64 and string formats.
+func (e *EmbeddingUnion) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as []float64 first.
+	var floats []float64
+	if err := json.Unmarshal(data, &floats); err == nil {
+		e.Value = floats
+		return nil
+	}
+
+	// Try to unmarshal as string.
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		e.Value = str
+		return nil
+	}
+
+	return errors.New("embedding must be either []float64 or string")
+}
+
+// MarshalJSON implements json.Marshaler.
+func (e EmbeddingUnion) MarshalJSON() ([]byte, error) {
+	return json.Marshal(e.Value)
+}
+
+// RedactedContentUnion is a union type that can handle both []byte and string formats.
+// AWS Bedrock uses []byte while GCP Anthropic uses string.
+type RedactedContentUnion struct {
+	Value any
+}
+
+// UnmarshalJSON implements json.Unmarshaler to handle both []byte and string formats.
+func (r *RedactedContentUnion) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as []byte first (base64 encoded).
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		// Try to decode as base64 first (this would be []byte encoded as base64)
+		if decoded, err := base64.StdEncoding.DecodeString(str); err == nil {
+			r.Value = decoded
+			return nil
+		}
+		// If not base64, treat as plain string
+		r.Value = str
+		return nil
+	}
+
+	return errors.New("redactedContent must be either []byte (base64 encoded) or string")
+}
+
+// MarshalJSON implements json.Marshaler.
+func (r RedactedContentUnion) MarshalJSON() ([]byte, error) {
+	switch v := r.Value.(type) {
+	case []byte:
+		// Encode []byte as base64 string
+		return json.Marshal(base64.StdEncoding.EncodeToString(v))
+	case string:
+		return json.Marshal(v)
+	default:
+		return json.Marshal(r.Value)
+	}
 }
 
 // EmbeddingUsage represents the usage information for an embeddings request.
@@ -1165,20 +1677,360 @@ type GCPVertexAIVendorFields struct {
 	//
 	// https://cloud.google.com/vertex-ai/docs/reference/rest/v1/GenerationConfig
 	GenerationConfig *GCPVertexAIGenerationConfig `json:"generationConfig,omitzero"`
+
+	// SafetySettings: Safety settings in the request to block unsafe content in the response.
+	//
+	// https://cloud.google.com/vertex-ai/docs/reference/rest/v1/SafetySetting
+	SafetySettings []*genai.SafetySetting `json:"safetySettings,omitzero"`
 }
 
 // GCPVertexAIGenerationConfig represents Gemini generation configuration options.
 type GCPVertexAIGenerationConfig struct {
-	// ThinkingConfig holds Gemini thinking configuration options.
-	//
-	// https://cloud.google.com/vertex-ai/docs/reference/rest/v1/GenerationConfig#ThinkingConfig
-	ThinkingConfig *genai.GenerationConfigThinkingConfig `json:"thinkingConfig,omitzero"`
+	// MediaResolution is to set global media resolution in gemini models: https://ai.google.dev/api/caching#MediaResolution
+	MediaResolution genai.MediaResolution `json:"media_resolution,omitempty"`
 }
 
-// AnthropicVendorFields contains Anthropic vendor-specific fields.
-type AnthropicVendorFields struct {
-	// Thinking holds Anthropic thinking configuration options.
-	//
-	// https://docs.anthropic.com/en/api/messages#body-thinking
-	Thinking *anthropic.ThinkingConfigParamUnion `json:"thinking,omitzero"`
+// ReasoningContentUnion content regarding the reasoning that is carried out by the model.
+// Reasoning refers to a Chain of Thought (CoT) that the model generates to enhance the accuracy of its final response.
+type ReasoningContentUnion struct {
+	Value any
+}
+
+func (r *ReasoningContentUnion) UnmarshalJSON(data []byte) error {
+	// For qwen model it returns the reason content as a string.
+	var str string
+	err := json.Unmarshal(data, &str)
+	if err == nil {
+		r.Value = str
+		return nil
+	}
+
+	var content *ReasoningContent
+	err = json.Unmarshal(data, &content)
+	if err == nil {
+		r.Value = content
+		return nil
+	}
+	return errors.New("cannot unmarshal JSON data as string or reasoningContentBlock")
+}
+
+func (r ReasoningContentUnion) MarshalJSON() ([]byte, error) {
+	if stringContent, ok := r.Value.(string); ok {
+		return json.Marshal(stringContent)
+	}
+	if reasoningContent, ok := r.Value.(*ReasoningContent); ok {
+		return json.Marshal(reasoningContent)
+	}
+
+	return nil, errors.New("no reasoning content to marshal")
+}
+
+// ReasoningContent is used on both aws bedrock and gemini's reasoning
+type ReasoningContent struct {
+	// See https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ReasoningContentBlock.html for more information.
+	ReasoningContent *awsbedrock.ReasoningContentBlock `json:"reasoningContent,omitzero"`
+}
+
+type StreamReasoningContent struct {
+	Text            string `json:"text,omitzero"`
+	Signature       string `json:"signature,omitzero"`
+	RedactedContent []byte `json:"redactedContent,omitzero"`
+}
+
+// CompletionRequest represents a request to the legacy /completions endpoint.
+// See https://platform.openai.com/docs/api-reference/completions/create
+type CompletionRequest struct {
+	// ID of the model to use. You can use the List models API to see all of your
+	// available models, or see the Model overview for descriptions of them.
+	Model string `json:"model"`
+
+	// The prompt(s) to generate completions for, encoded as a string, array of
+	// strings, array of tokens, or array of token arrays.
+	// Note that <|endoftext|> is the document separator that the model sees during
+	// training, so if a prompt is not specified the model will generate as if from
+	// the beginning of a new document.
+	Prompt PromptUnion `json:"prompt"`
+
+	// Generates `best_of` completions server-side and returns the "best" (the one
+	// with the highest log probability per token). Results cannot be streamed.
+	// When used with `n`, `best_of` controls the number of candidate completions
+	// and `n` specifies how many to return – `best_of` must be greater than `n`.
+	// Minimum: 0, Maximum: 20, Default: 1
+	BestOf *int `json:"best_of,omitempty"`
+
+	// Echo back the prompt in addition to the completion.
+	// Default: false
+	Echo bool `json:"echo,omitzero"`
+
+	// Number between -2.0 and 2.0. Positive values penalize new tokens based on
+	// their existing frequency in the text so far, decreasing the model's
+	// likelihood to repeat the same line verbatim.
+	// Minimum: -2, Maximum: 2, Default: 0
+	FrequencyPenalty *float64 `json:"frequency_penalty,omitempty"`
+
+	// Modify the likelihood of specified tokens appearing in the completion.
+	// Accepts a JSON object that maps tokens (specified by their token ID in the
+	// GPT tokenizer) to an associated bias value from -100 to 100.
+	LogitBias map[string]int `json:"logit_bias,omitempty"`
+
+	// Include the log probabilities on the `logprobs` most likely output tokens,
+	// as well the chosen tokens. The maximum value for `logprobs` is 5.
+	// Minimum: 0, Maximum: 5, Default: null
+	Logprobs *int `json:"logprobs,omitempty"`
+
+	// The maximum number of tokens that can be generated in the completion.
+	// The token count of your prompt plus `max_tokens` cannot exceed the model's
+	// context length.
+	// Minimum: 0, Default: 16
+	MaxTokens *int `json:"max_tokens,omitempty"`
+
+	// How many completions to generate for each prompt.
+	// Minimum: 1, Maximum: 128, Default: 1
+	N *int `json:"n,omitempty"`
+
+	// Number between -2.0 and 2.0. Positive values penalize new tokens based on
+	// whether they appear in the text so far, increasing the model's likelihood
+	// to talk about new topics.
+	// Minimum: -2, Maximum: 2, Default: 0
+	PresencePenalty *float64 `json:"presence_penalty,omitempty"`
+
+	// If specified, our system will make a best effort to sample deterministically,
+	// such that repeated requests with the same `seed` and parameters should return
+	// the same result. Determinism is not guaranteed.
+	Seed *int64 `json:"seed,omitempty"`
+
+	// Up to 4 sequences where the API will stop generating further tokens.
+	Stop any `json:"stop,omitempty"`
+
+	// Whether to stream back partial progress. If set, tokens will be sent as
+	// data-only server-sent events as they become available, with the stream
+	// terminated by a `data: [DONE]` message.
+	// Default: false
+	Stream bool `json:"stream,omitzero"`
+
+	// Options for streaming response. Only set this when you set stream: true.
+	StreamOptions *StreamOptions `json:"stream_options,omitempty"`
+
+	// The suffix that comes after a completion of inserted text.
+	// This parameter is only supported for `gpt-3.5-turbo-instruct`.
+	// Default: null
+	Suffix string `json:"suffix,omitzero"`
+
+	// What sampling temperature to use, between 0 and 2. Higher values like 0.8
+	// will make the output more random, while lower values like 0.2 will make it
+	// more focused and deterministic.
+	// Minimum: 0, Maximum: 2, Default: 1
+	Temperature *float64 `json:"temperature,omitempty"`
+
+	// An alternative to sampling with temperature, called nucleus sampling, where
+	// the model considers the results of the tokens with top_p probability mass.
+	// So 0.1 means only the tokens comprising the top 10% probability mass are
+	// considered. We generally recommend altering this or temperature but not both.
+	// Minimum: 0, Maximum: 1, Default: 1
+	TopP *float64 `json:"top_p,omitempty"`
+
+	// A unique identifier representing your end-user, which can help OpenAI to
+	// monitor and detect abuse.
+	User string `json:"user,omitzero"`
+}
+
+// PromptUnion represents the polymorphic prompt field that can be:
+// - string: a single prompt
+// - []string: batch of prompts
+// - []int64: array of token IDs
+// - [][]int64: batch of token ID arrays
+type PromptUnion struct {
+	Value interface{}
+}
+
+func (p PromptUnion) MarshalJSON() ([]byte, error) {
+	return json.Marshal(p.Value)
+}
+
+func (p *PromptUnion) UnmarshalJSON(data []byte) (err error) {
+	p.Value, err = unmarshalJSONNestedUnion("prompt", data)
+	return
+}
+
+// CompletionResponse represents a completion response from the API.
+// Note: both the streamed and non-streamed response objects share the same shape
+// (unlike the chat endpoint).
+// See https://platform.openai.com/docs/api-reference/completions/object
+type CompletionResponse struct {
+	// A unique identifier for the completion.
+	ID string `json:"id"`
+
+	// The object type, which is always "text_completion".
+	Object string `json:"object"`
+
+	// The Unix timestamp (in seconds) of when the completion was created.
+	Created JSONUNIXTime `json:"created,omitzero"`
+
+	// The model used for completion.
+	Model string `json:"model"`
+
+	// This fingerprint represents the backend configuration that the model runs with.
+	SystemFingerprint string `json:"system_fingerprint,omitzero"`
+
+	// The list of completion choices generated by the model.
+	Choices []CompletionChoice `json:"choices"`
+
+	// Usage statistics for the completion request.
+	Usage *Usage `json:"usage,omitzero"`
+}
+
+// CompletionChoice represents a single completion choice.
+type CompletionChoice struct {
+	// The generated text completion.
+	Text string `json:"text"`
+
+	// The index of the choice in the list of choices.
+	Index *int `json:"index,omitempty"`
+
+	// Log probability information for the choice.
+	Logprobs *CompletionLogprobs `json:"logprobs,omitzero"`
+
+	// The reason the model stopped generating tokens.
+	// This will be "stop" if the model hit a natural stop point or a provided stop
+	// sequence, "length" if the maximum number of tokens specified in the request
+	// was reached, or "content_filter" if content was omitted due to a flag from
+	// our content filters.
+	FinishReason string `json:"finish_reason,omitzero"`
+}
+
+// CompletionLogprobs represents log probability information.
+type CompletionLogprobs struct {
+	// The tokens chosen by the model.
+	Tokens []string `json:"tokens,omitzero"`
+
+	// The log probability of each token.
+	TokenLogprobs []float64 `json:"token_logprobs,omitzero"`
+
+	// A list of the top log probabilities for each token position.
+	TopLogprobs []map[string]float64 `json:"top_logprobs,omitzero"`
+
+	// The character offset from the start of the returned text for each token.
+	TextOffset []int `json:"text_offset,omitzero"`
+}
+
+// Usage represents the usage information for completion requests (both chat and text).
+// Maps to OpenAI's CompletionUsage schema.
+// https://platform.openai.com/docs/api-reference/chat/object#chat/object-usage
+// https://platform.openai.com/docs/api-reference/completions/object#completions/object-usage
+//
+// For /v1/completions endpoint: Only the basic fields (prompt_tokens, completion_tokens, total_tokens) are populated.
+// For /v1/chat/completions endpoint: All fields including the detailed breakdowns may be populated.
+type Usage struct {
+	// Number of tokens in the prompt.
+	PromptTokens int `json:"prompt_tokens,omitempty"` //nolint:tagliatelle //follow openai api
+
+	// Number of tokens in the generated completion.
+	CompletionTokens int `json:"completion_tokens,omitempty"` //nolint:tagliatelle //follow openai api
+
+	// Total number of tokens used in the request (prompt + completion).
+	TotalTokens int `json:"total_tokens,omitempty"` //nolint:tagliatelle //follow openai api
+
+	// CompletionTokensDetails: Breakdown of tokens used in a completion.
+	// Only populated for /v1/chat/completions endpoint, not for /v1/completions.
+	CompletionTokensDetails *CompletionTokensDetails `json:"completion_tokens_details,omitempty"` //nolint:tagliatelle //follow openai api
+
+	// PromptTokensDetails: Breakdown of tokens used in the prompt.
+	// Only populated for /v1/chat/completions endpoint, not for /v1/completions.
+	PromptTokensDetails *PromptTokensDetails `json:"prompt_tokens_details,omitempty"` //nolint:tagliatelle //follow openai api
+}
+
+// ImageGenerationRequest represents the request body for /v1/images/generations.
+// https://platform.openai.com/docs/api-reference/images/create
+type ImageGenerationRequest struct {
+	// A text description of the desired image(s). The maximum length is 1000 characters for DALL-E 2,
+	// 4000 characters for DALL-E 3, and 32000 characters for gpt-image-1.
+	Prompt string `json:"prompt"`
+	// The model to use for image generation. Defaults to dall-e-2.
+	Model string `json:"model,omitempty"`
+	// The number of images to generate. Must be between 1 and 10. For DALL-E 3, only n=1 is supported.
+	// Defaults to 1.
+	N int `json:"n,omitempty"`
+	// The quality of the image that will be generated.
+	// - hd or standard for DALL-E 3.
+	// - high, medium, or low for gpt-image-1.
+	// Defaults to standard for DALL-E 3, auto for gpt-image-1.
+	Quality string `json:"quality,omitempty"`
+	// The format in which the generated images are returned. Must be one of url or b64_json.
+	// URLs are only valid for 60 minutes after the image has been generated.
+	// This parameter isn't supported for gpt-image-1 which will always return base64-encoded images.
+	// Defaults to url.
+	ResponseFormat string `json:"response_format,omitempty"`
+	// The size of the generated images.
+	// - DALL-E 2: 256x256, 512x512, or 1024x1024.
+	// - DALL-E 3: 1024x1024, 1792x1024, or 1024x1792.
+	// - gpt-image-1: 1024x1024, 1536x1024, 1024x1536, or auto.
+	// Defaults to 1024x1024 (DALL-E 2/3) or auto (gpt-image-1).
+	Size string `json:"size,omitempty"`
+	// The style of the generated images. vivid or natural. DALL-E 3 only.
+	// Defaults to vivid.
+	Style string `json:"style,omitempty"`
+	// A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
+	User string `json:"user,omitempty"`
+	// The output format of the image generation. Either png, webp, or jpeg.
+	// This parameter is only supported for gpt-image-1.
+	// Defaults to png.
+	OutputFormat string `json:"output_format,omitempty"`
+	// The background parameter used for the image generation. Either transparent, opaque, or auto.
+	// This parameter is only supported for gpt-image-1.
+	// Defaults to auto.
+	Background string `json:"background,omitempty"`
+	// Control the content-moderation level for images generated by gpt-image-1. Must be either low or auto.
+	// Defaults to auto.
+	Moderation string `json:"moderation,omitempty"`
+	// The compression level (0-100%) for the generated images.
+	// This parameter is only supported for gpt-image-1 with the webp or jpeg output formats.
+	// Defaults to 100.
+	OutputCompression *int `json:"output_compression,omitempty"`
+	// The number of partial images to generate.
+	// This parameter is used for streaming responses that return partial images. Value must be between 0 and 3.
+	// Defaults to 0.
+	PartialImages int `json:"partial_images,omitempty"`
+	// Generate the image in streaming mode.
+	// This parameter is only supported for gpt-image-1.
+	// Defaults to false.
+	Stream bool `json:"stream,omitempty"`
+}
+
+// ImageGenerationInputTokensDetails breakdown of tokens used in the prompt for image generation.
+type ImageGenerationInputTokensDetails struct {
+	TextTokens  int `json:"text_tokens,omitempty"`
+	ImageTokens int `json:"image_tokens,omitempty"`
+}
+
+// ImageGenerationUsage represents the usage information for image generation requests.
+type ImageGenerationUsage struct {
+	TotalTokens        int                                `json:"total_tokens"`
+	InputTokens        int                                `json:"input_tokens"`
+	OutputTokens       int                                `json:"output_tokens"`
+	InputTokensDetails *ImageGenerationInputTokensDetails `json:"input_tokens_details,omitempty"`
+}
+
+// ImageGenerationResponse represents the response body for /v1/images/generations.
+// https://platform.openai.com/docs/api-reference/images/object
+type ImageGenerationResponse struct {
+	// The Unix timestamp (in seconds) of when the image was created.
+	Created int64 `json:"created"`
+	// The list of generated images.
+	Data []ImageGenerationResponseData `json:"data"`
+	// For gpt-image-1 only, the token usage information for the image generation.
+	Usage *ImageGenerationUsage `json:"usage,omitempty"`
+	// The output format of the image generation. Either png, webp, or jpeg.
+	OutputFormat string `json:"output_format,omitempty"`
+	// The quality of the image generated. Either low, medium, or high.
+	Quality string `json:"quality,omitempty"`
+	// The size of the image generated. Either 1024x1024, 1024x1536, or 1536x1024.
+	Size string `json:"size,omitempty"`
+	// The background parameter used for the image generation. Either transparent or opaque.
+	Background string `json:"background,omitempty"`
+}
+
+type ImageGenerationResponseData struct {
+	B64JSON       string `json:"b64_json,omitempty"`
+	URL           string `json:"url,omitempty"`
+	RevisedPrompt string `json:"revised_prompt,omitempty"`
 }

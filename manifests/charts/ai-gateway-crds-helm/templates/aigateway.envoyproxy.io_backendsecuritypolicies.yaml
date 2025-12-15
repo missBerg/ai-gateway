@@ -57,6 +57,58 @@ spec:
               Only one type of BackendSecurityPolicy can be defined.
             maxProperties: 3
             properties:
+              anthropicAPIKey:
+                description: |-
+                  AnthropicAPIKey is a mechanism to access Anthropic backend(s). The API key will be injected into the "x-api-key" header.
+                  https://docs.claude.com/en/api/overview#authentication
+                properties:
+                  secretRef:
+                    description: |-
+                      SecretRef is the reference to the secret containing the Anthropic API key.
+                      ai-gateway must be given the permission to read this secret.
+                      The key of the secret should be "apiKey".
+                    properties:
+                      group:
+                        default: ""
+                        description: |-
+                          Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                          When unspecified or empty string, core API group is inferred.
+                        maxLength: 253
+                        pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                        type: string
+                      kind:
+                        default: Secret
+                        description: Kind is kind of the referent. For example "Secret".
+                        maxLength: 63
+                        minLength: 1
+                        pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                        type: string
+                      name:
+                        description: Name is the name of the referent.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace is the namespace of the referenced object. When unspecified, the local
+                          namespace is inferred.
+
+                          Note that when a namespace different than the local namespace is specified,
+                          a ReferenceGrant object is required in the referent namespace to allow that
+                          namespace's owner to accept the reference. See the ReferenceGrant
+                          documentation for details.
+
+                          Support: Core
+                        maxLength: 63
+                        minLength: 1
+                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                        type: string
+                    required:
+                    - name
+                    type: object
+                required:
+                - secretRef
+                type: object
               apiKey:
                 description: APIKey is a mechanism to access a backend(s). The API
                   key will be injected into the Authorization header.
@@ -113,8 +165,9 @@ spec:
                   AWS specific logic will be applied.
                 properties:
                   credentialsFile:
-                    description: CredentialsFile specifies the credentials file to
-                      use for the AWS provider.
+                    description: |-
+                      CredentialsFile specifies the credentials file to use for the AWS provider.
+                      When specified, this takes precedence over the default credential chain.
                     properties:
                       profile:
                         default: default
@@ -173,6 +226,7 @@ spec:
                     description: |-
                       OIDCExchangeToken specifies the oidc configurations used to obtain an oidc token. The oidc token will be
                       used to obtain temporary credentials to access AWS.
+                      When specified, this takes precedence over the default credential chain.
                     properties:
                       aud:
                         description: Aud defines the audience that this ID Token is
@@ -196,6 +250,8 @@ spec:
                             description: |-
                               The client ID to be used in the OIDC
                               [Authentication Request](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
+
+                              Only one of clientID or clientIDRef must be set.
                             minLength: 1
                             type: string
                           clientIDRef:
@@ -204,6 +260,8 @@ spec:
                               [Authentication Request](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
                               Exactly one of clientID or clientIDRef must be set.
                               This is an Opaque secret. The client ID should be stored in the key "client-id".
+
+                              Only one of clientID or clientIDRef must be set.
                             properties:
                               group:
                                 default: ""
@@ -297,7 +355,6 @@ spec:
                               By default, its unset.
                             properties:
                               sameSite:
-                                default: Strict
                                 enum:
                                 - Lax
                                 - Strict
@@ -331,6 +388,16 @@ spec:
                                   If not specified, defaults to "IdToken-(randomly generated uid)"
                                 type: string
                             type: object
+                          csrfTokenTTL:
+                            description: |-
+                              CSRFTokenTTL defines how long the CSRF token generated during the OAuth2 authorization flow remains valid.
+
+                              This duration determines the lifetime of the CSRF cookie, which is validated against the CSRF token
+                              in the "state" parameter when the provider redirects back to the callback endpoint.
+
+                              If omitted, Envoy Gateway defaults the token expiration to 10 minutes.
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                            type: string
                           defaultRefreshTokenTTL:
                             description: |-
                               DefaultRefreshTokenTTL is the default lifetime of the refresh token.
@@ -339,6 +406,7 @@ spec:
 
                               If not specified, defaults to 604800s (one week).
                               Note: this field is only applicable when the "refreshToken" field is set to true.
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                           defaultTokenTTL:
                             description: |-
@@ -350,6 +418,7 @@ spec:
                               If not specified, defaults to 0. In this case, the "expires_in" field in
                               the authorization response must be set by the authorization server, or the
                               OAuth flow will fail.
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                           denyRedirect:
                             description: |-
@@ -394,6 +463,12 @@ spec:
                             required:
                             - headers
                             type: object
+                          disableTokenEncryption:
+                            description: |-
+                              Disable token encryption. When set to true, both the access token and the ID token will be stored in plain text.
+                              This option should only be used in secure environments where token encryption is not required.
+                              Default is false (tokens are encrypted).
+                            type: boolean
                           forwardAccessToken:
                             description: |-
                               ForwardAccessToken indicates whether the Envoy should forward the access token
@@ -674,6 +749,41 @@ spec:
                                           For example, 20Mi, 1Gi, 256Ki etc.
                                           Note: that when the suffix is not provided, the value is interpreted as bytes.
                                         x-kubernetes-int-or-string: true
+                                      preconnect:
+                                        description: |-
+                                          Preconnect configures proactive upstream connections to reduce latency by establishing
+                                          connections before they’re needed and avoiding connection establishment overhead.
+
+                                          If unset, Envoy will fetch connections as needed to serve in-flight requests.
+                                        properties:
+                                          perEndpointPercent:
+                                            description: |-
+                                              PerEndpointPercent configures how many additional connections to maintain per
+                                              upstream endpoint, useful for high-QPS or latency sensitive services. Expressed as a
+                                              percentage of the connections required by active streams
+                                              (e.g. 100 = preconnect disabled, 105 = 1.05x connections per-endpoint, 200 = 2.00×).
+
+                                              Allowed value range is between 100-300. When both PerEndpointPercent and
+                                              PredictivePercent are set, Envoy ensures both are satisfied (max of the two).
+                                            format: int32
+                                            maximum: 300
+                                            minimum: 100
+                                            type: integer
+                                          predictivePercent:
+                                            description: |-
+                                              PredictivePercent configures how many additional connections to maintain
+                                              across the cluster by anticipating which upstream endpoint the load balancer
+                                              will select next, useful for low-QPS services. Relies on deterministic
+                                              loadbalancing and is only supported with Random or RoundRobin.
+                                              Expressed as a percentage of the connections required by active streams
+                                              (e.g. 100 = 1.0 (no preconnect), 105 = 1.05× connections across the cluster, 200 = 2.00×).
+
+                                              Minimum allowed value is 100. When both PerEndpointPercent and PredictivePercent are
+                                              set Envoy ensures both are satisfied per host (max of the two).
+                                            format: int32
+                                            minimum: 100
+                                            type: integer
+                                        type: object
                                       socketBufferLimit:
                                         allOf:
                                         - pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
@@ -696,6 +806,7 @@ spec:
                                         description: |-
                                           DNSRefreshRate specifies the rate at which DNS records should be refreshed.
                                           Defaults to 30 seconds.
+                                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                         type: string
                                       lookupFamily:
                                         description: |-
@@ -792,8 +903,7 @@ spec:
                                                 items:
                                                   description: HTTPStatus defines
                                                     the http status code.
-                                                  exclusiveMaximum: true
-                                                  maximum: 600
+                                                  maximum: 599
                                                   minimum: 100
                                                   type: integer
                                                 type: array
@@ -820,11 +930,17 @@ spec:
                                             required:
                                             - path
                                             type: object
+                                          initialJitter:
+                                            description: |-
+                                              InitialJitter defines the maximum time Envoy will wait before the first health check.
+                                              Envoy will randomly select a value between 0 and the initial jitter value.
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                            type: string
                                           interval:
                                             default: 3s
                                             description: Interval defines the time
                                               between active health checks.
-                                            format: duration
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                           tcp:
                                             description: |-
@@ -908,7 +1024,7 @@ spec:
                                             default: 1s
                                             description: Timeout defines the time
                                               to wait for a health check response.
-                                            format: duration
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                           type:
                                             allOf:
@@ -966,7 +1082,7 @@ spec:
                                             description: BaseEjectionTime defines
                                               the base duration for which a host will
                                               be ejected on consecutive failures.
-                                            format: duration
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                           consecutive5XxErrors:
                                             default: 5
@@ -976,7 +1092,6 @@ spec:
                                             format: int32
                                             type: integer
                                           consecutiveGatewayErrors:
-                                            default: 0
                                             description: ConsecutiveGatewayErrors
                                               sets the number of consecutive gateway
                                               errors triggering ejection.
@@ -989,11 +1104,20 @@ spec:
                                               Parameter takes effect only when split_external_local_origin_errors is set to true.
                                             format: int32
                                             type: integer
+                                          failurePercentageThreshold:
+                                            description: |-
+                                              FailurePercentageThreshold sets the failure percentage threshold for outlier detection.
+                                              If the failure percentage of a given host is greater than or equal to this value, it will be ejected.
+                                              Defaults to 85.
+                                            format: int32
+                                            maximum: 100
+                                            minimum: 0
+                                            type: integer
                                           interval:
                                             default: 3s
                                             description: Interval defines the time
                                               between passive health checks.
-                                            format: duration
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                           maxEjectionPercent:
                                             default: 10
@@ -1085,14 +1209,16 @@ spec:
                                                 description: |-
                                                   TTL of the generated cookie if the cookie is not present. This value sets the
                                                   Max-Age attribute value.
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                 type: string
                                             required:
                                             - name
                                             type: object
                                           header:
-                                            description: Header configures the header
-                                              hash policy when the consistent hash
-                                              type is set to Header.
+                                            description: |-
+                                              Header configures the header hash policy when the consistent hash type is set to Header.
+
+                                              Deprecated: use Headers instead
                                             properties:
                                               name:
                                                 description: Name of the header to
@@ -1101,6 +1227,23 @@ spec:
                                             required:
                                             - name
                                             type: object
+                                          headers:
+                                            description: Headers configures the header
+                                              hash policy for each header, when the
+                                              consistent hash type is set to Headers.
+                                            items:
+                                              description: |-
+                                                Header defines the header hashing configuration for consistent hash based
+                                                load balancing.
+                                              properties:
+                                                name:
+                                                  description: Name of the header
+                                                    to hash.
+                                                  type: string
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
                                           tableSize:
                                             default: 65537
                                             description: The table size for consistent
@@ -1115,10 +1258,12 @@ spec:
                                               ConsistentHashType defines the type of input to hash on. Valid Type values are
                                               "SourceIP",
                                               "Header",
+                                              "Headers",
                                               "Cookie".
                                             enum:
                                             - SourceIP
                                             - Header
+                                            - Headers
                                             - Cookie
                                             type: string
                                         required:
@@ -1129,10 +1274,44 @@ spec:
                                             the header field must be set.
                                           rule: 'self.type == ''Header'' ? has(self.header)
                                             : !has(self.header)'
+                                        - message: If consistent hash type is headers,
+                                            the headers field must be set.
+                                          rule: 'self.type == ''Headers'' ? has(self.headers)
+                                            : !has(self.headers)'
                                         - message: If consistent hash type is cookie,
                                             the cookie field must be set.
                                           rule: 'self.type == ''Cookie'' ? has(self.cookie)
                                             : !has(self.cookie)'
+                                      endpointOverride:
+                                        description: |-
+                                          EndpointOverride defines the configuration for endpoint override.
+                                          When specified, the load balancer will attempt to route requests to endpoints
+                                          based on the override information extracted from request headers or metadata.
+                                           If the override endpoints are not available, the configured load balancer policy will be used as fallback.
+                                        properties:
+                                          extractFrom:
+                                            description: ExtractFrom defines the sources
+                                              to extract endpoint override information
+                                              from.
+                                            items:
+                                              description: EndpointOverrideExtractFrom
+                                                defines a source to extract endpoint
+                                                override information from.
+                                              properties:
+                                                header:
+                                                  description: |-
+                                                    Header defines the header to get the override endpoint addresses.
+                                                    The header value must specify at least one endpoint in `IP:Port` format or multiple endpoints in `IP:Port,IP:Port,...` format.
+                                                    For example `10.0.0.5:8080` or `[2600:4040:5204::1574:24ae]:80`.
+                                                    The IPv6 address is enclosed in square brackets.
+                                                  type: string
+                                              type: object
+                                            maxItems: 10
+                                            minItems: 1
+                                            type: array
+                                        required:
+                                        - extractFrom
+                                        type: object
                                       slowStart:
                                         description: |-
                                           SlowStart defines the configuration related to the slow start load balancer policy.
@@ -1145,6 +1324,7 @@ spec:
                                               During slow start window, traffic sent to the newly added hosts will gradually increase.
                                               Currently only supports linear growth of traffic. For additional details,
                                               see https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto#config-cluster-v3-cluster-slowstartconfig
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                         required:
                                         - window
@@ -1191,6 +1371,16 @@ spec:
                                                   endpoints across all zones required
                                                   to enable zone-aware routing.
                                                 format: int64
+                                                type: integer
+                                              percentageEnabled:
+                                                description: Configures percentage
+                                                  of requests that will be considered
+                                                  for zone aware routing if zone aware
+                                                  routing is configured. If not specified,
+                                                  Envoy defaults to 100%.
+                                                format: int32
+                                                maximum: 100
+                                                minimum: 0
                                                 type: integer
                                             type: object
                                         type: object
@@ -1260,19 +1450,19 @@ spec:
                                               baseInterval:
                                                 description: BaseInterval is the base
                                                   interval between retries.
-                                                format: duration
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                 type: string
                                               maxInterval:
                                                 description: |-
                                                   MaxInterval is the maximum interval between retries. This parameter is optional, but must be greater than or equal to the base_interval if set.
                                                   The default is 10 times the base_interval
-                                                format: duration
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                 type: string
                                             type: object
                                           timeout:
                                             description: Timeout is the timeout per
                                               retry attempt.
-                                            format: duration
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                         type: object
                                       retryOn:
@@ -1288,8 +1478,7 @@ spec:
                                             items:
                                               description: HTTPStatus defines the
                                                 http status code.
-                                              exclusiveMaximum: true
-                                              maximum: 600
+                                              maximum: 599
                                               minimum: 100
                                               type: integer
                                             type: array
@@ -1303,6 +1492,7 @@ spec:
                                               - 5xx
                                               - gateway-error
                                               - reset
+                                              - reset-before-request
                                               - connect-failure
                                               - retriable-4xx
                                               - refused-stream
@@ -1362,6 +1552,14 @@ spec:
                                               Default: unlimited.
                                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
+                                          maxStreamDuration:
+                                            description: |-
+                                              MaxStreamDuration is the maximum duration for a stream to complete. This timeout measures the time
+                                              from when the request is sent until the response stream is fully consumed and does not apply to
+                                              non-streaming requests.
+                                              When set to "0s", no max duration is applied and streams can run indefinitely.
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                            type: string
                                           requestTimeout:
                                             description: RequestTimeout is the time
                                               until which entire response is received
@@ -1381,6 +1579,13 @@ spec:
                                         type: object
                                     type: object
                                 type: object
+                                x-kubernetes-validations:
+                                - message: predictivePercent in preconnect policy
+                                    only works with RoundRobin or Random load balancers
+                                  rule: '!((has(self.connection) && has(self.connection.preconnect)
+                                    && has(self.connection.preconnect.predictivePercent))
+                                    && !(has(self.loadBalancer) && has(self.loadBalancer.type)
+                                    && self.loadBalancer.type in [''Random'', ''RoundRobin'']))'
                               endSessionEndpoint:
                                 description: |-
                                   The OIDC Provider's [end session endpoint](https://openid.net/specs/openid-connect-core-1_0.html#RPLogout).
@@ -1421,13 +1626,14 @@ spec:
                               If not specified, uses the default redirect URI "%REQ(x-forwarded-proto)%://%REQ(:authority)%/oauth2/callback"
                             type: string
                           refreshToken:
+                            default: true
                             description: |-
                               RefreshToken indicates whether the Envoy should automatically refresh the
                               id token and access token when they expire.
                               When set to true, the Envoy will use the refresh token to get a new id token
                               and access token when they expire.
 
-                              If not specified, defaults to false.
+                              If not specified, defaults to true.
                             type: boolean
                           resources:
                             description: |-
@@ -1446,10 +1652,13 @@ spec:
                               type: string
                             type: array
                         required:
-                        - clientID
                         - clientSecret
                         - provider
                         type: object
+                        x-kubernetes-validations:
+                        - message: only one of clientID or clientIDRef must be set
+                          rule: (has(self.clientID) && !has(self.clientIDRef)) ||
+                            (!has(self.clientID) && has(self.clientIDRef))
                     required:
                     - awsRoleArn
                     - oidc
@@ -1461,6 +1670,57 @@ spec:
                     type: string
                 required:
                 - region
+                type: object
+              azureAPIKey:
+                description: AzureAPIKey is a mechanism to access Azure OpenAI backend(s).
+                  The API key will be injected into the api-key header.
+                properties:
+                  secretRef:
+                    description: |-
+                      SecretRef is the reference to the secret containing the Azure API key.
+                      ai-gateway must be given the permission to read this secret.
+                      The key of the secret should be "apiKey".
+                    properties:
+                      group:
+                        default: ""
+                        description: |-
+                          Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                          When unspecified or empty string, core API group is inferred.
+                        maxLength: 253
+                        pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                        type: string
+                      kind:
+                        default: Secret
+                        description: Kind is kind of the referent. For example "Secret".
+                        maxLength: 63
+                        minLength: 1
+                        pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                        type: string
+                      name:
+                        description: Name is the name of the referent.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace is the namespace of the referenced object. When unspecified, the local
+                          namespace is inferred.
+
+                          Note that when a namespace different than the local namespace is specified,
+                          a ReferenceGrant object is required in the referent namespace to allow that
+                          namespace's owner to accept the reference. See the ReferenceGrant
+                          documentation for details.
+
+                          Support: Core
+                        maxLength: 63
+                        minLength: 1
+                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                        type: string
+                    required:
+                    - name
+                    type: object
+                required:
+                - secretRef
                 type: object
               azureCredentials:
                 description: AzureCredentials is a mechanism to access a backend(s).
@@ -1536,6 +1796,8 @@ spec:
                             description: |-
                               The client ID to be used in the OIDC
                               [Authentication Request](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
+
+                              Only one of clientID or clientIDRef must be set.
                             minLength: 1
                             type: string
                           clientIDRef:
@@ -1544,6 +1806,8 @@ spec:
                               [Authentication Request](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
                               Exactly one of clientID or clientIDRef must be set.
                               This is an Opaque secret. The client ID should be stored in the key "client-id".
+
+                              Only one of clientID or clientIDRef must be set.
                             properties:
                               group:
                                 default: ""
@@ -1637,7 +1901,6 @@ spec:
                               By default, its unset.
                             properties:
                               sameSite:
-                                default: Strict
                                 enum:
                                 - Lax
                                 - Strict
@@ -1671,6 +1934,16 @@ spec:
                                   If not specified, defaults to "IdToken-(randomly generated uid)"
                                 type: string
                             type: object
+                          csrfTokenTTL:
+                            description: |-
+                              CSRFTokenTTL defines how long the CSRF token generated during the OAuth2 authorization flow remains valid.
+
+                              This duration determines the lifetime of the CSRF cookie, which is validated against the CSRF token
+                              in the "state" parameter when the provider redirects back to the callback endpoint.
+
+                              If omitted, Envoy Gateway defaults the token expiration to 10 minutes.
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                            type: string
                           defaultRefreshTokenTTL:
                             description: |-
                               DefaultRefreshTokenTTL is the default lifetime of the refresh token.
@@ -1679,6 +1952,7 @@ spec:
 
                               If not specified, defaults to 604800s (one week).
                               Note: this field is only applicable when the "refreshToken" field is set to true.
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                           defaultTokenTTL:
                             description: |-
@@ -1690,6 +1964,7 @@ spec:
                               If not specified, defaults to 0. In this case, the "expires_in" field in
                               the authorization response must be set by the authorization server, or the
                               OAuth flow will fail.
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                           denyRedirect:
                             description: |-
@@ -1734,6 +2009,12 @@ spec:
                             required:
                             - headers
                             type: object
+                          disableTokenEncryption:
+                            description: |-
+                              Disable token encryption. When set to true, both the access token and the ID token will be stored in plain text.
+                              This option should only be used in secure environments where token encryption is not required.
+                              Default is false (tokens are encrypted).
+                            type: boolean
                           forwardAccessToken:
                             description: |-
                               ForwardAccessToken indicates whether the Envoy should forward the access token
@@ -2014,6 +2295,41 @@ spec:
                                           For example, 20Mi, 1Gi, 256Ki etc.
                                           Note: that when the suffix is not provided, the value is interpreted as bytes.
                                         x-kubernetes-int-or-string: true
+                                      preconnect:
+                                        description: |-
+                                          Preconnect configures proactive upstream connections to reduce latency by establishing
+                                          connections before they’re needed and avoiding connection establishment overhead.
+
+                                          If unset, Envoy will fetch connections as needed to serve in-flight requests.
+                                        properties:
+                                          perEndpointPercent:
+                                            description: |-
+                                              PerEndpointPercent configures how many additional connections to maintain per
+                                              upstream endpoint, useful for high-QPS or latency sensitive services. Expressed as a
+                                              percentage of the connections required by active streams
+                                              (e.g. 100 = preconnect disabled, 105 = 1.05x connections per-endpoint, 200 = 2.00×).
+
+                                              Allowed value range is between 100-300. When both PerEndpointPercent and
+                                              PredictivePercent are set, Envoy ensures both are satisfied (max of the two).
+                                            format: int32
+                                            maximum: 300
+                                            minimum: 100
+                                            type: integer
+                                          predictivePercent:
+                                            description: |-
+                                              PredictivePercent configures how many additional connections to maintain
+                                              across the cluster by anticipating which upstream endpoint the load balancer
+                                              will select next, useful for low-QPS services. Relies on deterministic
+                                              loadbalancing and is only supported with Random or RoundRobin.
+                                              Expressed as a percentage of the connections required by active streams
+                                              (e.g. 100 = 1.0 (no preconnect), 105 = 1.05× connections across the cluster, 200 = 2.00×).
+
+                                              Minimum allowed value is 100. When both PerEndpointPercent and PredictivePercent are
+                                              set Envoy ensures both are satisfied per host (max of the two).
+                                            format: int32
+                                            minimum: 100
+                                            type: integer
+                                        type: object
                                       socketBufferLimit:
                                         allOf:
                                         - pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
@@ -2036,6 +2352,7 @@ spec:
                                         description: |-
                                           DNSRefreshRate specifies the rate at which DNS records should be refreshed.
                                           Defaults to 30 seconds.
+                                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                         type: string
                                       lookupFamily:
                                         description: |-
@@ -2132,8 +2449,7 @@ spec:
                                                 items:
                                                   description: HTTPStatus defines
                                                     the http status code.
-                                                  exclusiveMaximum: true
-                                                  maximum: 600
+                                                  maximum: 599
                                                   minimum: 100
                                                   type: integer
                                                 type: array
@@ -2160,11 +2476,17 @@ spec:
                                             required:
                                             - path
                                             type: object
+                                          initialJitter:
+                                            description: |-
+                                              InitialJitter defines the maximum time Envoy will wait before the first health check.
+                                              Envoy will randomly select a value between 0 and the initial jitter value.
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                            type: string
                                           interval:
                                             default: 3s
                                             description: Interval defines the time
                                               between active health checks.
-                                            format: duration
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                           tcp:
                                             description: |-
@@ -2248,7 +2570,7 @@ spec:
                                             default: 1s
                                             description: Timeout defines the time
                                               to wait for a health check response.
-                                            format: duration
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                           type:
                                             allOf:
@@ -2306,7 +2628,7 @@ spec:
                                             description: BaseEjectionTime defines
                                               the base duration for which a host will
                                               be ejected on consecutive failures.
-                                            format: duration
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                           consecutive5XxErrors:
                                             default: 5
@@ -2316,7 +2638,6 @@ spec:
                                             format: int32
                                             type: integer
                                           consecutiveGatewayErrors:
-                                            default: 0
                                             description: ConsecutiveGatewayErrors
                                               sets the number of consecutive gateway
                                               errors triggering ejection.
@@ -2329,11 +2650,20 @@ spec:
                                               Parameter takes effect only when split_external_local_origin_errors is set to true.
                                             format: int32
                                             type: integer
+                                          failurePercentageThreshold:
+                                            description: |-
+                                              FailurePercentageThreshold sets the failure percentage threshold for outlier detection.
+                                              If the failure percentage of a given host is greater than or equal to this value, it will be ejected.
+                                              Defaults to 85.
+                                            format: int32
+                                            maximum: 100
+                                            minimum: 0
+                                            type: integer
                                           interval:
                                             default: 3s
                                             description: Interval defines the time
                                               between passive health checks.
-                                            format: duration
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                           maxEjectionPercent:
                                             default: 10
@@ -2425,14 +2755,16 @@ spec:
                                                 description: |-
                                                   TTL of the generated cookie if the cookie is not present. This value sets the
                                                   Max-Age attribute value.
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                 type: string
                                             required:
                                             - name
                                             type: object
                                           header:
-                                            description: Header configures the header
-                                              hash policy when the consistent hash
-                                              type is set to Header.
+                                            description: |-
+                                              Header configures the header hash policy when the consistent hash type is set to Header.
+
+                                              Deprecated: use Headers instead
                                             properties:
                                               name:
                                                 description: Name of the header to
@@ -2441,6 +2773,23 @@ spec:
                                             required:
                                             - name
                                             type: object
+                                          headers:
+                                            description: Headers configures the header
+                                              hash policy for each header, when the
+                                              consistent hash type is set to Headers.
+                                            items:
+                                              description: |-
+                                                Header defines the header hashing configuration for consistent hash based
+                                                load balancing.
+                                              properties:
+                                                name:
+                                                  description: Name of the header
+                                                    to hash.
+                                                  type: string
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
                                           tableSize:
                                             default: 65537
                                             description: The table size for consistent
@@ -2455,10 +2804,12 @@ spec:
                                               ConsistentHashType defines the type of input to hash on. Valid Type values are
                                               "SourceIP",
                                               "Header",
+                                              "Headers",
                                               "Cookie".
                                             enum:
                                             - SourceIP
                                             - Header
+                                            - Headers
                                             - Cookie
                                             type: string
                                         required:
@@ -2469,10 +2820,44 @@ spec:
                                             the header field must be set.
                                           rule: 'self.type == ''Header'' ? has(self.header)
                                             : !has(self.header)'
+                                        - message: If consistent hash type is headers,
+                                            the headers field must be set.
+                                          rule: 'self.type == ''Headers'' ? has(self.headers)
+                                            : !has(self.headers)'
                                         - message: If consistent hash type is cookie,
                                             the cookie field must be set.
                                           rule: 'self.type == ''Cookie'' ? has(self.cookie)
                                             : !has(self.cookie)'
+                                      endpointOverride:
+                                        description: |-
+                                          EndpointOverride defines the configuration for endpoint override.
+                                          When specified, the load balancer will attempt to route requests to endpoints
+                                          based on the override information extracted from request headers or metadata.
+                                           If the override endpoints are not available, the configured load balancer policy will be used as fallback.
+                                        properties:
+                                          extractFrom:
+                                            description: ExtractFrom defines the sources
+                                              to extract endpoint override information
+                                              from.
+                                            items:
+                                              description: EndpointOverrideExtractFrom
+                                                defines a source to extract endpoint
+                                                override information from.
+                                              properties:
+                                                header:
+                                                  description: |-
+                                                    Header defines the header to get the override endpoint addresses.
+                                                    The header value must specify at least one endpoint in `IP:Port` format or multiple endpoints in `IP:Port,IP:Port,...` format.
+                                                    For example `10.0.0.5:8080` or `[2600:4040:5204::1574:24ae]:80`.
+                                                    The IPv6 address is enclosed in square brackets.
+                                                  type: string
+                                              type: object
+                                            maxItems: 10
+                                            minItems: 1
+                                            type: array
+                                        required:
+                                        - extractFrom
+                                        type: object
                                       slowStart:
                                         description: |-
                                           SlowStart defines the configuration related to the slow start load balancer policy.
@@ -2485,6 +2870,7 @@ spec:
                                               During slow start window, traffic sent to the newly added hosts will gradually increase.
                                               Currently only supports linear growth of traffic. For additional details,
                                               see https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto#config-cluster-v3-cluster-slowstartconfig
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                         required:
                                         - window
@@ -2531,6 +2917,16 @@ spec:
                                                   endpoints across all zones required
                                                   to enable zone-aware routing.
                                                 format: int64
+                                                type: integer
+                                              percentageEnabled:
+                                                description: Configures percentage
+                                                  of requests that will be considered
+                                                  for zone aware routing if zone aware
+                                                  routing is configured. If not specified,
+                                                  Envoy defaults to 100%.
+                                                format: int32
+                                                maximum: 100
+                                                minimum: 0
                                                 type: integer
                                             type: object
                                         type: object
@@ -2600,19 +2996,19 @@ spec:
                                               baseInterval:
                                                 description: BaseInterval is the base
                                                   interval between retries.
-                                                format: duration
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                 type: string
                                               maxInterval:
                                                 description: |-
                                                   MaxInterval is the maximum interval between retries. This parameter is optional, but must be greater than or equal to the base_interval if set.
                                                   The default is 10 times the base_interval
-                                                format: duration
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                 type: string
                                             type: object
                                           timeout:
                                             description: Timeout is the timeout per
                                               retry attempt.
-                                            format: duration
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                         type: object
                                       retryOn:
@@ -2628,8 +3024,7 @@ spec:
                                             items:
                                               description: HTTPStatus defines the
                                                 http status code.
-                                              exclusiveMaximum: true
-                                              maximum: 600
+                                              maximum: 599
                                               minimum: 100
                                               type: integer
                                             type: array
@@ -2643,6 +3038,7 @@ spec:
                                               - 5xx
                                               - gateway-error
                                               - reset
+                                              - reset-before-request
                                               - connect-failure
                                               - retriable-4xx
                                               - refused-stream
@@ -2702,6 +3098,14 @@ spec:
                                               Default: unlimited.
                                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
+                                          maxStreamDuration:
+                                            description: |-
+                                              MaxStreamDuration is the maximum duration for a stream to complete. This timeout measures the time
+                                              from when the request is sent until the response stream is fully consumed and does not apply to
+                                              non-streaming requests.
+                                              When set to "0s", no max duration is applied and streams can run indefinitely.
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                            type: string
                                           requestTimeout:
                                             description: RequestTimeout is the time
                                               until which entire response is received
@@ -2721,6 +3125,13 @@ spec:
                                         type: object
                                     type: object
                                 type: object
+                                x-kubernetes-validations:
+                                - message: predictivePercent in preconnect policy
+                                    only works with RoundRobin or Random load balancers
+                                  rule: '!((has(self.connection) && has(self.connection.preconnect)
+                                    && has(self.connection.preconnect.predictivePercent))
+                                    && !(has(self.loadBalancer) && has(self.loadBalancer.type)
+                                    && self.loadBalancer.type in [''Random'', ''RoundRobin'']))'
                               endSessionEndpoint:
                                 description: |-
                                   The OIDC Provider's [end session endpoint](https://openid.net/specs/openid-connect-core-1_0.html#RPLogout).
@@ -2761,13 +3172,14 @@ spec:
                               If not specified, uses the default redirect URI "%REQ(x-forwarded-proto)%://%REQ(:authority)%/oauth2/callback"
                             type: string
                           refreshToken:
+                            default: true
                             description: |-
                               RefreshToken indicates whether the Envoy should automatically refresh the
                               id token and access token when they expire.
                               When set to true, the Envoy will use the refresh token to get a new id token
                               and access token when they expire.
 
-                              If not specified, defaults to false.
+                              If not specified, defaults to true.
                             type: boolean
                           resources:
                             description: |-
@@ -2786,10 +3198,13 @@ spec:
                               type: string
                             type: array
                         required:
-                        - clientID
                         - clientSecret
                         - provider
                         type: object
+                        x-kubernetes-validations:
+                        - message: only one of clientID or clientIDRef must be set
+                          rule: (has(self.clientID) && !has(self.clientIDRef)) ||
+                            (!has(self.clientID) && has(self.clientIDRef))
                     required:
                     - oidc
                     type: object
@@ -2811,6 +3226,58 @@ spec:
                 description: GCPCredentials is a mechanism to access a backend(s).
                   GCP specific logic will be applied.
                 properties:
+                  credentialsFile:
+                    description: CredentialsFile specifies the service account credentials
+                      file to use for the GCP provider.
+                    properties:
+                      secretRef:
+                        description: |-
+                          SecretRef is the reference to the credential file.
+
+                          The secret should contain the GCP service account credentials file keyed on "service_account.json".
+                        properties:
+                          group:
+                            default: ""
+                            description: |-
+                              Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                              When unspecified or empty string, core API group is inferred.
+                            maxLength: 253
+                            pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                            type: string
+                          kind:
+                            default: Secret
+                            description: Kind is kind of the referent. For example
+                              "Secret".
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                            type: string
+                          name:
+                            description: Name is the name of the referent.
+                            maxLength: 253
+                            minLength: 1
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace is the namespace of the referenced object. When unspecified, the local
+                              namespace is inferred.
+
+                              Note that when a namespace different than the local namespace is specified,
+                              a ReferenceGrant object is required in the referent namespace to allow that
+                              namespace's owner to accept the reference. See the ReferenceGrant
+                              documentation for details.
+
+                              Support: Core
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                            type: string
+                        required:
+                        - name
+                        type: object
+                    required:
+                    - secretRef
+                    type: object
                   projectName:
                     description: ProjectName is the GCP project name.
                     minLength: 1
@@ -2845,6 +3312,8 @@ spec:
                                 description: |-
                                   The client ID to be used in the OIDC
                                   [Authentication Request](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
+
+                                  Only one of clientID or clientIDRef must be set.
                                 minLength: 1
                                 type: string
                               clientIDRef:
@@ -2853,6 +3322,8 @@ spec:
                                   [Authentication Request](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
                                   Exactly one of clientID or clientIDRef must be set.
                                   This is an Opaque secret. The client ID should be stored in the key "client-id".
+
+                                  Only one of clientID or clientIDRef must be set.
                                 properties:
                                   group:
                                     default: ""
@@ -2946,7 +3417,6 @@ spec:
                                   By default, its unset.
                                 properties:
                                   sameSite:
-                                    default: Strict
                                     enum:
                                     - Lax
                                     - Strict
@@ -2980,6 +3450,16 @@ spec:
                                       If not specified, defaults to "IdToken-(randomly generated uid)"
                                     type: string
                                 type: object
+                              csrfTokenTTL:
+                                description: |-
+                                  CSRFTokenTTL defines how long the CSRF token generated during the OAuth2 authorization flow remains valid.
+
+                                  This duration determines the lifetime of the CSRF cookie, which is validated against the CSRF token
+                                  in the "state" parameter when the provider redirects back to the callback endpoint.
+
+                                  If omitted, Envoy Gateway defaults the token expiration to 10 minutes.
+                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                type: string
                               defaultRefreshTokenTTL:
                                 description: |-
                                   DefaultRefreshTokenTTL is the default lifetime of the refresh token.
@@ -2988,6 +3468,7 @@ spec:
 
                                   If not specified, defaults to 604800s (one week).
                                   Note: this field is only applicable when the "refreshToken" field is set to true.
+                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                 type: string
                               defaultTokenTTL:
                                 description: |-
@@ -2999,6 +3480,7 @@ spec:
                                   If not specified, defaults to 0. In this case, the "expires_in" field in
                                   the authorization response must be set by the authorization server, or the
                                   OAuth flow will fail.
+                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                 type: string
                               denyRedirect:
                                 description: |-
@@ -3043,6 +3525,12 @@ spec:
                                 required:
                                 - headers
                                 type: object
+                              disableTokenEncryption:
+                                description: |-
+                                  Disable token encryption. When set to true, both the access token and the ID token will be stored in plain text.
+                                  This option should only be used in secure environments where token encryption is not required.
+                                  Default is false (tokens are encrypted).
+                                type: boolean
                               forwardAccessToken:
                                 description: |-
                                   ForwardAccessToken indicates whether the Envoy should forward the access token
@@ -3326,6 +3814,41 @@ spec:
                                               For example, 20Mi, 1Gi, 256Ki etc.
                                               Note: that when the suffix is not provided, the value is interpreted as bytes.
                                             x-kubernetes-int-or-string: true
+                                          preconnect:
+                                            description: |-
+                                              Preconnect configures proactive upstream connections to reduce latency by establishing
+                                              connections before they’re needed and avoiding connection establishment overhead.
+
+                                              If unset, Envoy will fetch connections as needed to serve in-flight requests.
+                                            properties:
+                                              perEndpointPercent:
+                                                description: |-
+                                                  PerEndpointPercent configures how many additional connections to maintain per
+                                                  upstream endpoint, useful for high-QPS or latency sensitive services. Expressed as a
+                                                  percentage of the connections required by active streams
+                                                  (e.g. 100 = preconnect disabled, 105 = 1.05x connections per-endpoint, 200 = 2.00×).
+
+                                                  Allowed value range is between 100-300. When both PerEndpointPercent and
+                                                  PredictivePercent are set, Envoy ensures both are satisfied (max of the two).
+                                                format: int32
+                                                maximum: 300
+                                                minimum: 100
+                                                type: integer
+                                              predictivePercent:
+                                                description: |-
+                                                  PredictivePercent configures how many additional connections to maintain
+                                                  across the cluster by anticipating which upstream endpoint the load balancer
+                                                  will select next, useful for low-QPS services. Relies on deterministic
+                                                  loadbalancing and is only supported with Random or RoundRobin.
+                                                  Expressed as a percentage of the connections required by active streams
+                                                  (e.g. 100 = 1.0 (no preconnect), 105 = 1.05× connections across the cluster, 200 = 2.00×).
+
+                                                  Minimum allowed value is 100. When both PerEndpointPercent and PredictivePercent are
+                                                  set Envoy ensures both are satisfied per host (max of the two).
+                                                format: int32
+                                                minimum: 100
+                                                type: integer
+                                            type: object
                                           socketBufferLimit:
                                             allOf:
                                             - pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
@@ -3348,6 +3871,7 @@ spec:
                                             description: |-
                                               DNSRefreshRate specifies the rate at which DNS records should be refreshed.
                                               Defaults to 30 seconds.
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                           lookupFamily:
                                             description: |-
@@ -3446,8 +3970,7 @@ spec:
                                                     items:
                                                       description: HTTPStatus defines
                                                         the http status code.
-                                                      exclusiveMaximum: true
-                                                      maximum: 600
+                                                      maximum: 599
                                                       minimum: 100
                                                       type: integer
                                                     type: array
@@ -3474,11 +3997,17 @@ spec:
                                                 required:
                                                 - path
                                                 type: object
+                                              initialJitter:
+                                                description: |-
+                                                  InitialJitter defines the maximum time Envoy will wait before the first health check.
+                                                  Envoy will randomly select a value between 0 and the initial jitter value.
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                                type: string
                                               interval:
                                                 default: 3s
                                                 description: Interval defines the
                                                   time between active health checks.
-                                                format: duration
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                 type: string
                                               tcp:
                                                 description: |-
@@ -3566,7 +4095,7 @@ spec:
                                                 default: 1s
                                                 description: Timeout defines the time
                                                   to wait for a health check response.
-                                                format: duration
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                 type: string
                                               type:
                                                 allOf:
@@ -3625,7 +4154,7 @@ spec:
                                                 description: BaseEjectionTime defines
                                                   the base duration for which a host
                                                   will be ejected on consecutive failures.
-                                                format: duration
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                 type: string
                                               consecutive5XxErrors:
                                                 default: 5
@@ -3635,7 +4164,6 @@ spec:
                                                 format: int32
                                                 type: integer
                                               consecutiveGatewayErrors:
-                                                default: 0
                                                 description: ConsecutiveGatewayErrors
                                                   sets the number of consecutive gateway
                                                   errors triggering ejection.
@@ -3648,11 +4176,20 @@ spec:
                                                   Parameter takes effect only when split_external_local_origin_errors is set to true.
                                                 format: int32
                                                 type: integer
+                                              failurePercentageThreshold:
+                                                description: |-
+                                                  FailurePercentageThreshold sets the failure percentage threshold for outlier detection.
+                                                  If the failure percentage of a given host is greater than or equal to this value, it will be ejected.
+                                                  Defaults to 85.
+                                                format: int32
+                                                maximum: 100
+                                                minimum: 0
+                                                type: integer
                                               interval:
                                                 default: 3s
                                                 description: Interval defines the
                                                   time between passive health checks.
-                                                format: duration
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                 type: string
                                               maxEjectionPercent:
                                                 default: 10
@@ -3744,14 +4281,16 @@ spec:
                                                     description: |-
                                                       TTL of the generated cookie if the cookie is not present. This value sets the
                                                       Max-Age attribute value.
+                                                    pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                     type: string
                                                 required:
                                                 - name
                                                 type: object
                                               header:
-                                                description: Header configures the
-                                                  header hash policy when the consistent
-                                                  hash type is set to Header.
+                                                description: |-
+                                                  Header configures the header hash policy when the consistent hash type is set to Header.
+
+                                                  Deprecated: use Headers instead
                                                 properties:
                                                   name:
                                                     description: Name of the header
@@ -3760,6 +4299,24 @@ spec:
                                                 required:
                                                 - name
                                                 type: object
+                                              headers:
+                                                description: Headers configures the
+                                                  header hash policy for each header,
+                                                  when the consistent hash type is
+                                                  set to Headers.
+                                                items:
+                                                  description: |-
+                                                    Header defines the header hashing configuration for consistent hash based
+                                                    load balancing.
+                                                  properties:
+                                                    name:
+                                                      description: Name of the header
+                                                        to hash.
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                type: array
                                               tableSize:
                                                 default: 65537
                                                 description: The table size for consistent
@@ -3774,10 +4331,12 @@ spec:
                                                   ConsistentHashType defines the type of input to hash on. Valid Type values are
                                                   "SourceIP",
                                                   "Header",
+                                                  "Headers",
                                                   "Cookie".
                                                 enum:
                                                 - SourceIP
                                                 - Header
+                                                - Headers
                                                 - Cookie
                                                 type: string
                                             required:
@@ -3789,9 +4348,44 @@ spec:
                                               rule: 'self.type == ''Header'' ? has(self.header)
                                                 : !has(self.header)'
                                             - message: If consistent hash type is
+                                                headers, the headers field must be
+                                                set.
+                                              rule: 'self.type == ''Headers'' ? has(self.headers)
+                                                : !has(self.headers)'
+                                            - message: If consistent hash type is
                                                 cookie, the cookie field must be set.
                                               rule: 'self.type == ''Cookie'' ? has(self.cookie)
                                                 : !has(self.cookie)'
+                                          endpointOverride:
+                                            description: |-
+                                              EndpointOverride defines the configuration for endpoint override.
+                                              When specified, the load balancer will attempt to route requests to endpoints
+                                              based on the override information extracted from request headers or metadata.
+                                               If the override endpoints are not available, the configured load balancer policy will be used as fallback.
+                                            properties:
+                                              extractFrom:
+                                                description: ExtractFrom defines the
+                                                  sources to extract endpoint override
+                                                  information from.
+                                                items:
+                                                  description: EndpointOverrideExtractFrom
+                                                    defines a source to extract endpoint
+                                                    override information from.
+                                                  properties:
+                                                    header:
+                                                      description: |-
+                                                        Header defines the header to get the override endpoint addresses.
+                                                        The header value must specify at least one endpoint in `IP:Port` format or multiple endpoints in `IP:Port,IP:Port,...` format.
+                                                        For example `10.0.0.5:8080` or `[2600:4040:5204::1574:24ae]:80`.
+                                                        The IPv6 address is enclosed in square brackets.
+                                                      type: string
+                                                  type: object
+                                                maxItems: 10
+                                                minItems: 1
+                                                type: array
+                                            required:
+                                            - extractFrom
+                                            type: object
                                           slowStart:
                                             description: |-
                                               SlowStart defines the configuration related to the slow start load balancer policy.
@@ -3804,6 +4398,7 @@ spec:
                                                   During slow start window, traffic sent to the newly added hosts will gradually increase.
                                                   Currently only supports linear growth of traffic. For additional details,
                                                   see https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto#config-cluster-v3-cluster-slowstartconfig
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                 type: string
                                             required:
                                             - window
@@ -3851,6 +4446,17 @@ spec:
                                                       zones required to enable zone-aware
                                                       routing.
                                                     format: int64
+                                                    type: integer
+                                                  percentageEnabled:
+                                                    description: Configures percentage
+                                                      of requests that will be considered
+                                                      for zone aware routing if zone
+                                                      aware routing is configured.
+                                                      If not specified, Envoy defaults
+                                                      to 100%.
+                                                    format: int32
+                                                    maximum: 100
+                                                    minimum: 0
                                                     type: integer
                                                 type: object
                                             type: object
@@ -3921,19 +4527,19 @@ spec:
                                                   baseInterval:
                                                     description: BaseInterval is the
                                                       base interval between retries.
-                                                    format: duration
+                                                    pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                     type: string
                                                   maxInterval:
                                                     description: |-
                                                       MaxInterval is the maximum interval between retries. This parameter is optional, but must be greater than or equal to the base_interval if set.
                                                       The default is 10 times the base_interval
-                                                    format: duration
+                                                    pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                     type: string
                                                 type: object
                                               timeout:
                                                 description: Timeout is the timeout
                                                   per retry attempt.
-                                                format: duration
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                 type: string
                                             type: object
                                           retryOn:
@@ -3949,8 +4555,7 @@ spec:
                                                 items:
                                                   description: HTTPStatus defines
                                                     the http status code.
-                                                  exclusiveMaximum: true
-                                                  maximum: 600
+                                                  maximum: 599
                                                   minimum: 100
                                                   type: integer
                                                 type: array
@@ -3964,6 +4569,7 @@ spec:
                                                   - 5xx
                                                   - gateway-error
                                                   - reset
+                                                  - reset-before-request
                                                   - connect-failure
                                                   - retriable-4xx
                                                   - refused-stream
@@ -4023,6 +4629,14 @@ spec:
                                                   Default: unlimited.
                                                 pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                 type: string
+                                              maxStreamDuration:
+                                                description: |-
+                                                  MaxStreamDuration is the maximum duration for a stream to complete. This timeout measures the time
+                                                  from when the request is sent until the response stream is fully consumed and does not apply to
+                                                  non-streaming requests.
+                                                  When set to "0s", no max duration is applied and streams can run indefinitely.
+                                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                                type: string
                                               requestTimeout:
                                                 description: RequestTimeout is the
                                                   time until which entire response
@@ -4042,6 +4656,15 @@ spec:
                                             type: object
                                         type: object
                                     type: object
+                                    x-kubernetes-validations:
+                                    - message: predictivePercent in preconnect policy
+                                        only works with RoundRobin or Random load
+                                        balancers
+                                      rule: '!((has(self.connection) && has(self.connection.preconnect)
+                                        && has(self.connection.preconnect.predictivePercent))
+                                        && !(has(self.loadBalancer) && has(self.loadBalancer.type)
+                                        && self.loadBalancer.type in [''Random'',
+                                        ''RoundRobin'']))'
                                   endSessionEndpoint:
                                     description: |-
                                       The OIDC Provider's [end session endpoint](https://openid.net/specs/openid-connect-core-1_0.html#RPLogout).
@@ -4082,13 +4705,14 @@ spec:
                                   If not specified, uses the default redirect URI "%REQ(x-forwarded-proto)%://%REQ(:authority)%/oauth2/callback"
                                 type: string
                               refreshToken:
+                                default: true
                                 description: |-
                                   RefreshToken indicates whether the Envoy should automatically refresh the
                                   id token and access token when they expire.
                                   When set to true, the Envoy will use the refresh token to get a new id token
                                   and access token when they expire.
 
-                                  If not specified, defaults to false.
+                                  If not specified, defaults to true.
                                 type: boolean
                               resources:
                                 description: |-
@@ -4107,10 +4731,14 @@ spec:
                                   type: string
                                 type: array
                             required:
-                            - clientID
                             - clientSecret
                             - provider
                             type: object
+                            x-kubernetes-validations:
+                            - message: only one of clientID or clientIDRef must be
+                                set
+                              rule: (has(self.clientID) && !has(self.clientIDRef))
+                                || (!has(self.clientID) && has(self.clientIDRef))
                         required:
                         - oidc
                         type: object
@@ -4152,8 +4780,12 @@ spec:
                 required:
                 - projectName
                 - region
-                - workloadIdentityFederationConfig
                 type: object
+                x-kubernetes-validations:
+                - message: Exactly one of GCPWorkloadIdentityFederationConfig or GCPCredentialsFile
+                    must be specified
+                  rule: (has(self.credentialsFile) && !has(self.workloadIdentityFederationConfig))
+                    || (has(self.workloadIdentityFederationConfig) && !has(self.credentialsFile))
               targetRefs:
                 description: |-
                   TargetRefs are the names of the AIServiceBackend resources this BackendSecurityPolicy is being attached to.
@@ -4199,8 +4831,10 @@ spec:
                 enum:
                 - APIKey
                 - AWSCredentials
+                - AzureAPIKey
                 - AzureCredentials
                 - GCPCredentials
+                - AnthropicAPIKey
                 type: string
             required:
             - type
@@ -4208,22 +4842,33 @@ spec:
             x-kubernetes-validations:
             - message: When type is APIKey, only apiKey field should be set
               rule: 'self.type == ''APIKey'' ? (has(self.apiKey) && !has(self.awsCredentials)
-                && !has(self.azureCredentials) && !has(self.gcpCredentials)) : true'
+                && !has(self.azureAPIKey) && !has(self.azureCredentials) && !has(self.gcpCredentials)
+                && !has(self.anthropicAPIKey)) : true'
             - message: When type is AWSCredentials, only awsCredentials field should
                 be set
               rule: 'self.type == ''AWSCredentials'' ? (has(self.awsCredentials) &&
-                !has(self.apiKey) && !has(self.azureCredentials) && !has(self.gcpCredentials))
-                : true'
+                !has(self.apiKey) && !has(self.azureAPIKey) && !has(self.azureCredentials)
+                && !has(self.gcpCredentials) && !has(self.anthropicAPIKey)) : true'
+            - message: When type is AzureAPIKey, only azureAPIKey field should be
+                set
+              rule: 'self.type == ''AzureAPIKey'' ? (has(self.azureAPIKey) && !has(self.apiKey)
+                && !has(self.awsCredentials) && !has(self.azureCredentials) && !has(self.gcpCredentials)
+                && !has(self.anthropicAPIKey)) : true'
             - message: When type is AzureCredentials, only azureCredentials field
                 should be set
               rule: 'self.type == ''AzureCredentials'' ? (has(self.azureCredentials)
-                && !has(self.apiKey) && !has(self.awsCredentials) && !has(self.gcpCredentials))
-                : true'
+                && !has(self.apiKey) && !has(self.awsCredentials) && !has(self.azureAPIKey)
+                && !has(self.gcpCredentials) && !has(self.anthropicAPIKey)) : true'
             - message: When type is GCPCredentials, only gcpCredentials field should
                 be set
               rule: 'self.type == ''GCPCredentials'' ? (has(self.gcpCredentials) &&
-                !has(self.apiKey) && !has(self.awsCredentials) && !has(self.azureCredentials))
-                : true'
+                !has(self.apiKey) && !has(self.awsCredentials) && !has(self.azureAPIKey)
+                && !has(self.azureCredentials) && !has(self.anthropicAPIKey)) : true'
+            - message: When type is AnthropicAPIKey, only anthropicAPIKey field should
+                be set
+              rule: 'self.type == ''AnthropicAPIKey'' ? (has(self.anthropicAPIKey)
+                && !has(self.apiKey) && !has(self.awsCredentials) && !has(self.azureAPIKey)
+                && !has(self.azureCredentials) && !has(self.gcpCredentials)) : true'
           status:
             description: Status defines the status details of the BackendSecurityPolicy.
             properties:

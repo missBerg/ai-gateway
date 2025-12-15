@@ -21,6 +21,25 @@ spec:
     - name: http
       protocol: HTTP
       port: 80
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: translation-testupstream
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: translation-testupstream
+  namespace: default
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        container:
+          # Clear the default memory/cpu requirements for local tests.
+          resources: {}
 ---
 apiVersion: aigateway.envoyproxy.io/v1alpha1
 kind: AIGatewayRoute
@@ -28,9 +47,7 @@ metadata:
   name: translation-testupstream
   namespace: default
 spec:
-  schema:
-    name: OpenAI
-  targetRefs:
+  parentRefs:
     - name: translation-testupstream
       kind: Gateway
       group: gateway.networking.k8s.io
@@ -42,7 +59,6 @@ spec:
               value: some-cool-model
       backendRefs:
         - name: translation-testupstream-cool-model-backend
-          weight: 100
     - matches:
         - headers:
             - type: Exact
@@ -50,7 +66,13 @@ spec:
               value: another-cool-model
       backendRefs:
         - name: translation-testupstream-another-cool-model-backend
-          weight: 100
+    - matches:
+        - headers:
+            - type: Exact
+              name: x-ai-eg-model
+              value: whatever-model
+      backendRefs:
+        - name: translation-testupstream-cool-model-backend
 ---
 apiVersion: aigateway.envoyproxy.io/v1alpha1
 kind: AIServiceBackend
@@ -64,11 +86,9 @@ spec:
     name: testupstream
     kind: Backend
     group: gateway.envoyproxy.io
-  # This is mainly to ensure backward compatibility in tests.
-  backendSecurityPolicyRef:
-    name: translation-testupstream-cool-model-backend-api-key
-    kind: BackendSecurityPolicy
-    group: aigateway.envoyproxy.io
+  headerMutation:
+    remove:
+      - x-remove-header
 ---
 apiVersion: aigateway.envoyproxy.io/v1alpha1
 kind: AIServiceBackend
@@ -90,6 +110,10 @@ metadata:
   namespace: default
 spec:
   type: APIKey
+  targetRefs:
+    - group: aigateway.envoyproxy.io
+      kind: AIServiceBackend
+      name: translation-testupstream-cool-model-backend
   apiKey:
     secretRef:
       name: translation-testupstream-cool-model-backend-api-key

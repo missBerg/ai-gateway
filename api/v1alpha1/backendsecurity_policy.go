@@ -18,6 +18,8 @@ type BackendSecurityPolicyType string
 const (
 	BackendSecurityPolicyTypeAPIKey           BackendSecurityPolicyType = "APIKey"
 	BackendSecurityPolicyTypeAWSCredentials   BackendSecurityPolicyType = "AWSCredentials"
+	BackendSecurityPolicyTypeAzureAPIKey      BackendSecurityPolicyType = "AzureAPIKey"
+	BackendSecurityPolicyTypeAnthropicAPIKey  BackendSecurityPolicyType = "AnthropicAPIKey" // #nosec G101
 	BackendSecurityPolicyTypeAzureCredentials BackendSecurityPolicyType = "AzureCredentials"
 	BackendSecurityPolicyTypeGCPCredentials   BackendSecurityPolicyType = "GCPCredentials"
 )
@@ -25,6 +27,8 @@ const (
 // BackendSecurityPolicy specifies configuration for authentication and authorization rules on the traffic
 // exiting the gateway to the backend.
 //
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[-1:].type`
@@ -42,10 +46,12 @@ type BackendSecurityPolicy struct {
 //
 // Only one type of BackendSecurityPolicy can be defined.
 // +kubebuilder:validation:MaxProperties=3
-// +kubebuilder:validation:XValidation:rule="self.type == 'APIKey' ? (has(self.apiKey) && !has(self.awsCredentials) && !has(self.azureCredentials) && !has(self.gcpCredentials)) : true",message="When type is APIKey, only apiKey field should be set"
-// +kubebuilder:validation:XValidation:rule="self.type == 'AWSCredentials' ? (has(self.awsCredentials) && !has(self.apiKey) && !has(self.azureCredentials) && !has(self.gcpCredentials)) : true",message="When type is AWSCredentials, only awsCredentials field should be set"
-// +kubebuilder:validation:XValidation:rule="self.type == 'AzureCredentials' ? (has(self.azureCredentials) && !has(self.apiKey) && !has(self.awsCredentials) && !has(self.gcpCredentials)) : true",message="When type is AzureCredentials, only azureCredentials field should be set"
-// +kubebuilder:validation:XValidation:rule="self.type == 'GCPCredentials' ? (has(self.gcpCredentials) && !has(self.apiKey) && !has(self.awsCredentials) && !has(self.azureCredentials)) : true",message="When type is GCPCredentials, only gcpCredentials field should be set"
+// +kubebuilder:validation:XValidation:rule="self.type == 'APIKey' ? (has(self.apiKey) && !has(self.awsCredentials) && !has(self.azureAPIKey) && !has(self.azureCredentials) && !has(self.gcpCredentials) && !has(self.anthropicAPIKey)) : true",message="When type is APIKey, only apiKey field should be set"
+// +kubebuilder:validation:XValidation:rule="self.type == 'AWSCredentials' ? (has(self.awsCredentials) && !has(self.apiKey) && !has(self.azureAPIKey) && !has(self.azureCredentials) && !has(self.gcpCredentials) && !has(self.anthropicAPIKey)) : true",message="When type is AWSCredentials, only awsCredentials field should be set"
+// +kubebuilder:validation:XValidation:rule="self.type == 'AzureAPIKey' ? (has(self.azureAPIKey) && !has(self.apiKey) && !has(self.awsCredentials) && !has(self.azureCredentials) && !has(self.gcpCredentials) && !has(self.anthropicAPIKey)) : true",message="When type is AzureAPIKey, only azureAPIKey field should be set"
+// +kubebuilder:validation:XValidation:rule="self.type == 'AzureCredentials' ? (has(self.azureCredentials) && !has(self.apiKey) && !has(self.awsCredentials) && !has(self.azureAPIKey) && !has(self.gcpCredentials) && !has(self.anthropicAPIKey)) : true",message="When type is AzureCredentials, only azureCredentials field should be set"
+// +kubebuilder:validation:XValidation:rule="self.type == 'GCPCredentials' ? (has(self.gcpCredentials) && !has(self.apiKey) && !has(self.awsCredentials) && !has(self.azureAPIKey) && !has(self.azureCredentials) && !has(self.anthropicAPIKey)) : true",message="When type is GCPCredentials, only gcpCredentials field should be set"
+// +kubebuilder:validation:XValidation:rule="self.type == 'AnthropicAPIKey' ? (has(self.anthropicAPIKey) && !has(self.apiKey) && !has(self.awsCredentials) && !has(self.azureAPIKey) && !has(self.azureCredentials) && !has(self.gcpCredentials)) : true",message="When type is AnthropicAPIKey, only anthropicAPIKey field should be set"
 type BackendSecurityPolicySpec struct {
 	// TargetRefs are the names of the AIServiceBackend resources this BackendSecurityPolicy is being attached to.
 	// Attaching multiple BackendSecurityPolicies to the same AIServiceBackend is invalid and will result in an error
@@ -58,7 +64,7 @@ type BackendSecurityPolicySpec struct {
 
 	// Type specifies the type of the backend security policy.
 	//
-	// +kubebuilder:validation:Enum=APIKey;AWSCredentials;AzureCredentials;GCPCredentials
+	// +kubebuilder:validation:Enum=APIKey;AWSCredentials;AzureAPIKey;AzureCredentials;GCPCredentials;AnthropicAPIKey
 	Type BackendSecurityPolicyType `json:"type"`
 
 	// APIKey is a mechanism to access a backend(s). The API key will be injected into the Authorization header.
@@ -71,18 +77,31 @@ type BackendSecurityPolicySpec struct {
 	// +optional
 	AWSCredentials *BackendSecurityPolicyAWSCredentials `json:"awsCredentials,omitempty"`
 
+	// AzureAPIKey is a mechanism to access Azure OpenAI backend(s). The API key will be injected into the api-key header.
+	//
+	// +optional
+	AzureAPIKey *BackendSecurityPolicyAzureAPIKey `json:"azureAPIKey,omitempty"`
+
 	// AzureCredentials is a mechanism to access a backend(s). Azure OpenAI specific logic will be applied.
 	//
 	// +optional
 	AzureCredentials *BackendSecurityPolicyAzureCredentials `json:"azureCredentials,omitempty"`
+
 	// GCPCredentials is a mechanism to access a backend(s). GCP specific logic will be applied.
 	//
 	// +optional
 	GCPCredentials *BackendSecurityPolicyGCPCredentials `json:"gcpCredentials,omitempty"`
+
+	// AnthropicAPIKey is a mechanism to access Anthropic backend(s). The API key will be injected into the "x-api-key" header.
+	// https://docs.claude.com/en/api/overview#authentication
+	//
+	// +optional
+	AnthropicAPIKey *BackendSecurityPolicyAnthropicAPIKey `json:"anthropicAPIKey,omitempty"`
 }
 
 // BackendSecurityPolicyList contains a list of BackendSecurityPolicy
 //
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 type BackendSecurityPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
@@ -93,6 +112,14 @@ type BackendSecurityPolicyList struct {
 // BackendSecurityPolicyAPIKey specifies the API key.
 type BackendSecurityPolicyAPIKey struct {
 	// SecretRef is the reference to the secret containing the API key.
+	// ai-gateway must be given the permission to read this secret.
+	// The key of the secret should be "apiKey".
+	SecretRef *gwapiv1.SecretObjectReference `json:"secretRef"`
+}
+
+// BackendSecurityPolicyAzureAPIKey specifies the Azure OpenAI API key.
+type BackendSecurityPolicyAzureAPIKey struct {
+	// SecretRef is the reference to the secret containing the Azure API key.
 	// ai-gateway must be given the permission to read this secret.
 	// The key of the secret should be "apiKey".
 	SecretRef *gwapiv1.SecretObjectReference `json:"secretRef"`
@@ -180,6 +207,7 @@ type GCPServiceAccountImpersonationConfig struct {
 }
 
 // BackendSecurityPolicyGCPCredentials contains the supported authentication mechanisms to access GCP.
+// +kubebuilder:validation:XValidation:rule="(has(self.credentialsFile) && !has(self.workloadIdentityFederationConfig)) || (has(self.workloadIdentityFederationConfig) && !has(self.credentialsFile))",message="Exactly one of GCPWorkloadIdentityFederationConfig or GCPCredentialsFile must be specified"
 type BackendSecurityPolicyGCPCredentials struct {
 	// ProjectName is the GCP project name.
 	//
@@ -192,10 +220,15 @@ type BackendSecurityPolicyGCPCredentials struct {
 	// +kubebuilder:validation:MinLength=1
 	Region string `json:"region"`
 
+	// CredentialsFile specifies the service account credentials file to use for the GCP provider.
+	//
+	// +optional
+	CredentialsFile *GCPCredentialsFile `json:"credentialsFile,omitempty"`
+
 	// WorkloadIdentityFederationConfig is the configuration for the GCP Workload Identity Federation.
 	//
-	// +kubebuilder:validation:Required
-	WorkloadIdentityFederationConfig GCPWorkloadIdentityFederationConfig `json:"workloadIdentityFederationConfig"`
+	// +optional
+	WorkloadIdentityFederationConfig *GCPWorkloadIdentityFederationConfig `json:"workloadIdentityFederationConfig,omitempty"`
 }
 
 // BackendSecurityPolicyAzureCredentials contains the supported authentication mechanisms to access Azure.
@@ -238,7 +271,19 @@ type AzureOIDCExchangeToken struct {
 	BackendSecurityPolicyOIDC `json:",inline"`
 }
 
-// BackendSecurityPolicyAWSCredentials contains the supported authentication mechanisms to access aws.
+// BackendSecurityPolicyAWSCredentials contains the supported authentication mechanisms to access AWS.
+//
+// When neither CredentialsFile nor OIDCExchangeToken is specified, the AWS SDK's default credential chain
+// will be used. This automatically supports various authentication methods in the following order:
+//  1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN)
+//  2. EKS Pod Identity - automatically rotates credentials for pods in EKS clusters
+//  3. IAM Roles for Service Accounts (IRSA) - injects credentials via mounted service account tokens
+//  4. EC2 instance metadata (IAM instance roles)
+//  5. ECS task roles
+//
+// The default credential chain is recommended for Kubernetes deployments as it supports automatic
+// credential rotation without manual configuration. Credentials are refreshed automatically when
+// they approach expiration (typically hourly for IRSA and Pod Identity).
 type BackendSecurityPolicyAWSCredentials struct {
 	// Region specifies the AWS region associated with the policy.
 	//
@@ -246,12 +291,14 @@ type BackendSecurityPolicyAWSCredentials struct {
 	Region string `json:"region"`
 
 	// CredentialsFile specifies the credentials file to use for the AWS provider.
+	// When specified, this takes precedence over the default credential chain.
 	//
 	// +optional
 	CredentialsFile *AWSCredentialsFile `json:"credentialsFile,omitempty"`
 
 	// OIDCExchangeToken specifies the oidc configurations used to obtain an oidc token. The oidc token will be
 	// used to obtain temporary credentials to access AWS.
+	// When specified, this takes precedence over the default credential chain.
 	//
 	// +optional
 	OIDCExchangeToken *AWSOIDCExchangeToken `json:"oidcExchangeToken,omitempty"`
@@ -284,4 +331,20 @@ type AWSOIDCExchangeToken struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	AwsRoleArn string `json:"awsRoleArn"`
+}
+
+// GCPCredentialsFile specifies the service account key json file to authenticate with GCP provider.
+type GCPCredentialsFile struct {
+	// SecretRef is the reference to the credential file.
+	//
+	// The secret should contain the GCP service account credentials file keyed on "service_account.json".
+	SecretRef *gwapiv1.SecretObjectReference `json:"secretRef"`
+}
+
+// BackendSecurityPolicyAnthropicAPIKey specifies the Anthropic API key.
+type BackendSecurityPolicyAnthropicAPIKey struct {
+	// SecretRef is the reference to the secret containing the Anthropic API key.
+	// ai-gateway must be given the permission to read this secret.
+	// The key of the secret should be "apiKey".
+	SecretRef *gwapiv1.SecretObjectReference `json:"secretRef"`
 }

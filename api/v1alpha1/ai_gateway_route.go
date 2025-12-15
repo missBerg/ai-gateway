@@ -9,7 +9,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwapiv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 )
 
 // AIGatewayRoute combines multiple AIServiceBackends and attaching them to Gateway(s) resources.
@@ -17,19 +16,12 @@ import (
 // This serves as a way to define a "unified" AI API for a Gateway which allows downstream
 // clients to use a single schema API to interact with multiple AI backends.
 //
-// The schema field is used to determine the structure of the requests that the Gateway will
-// receive. And then the Gateway will route the traffic to the appropriate AIServiceBackend based
-// on the output schema of the AIServiceBackend while doing the other necessary jobs like
-// upstream authentication, rate limit, etc.
-//
 // Envoy AI Gateway will generate the following k8s resources corresponding to the AIGatewayRoute:
 //
 //   - HTTPRoute of the Gateway API as a top-level resource to bind all backends.
 //     The name of the HTTPRoute is the same as the AIGatewayRoute.
-//   - EnvoyExtensionPolicy of the Envoy Gateway API to attach the AI Gateway filter into the target Gateways.
-//     This will be created per Gateway, and its name is `ai-eg-eep-${gateway-name}`.
 //   - HTTPRouteFilter of the Envoy Gateway API per namespace for automatic hostname rewrite.
-//     The name of the HTTPRouteFilter is `ai-eg-host-rewrite`.
+//     The name of the HTTPRouteFilter is `ai-eg-host-rewrite-${AIGatewayRoute.Name}`.
 //
 // All of these resources are created in the same namespace as the AIGatewayRoute. Note that this is the implementation
 // detail subject to change. If you want to customize the default behavior of the Envoy AI Gateway, you can use these
@@ -37,6 +29,8 @@ import (
 // Gateway to patch the generated resources. For example, you can configure the retry fallback behavior by attaching
 // BackendTrafficPolicy API of Envoy Gateway to the generated HTTPRoute.
 //
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[-1:].type`
@@ -51,6 +45,7 @@ type AIGatewayRoute struct {
 
 // AIGatewayRouteList contains a list of AIGatewayRoute.
 //
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 type AIGatewayRouteList struct {
 	metav1.TypeMeta `json:",inline"`
@@ -59,33 +54,16 @@ type AIGatewayRouteList struct {
 }
 
 // AIGatewayRouteSpec details the AIGatewayRoute configuration.
-//
-// +kubebuilder:validation:XValidation:rule="!has(self.parentRefs) || !has(self.targetRefs) || size(self.targetRefs) == 0", message="targetRefs is deprecated, use parentRefs only"
 type AIGatewayRouteSpec struct {
-	// TargetRefs are the names of the Gateway resources this AIGatewayRoute is being attached to.
-	//
-	// Deprecated: use the ParentRefs field instead. This field will be dropped in Envoy AI Gateway v0.4.0.
-	//
-	// +kubebuilder:validation:MaxItems=128
-	TargetRefs []gwapiv1a2.LocalPolicyTargetReferenceWithSectionName `json:"targetRefs,omitempty"`
-
 	// ParentRefs are the names of the Gateway resources this AIGatewayRoute is being attached to.
-	// Cross namespace references are not supported. In other words, the Gateway resources must be in the
-	// same namespace as the AIGatewayRoute. Currently, each reference's Kind must be Gateway.
+	// Currently, each reference's Kind must be Gateway.
 	//
 	// +kubebuilder:validation:MaxItems=16
 	// +kubebuilder:validation:XValidation:rule="self.all(match, match.kind == 'Gateway')", message="only Gateway is supported"
+	//
+	// +optional
 	ParentRefs []gwapiv1.ParentReference `json:"parentRefs,omitempty"`
 
-	// APISchema specifies the API schema of the input that the target Gateway(s) will receive.
-	// Based on this schema, the ai-gateway will perform the necessary transformation to the
-	// output schema specified in the selected AIServiceBackend during the routing process.
-	//
-	// Currently, the only supported schema is OpenAI as the input schema.
-	//
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:XValidation:rule="self.name == 'OpenAI'"
-	APISchema VersionedAPISchema `json:"schema"`
 	// Rules is the list of AIGatewayRouteRule that this AIGatewayRoute will match the traffic to.
 	// Each rule is a subset of the HTTPRoute in the Gateway API (https://gateway-api.sigs.k8s.io/api-types/httproute/).
 	//
@@ -111,6 +89,8 @@ type AIGatewayRouteSpec struct {
 	//
 	// Currently, the filter is only implemented as an external processor filter, which might be
 	// extended to other types of filters in the future. See https://github.com/envoyproxy/ai-gateway/issues/90
+	//
+	// +optional
 	FilterConfig *AIGatewayFilterConfig `json:"filterConfig,omitempty"`
 
 	// LLMRequestCosts specifies how to capture the cost of the LLM-related request, notably the token usage.
@@ -126,6 +106,8 @@ type AIGatewayRouteSpec struct {
 	//	  type: OutputToken
 	//	- metadataKey: llm_total_token
 	//	  type: TotalToken
+	//	- metadataKey: llm_cached_input_token
+	//	  type: CachedInputToken
 	// ```
 	// Then, with the following BackendTrafficPolicy of Envoy Gateway, you can have three
 	// rate limit buckets for each unique x-user-id header value. One bucket is for the input token,
@@ -221,7 +203,11 @@ type AIGatewayRouteRule struct {
 	// BackendRefs is the list of backends that this rule will route the traffic to.
 	// Each backend can have a weight that determines the traffic distribution.
 	//
-	// The namespace of each backend is "local", i.e. the same namespace as the AIGatewayRoute.
+	// The namespace of each backend defaults to the same namespace as the AIGatewayRoute when not specified.
+	// Cross-namespace references are supported by specifying the namespace field.
+	// When a namespace different than the AIGatewayRoute's namespace is specified,
+	// a ReferenceGrant object is required in the referent namespace to allow that
+	// namespace's owner to accept the reference.
 	//
 	// BackendRefs can reference either AIServiceBackend resources (default) or InferencePool resources
 	// from the Gateway API Inference Extension. When referencing InferencePool resources:
@@ -289,7 +275,7 @@ type AIGatewayRouteRule struct {
 // It can reference either an AIServiceBackend or an InferencePool resource.
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.group) && !has(self.kind) || (has(self.group) && has(self.kind))", message="group and kind must be specified together"
-// +kubebuilder:validation:XValidation:rule="!has(self.group) || (self.group == 'inference.networking.x-k8s.io' && self.kind == 'InferencePool')", message="only InferencePool from inference.networking.x-k8s.io group is supported"
+// +kubebuilder:validation:XValidation:rule="!has(self.group) || (self.group == 'inference.networking.k8s.io' && self.kind == 'InferencePool')", message="only InferencePool from inference.networking.k8s.io group is supported"
 type AIGatewayRouteRuleBackendRef struct {
 	// Name is the name of the backend resource.
 	// When Group and Kind are not specified, this refers to an AIServiceBackend.
@@ -299,9 +285,20 @@ type AIGatewayRouteRuleBackendRef struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
+	// Namespace is the namespace of the backend resource.
+	// When unspecified (or empty string), this refers to the local namespace of the AIGatewayRoute.
+	//
+	// Note that when a namespace different than the local namespace is specified,
+	// a ReferenceGrant object is required in the referent namespace to allow that
+	// namespace's owner to accept the reference. See the ReferenceGrant
+	// documentation for details.
+	//
+	// +optional
+	Namespace *gwapiv1.Namespace `json:"namespace,omitempty"`
+
 	// Group is the group of the backend resource.
 	// When not specified, defaults to aigateway.envoyproxy.io (AIServiceBackend).
-	// Currently, only "inference.networking.x-k8s.io" is supported for InferencePool resources.
+	// Currently, only "inference.networking.k8s.io" is supported for InferencePool resources.
 	//
 	// +optional
 	// +kubebuilder:validation:MaxLength=253
@@ -319,7 +316,26 @@ type AIGatewayRouteRuleBackendRef struct {
 
 	// Name of the model in the backend. If provided this will override the name provided in the request.
 	// This field is ignored when referencing InferencePool resources.
+	//
+	// +optional
 	ModelNameOverride string `json:"modelNameOverride,omitempty"`
+
+	// HeaderMutation defines the request header mutation to be applied to this backend.
+	// When both route-level and backend-level HeaderMutation are defined,
+	// route-level takes precedence over backend-level for conflicting operations.
+	// This field is ignored when referencing InferencePool resources.
+	//
+	// +optional
+	HeaderMutation *HTTPHeaderMutation `json:"headerMutation,omitempty"`
+
+	// BodyMutation defines the request body mutation to be applied to this backend.
+	// This allows modification of JSON fields in the request body before sending to the backend.
+	// When both route-level and backend-level BodyMutation are defined,
+	// route-level takes precedence over backend-level for conflicting operations.
+	// This field is ignored when referencing InferencePool resources.
+	//
+	// +optional
+	BodyMutation *HTTPBodyMutation `json:"bodyMutation,omitempty"`
 
 	// Weight is the weight of the backend. This is exactly the same as the weight in
 	// the BackendRef in the Gateway API. See for the details:
@@ -390,4 +406,81 @@ type AIGatewayFilterConfigExternalProcessor struct {
 	//
 	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+}
+
+// HTTPBodyMutation defines the mutation of HTTP request body JSON fields that will be applied to the request
+type HTTPBodyMutation struct {
+	// Set overwrites/adds the request body with the given JSON field (name, value)
+	// before sending to the backend. Only top-level fields are currently supported.
+	//
+	// Input:
+	//   {
+	//     "model": "gpt-4",
+	//     "service_tier": "default"
+	//   }
+	//
+	// Config:
+	//   set:
+	//   - path: "service_tier"
+	//     value: "scale"
+	//
+	// Output:
+	//   {
+	//     "model": "gpt-4",
+	//     "service_tier": "scale"
+	//   }
+	//
+	// +optional
+	// +listType=map
+	// +listMapKey=path
+	// +kubebuilder:validation:MaxItems=16
+	Set []HTTPBodyField `json:"set,omitempty"`
+
+	// Remove the given JSON field(s) from the HTTP request body before sending to the backend.
+	// The value of Remove is a list of top-level field names to remove.
+	//
+	// Input:
+	//   {
+	//     "model": "gpt-4",
+	//     "service_tier": "default",
+	//     "internal_flag": true
+	//   }
+	//
+	// Config:
+	//   remove: ["service_tier", "internal_flag"]
+	//
+	// Output:
+	//   {
+	//     "model": "gpt-4"
+	//   }
+	//
+	// +optional
+	// +listType=set
+	// +kubebuilder:validation:MaxItems=16
+	Remove []string `json:"remove,omitempty"`
+}
+
+// HTTPBodyField represents a JSON field name and value for body mutation
+type HTTPBodyField struct {
+	// Path is the top-level field name to set in the request body.
+	// Examples: "service_tier", "max_tokens", "temperature"
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	Path string `json:"path"`
+
+	// Value is the JSON value to set at the specified field. This can be any valid JSON value:
+	// string, number, boolean, object, array, or null.
+	// The value will be parsed as JSON and inserted at the specified field.
+	//
+	// Examples:
+	//   - "\"scale\"" (string)
+	//   - "42" (number)
+	//   - "true" (boolean)
+	//   - "{\"key\": \"value\"}" (object)
+	//   - "[1, 2, 3]" (array)
+	//   - "null" (null)
+	//
+	// +kubebuilder:validation:Required
+	Value string `json:"value"`
 }

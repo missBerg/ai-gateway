@@ -24,6 +24,59 @@ import (
 
 var noopLogger = log.New(io.Discard, "[testopenai] ", 0)
 
+// TestSplitSSEEvents tests the SSE event splitting logic.
+func TestSplitSSEEvents(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name:  "single event",
+			input: "data: {\"message\": \"hello\"}",
+			expected: []string{
+				"data: {\"message\": \"hello\"}",
+			},
+		},
+		{
+			name:  "multiple events with blank lines",
+			input: "data: {\"chunk\": 1}\n\ndata: {\"chunk\": 2}\n\ndata: [DONE]\n\n",
+			expected: []string{
+				"data: {\"chunk\": 1}",
+				"data: {\"chunk\": 2}",
+				"data: [DONE]",
+			},
+		},
+		{
+			name:  "events with multiple fields",
+			input: "event: message\ndata: {\"text\": \"hello\"}\n\nevent: close\ndata: [DONE]\n\n",
+			expected: []string{
+				"event: message\ndata: {\"text\": \"hello\"}",
+				"event: close\ndata: [DONE]",
+			},
+		},
+		{
+			name:     "empty input",
+			input:    "",
+			expected: nil,
+		},
+		{
+			name:  "trailing content without double newline",
+			input: "data: {\"message\": \"incomplete\"}",
+			expected: []string{
+				"data: {\"message\": \"incomplete\"}",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := splitSSEEvents(tt.input)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 // TestRecordNewInteraction tests the recording functionality with a mock server.
 func TestRecordNewInteraction(t *testing.T) {
 	// Create a mock OpenAI server.
@@ -79,7 +132,7 @@ func TestRecordNewInteraction(t *testing.T) {
 	require.NoError(t, err)
 
 	// Parse and verify the JSON response.
-	var respData map[string]interface{}
+	var respData map[string]any
 	err = json.Unmarshal(respBody, &respData)
 	require.NoError(t, err)
 	require.Equal(t, "chatcmpl-123", respData["id"])
@@ -142,11 +195,11 @@ func TestRecordNewInteraction_ServerError(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 
 	respBody, _ := io.ReadAll(resp.Body)
-	var errResp map[string]interface{}
+	var errResp map[string]any
 	err = json.Unmarshal(respBody, &errResp)
 	require.NoError(t, err)
-	require.Equal(t, map[string]interface{}{
-		"error": map[string]interface{}{
+	require.Equal(t, map[string]any{
+		"error": map[string]any{
 			"message": "Internal server error",
 			"type":    "server_error",
 		},
@@ -219,7 +272,7 @@ func TestRecordNewInteraction_NoAPIKey(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusInternalServerError, w.Code)
-	expected := "TestOpenAI Error: No cassette found for POST /v1/chat/completions. To record new cassettes, set OPENAI_API_KEY environment variable and provide X-Cassette-Name header.\n"
+	expected := "TestOpenAI Error: No cassette found for POST /v1/chat/completions. To record OpenAI cassettes, set OPENAI_API_KEY environment variable and provide X-Cassette-Name header.\n"
 	require.Equal(t, expected, w.Body.String())
 }
 
@@ -276,8 +329,9 @@ func TestMatchRequest_EdgeCases(t *testing.T) {
 	// Test body read error simulation is tricky with standard http.Request.
 	// Instead test other edge cases.
 	h := &cassetteHandler{
-		logger:  noopLogger,
-		apiBase: "https://api.openai.com/v1",
+		logger:     noopLogger,
+		apiBase:    "https://api.openai.com/v1",
+		serverBase: "https://api.openai.com",
 	}
 
 	tests := []struct {
@@ -339,7 +393,7 @@ func TestMatchRequest_EdgeCases(t *testing.T) {
 			require.NoError(t, err)
 			tc.req.Body = io.NopCloser(bytes.NewReader(body))
 
-			result := h.matchRequest(tc.req, tc.cassReq, body)
+			result := h.matchRequest(tc.req, tc.cassReq, body, "test")
 			require.Equal(t, tc.expected, result)
 		})
 	}
@@ -429,14 +483,6 @@ func TestServeHTTP_ComplexScenarios(t *testing.T) {
 			name:           "cassette name with path",
 			method:         "GET",
 			path:           "/v1/models",
-			cassetteName:   "named-with-path",
-			expectedStatus: http.StatusOK,
-			expectedBody:   `{"data":[]}`,
-		},
-		{
-			name:           "v1 prefix stripped correctly",
-			method:         "GET",
-			path:           "/models", // Without /v1 prefix.
 			cassetteName:   "named-with-path",
 			expectedStatus: http.StatusOK,
 			expectedBody:   `{"data":[]}`,

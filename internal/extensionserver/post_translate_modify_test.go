@@ -9,8 +9,10 @@ import (
 	"testing"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	listenerv3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	httpconnectionmanagerv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -170,7 +172,8 @@ func TestInsertAIGatewayExtProcFilter(t *testing.T) {
 				ConfigType: &httpconnectionmanagerv3.HttpFilter_TypedConfig{TypedConfig: &anypb.Any{}},
 			}
 
-			insertAIGatewayExtProcFilter(mgr, newFilter)
+			err := insertAIGatewayExtProcFilter(mgr, newFilter)
+			require.NoError(t, err)
 
 			require.Len(t, mgr.HttpFilters, tt.expectedFilterCount)
 			require.Equal(t, aiGatewayExtProcName, mgr.HttpFilters[tt.expectedPosition].Name)
@@ -187,27 +190,27 @@ func TestInsertAIGatewayExtProcFilter(t *testing.T) {
 }
 
 func TestServer_isRouteGeneratedByAIGateway(t *testing.T) {
-	emptyStruct, err := structpb.NewStruct(map[string]interface{}{})
+	emptyStruct, err := structpb.NewStruct(map[string]any{})
 	require.NoError(t, err)
 
-	structWithEmptyResources, err := structpb.NewStruct(map[string]interface{}{
+	structWithEmptyResources, err := structpb.NewStruct(map[string]any{
 		"resources": nil,
 	})
 	require.NoError(t, err)
 
-	withAnnotationsListStruct, err := structpb.NewStruct(map[string]interface{}{
-		"resources": []interface{}{
-			map[string]interface{}{
-				"annotations": map[string]interface{}{},
+	withAnnotationsListStruct, err := structpb.NewStruct(map[string]any{
+		"resources": []any{
+			map[string]any{
+				"annotations": map[string]any{},
 			},
 		},
 	})
 	require.NoError(t, err)
 
-	withOKAnnotationsListStruct, err := structpb.NewStruct(map[string]interface{}{
-		"resources": []interface{}{
-			map[string]interface{}{
-				"annotations": map[string]interface{}{
+	withOKAnnotationsListStruct, err := structpb.NewStruct(map[string]any{
+		"resources": []any{
+			map[string]any{
+				"annotations": map[string]any{
 					internalapi.AIGatewayGeneratedHTTPRouteAnnotation: "true",
 				},
 			},
@@ -306,26 +309,44 @@ func Test_shouldAIGatewayExtProcBeInserted(t *testing.T) {
 			filters:  []*httpconnectionmanagerv3.HttpFilter{{}, {}},
 			expected: true,
 		},
-		{
-			filters:  []*httpconnectionmanagerv3.HttpFilter{{}, {Name: "ai-eg-eep-test-gw"}},
-			expected: false,
-		},
-		{
-			filters:  []*httpconnectionmanagerv3.HttpFilter{{}, {Name: "ai-eg-eep-test-gw"}, {}},
-			expected: false,
-		},
-		{
-			filters:  []*httpconnectionmanagerv3.HttpFilter{{Name: "ai-eg-eep-test-gw"}},
-			expected: false,
-		},
-		{
-			filters:  []*httpconnectionmanagerv3.HttpFilter{{Name: aiGatewayExtProcName}, {Name: "ai-eg-eep-test-gw"}, {}},
-			expected: false,
-		},
 	}
 
 	for _, tt := range tests {
 		result := shouldAIGatewayExtProcBeInserted(tt.filters)
 		require.Equal(t, tt.expected, result)
 	}
+}
+
+func Test_findListenerRouteConfigs(t *testing.T) {
+	newHCM := func(name string) *httpconnectionmanagerv3.HttpConnectionManager {
+		return &httpconnectionmanagerv3.HttpConnectionManager{
+			RouteSpecifier: &httpconnectionmanagerv3.HttpConnectionManager_Rds{
+				Rds: &httpconnectionmanagerv3.Rds{RouteConfigName: name},
+			},
+		}
+	}
+	l := &listenerv3.Listener{
+		DefaultFilterChain: &listenerv3.FilterChain{
+			Filters: []*listenerv3.Filter{
+				{
+					Name:       wellknown.HTTPConnectionManager,
+					ConfigType: &listenerv3.Filter_TypedConfig{TypedConfig: mustToAny(t, newHCM("foo"))},
+				},
+			},
+		},
+		FilterChains: []*listenerv3.FilterChain{
+			{
+				Filters: []*listenerv3.Filter{
+					{
+						Name:       wellknown.HTTPConnectionManager,
+						ConfigType: &listenerv3.Filter_TypedConfig{TypedConfig: mustToAny(t, newHCM("bar"))},
+					},
+				},
+			},
+			// Non-HCM filter chain.
+			{Filters: []*listenerv3.Filter{}},
+		},
+	}
+	names := findListenerRouteConfigs(l)
+	require.ElementsMatch(t, []string{"foo", "bar"}, names)
 }

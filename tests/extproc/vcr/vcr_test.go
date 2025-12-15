@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -28,24 +29,15 @@ var envoyConfig string
 //go:embed extproc.yaml
 var extprocConfig string
 
-// extprocCustomBin holds the path to the compiled example custom extproc binary.
-var extprocCustomBin string
-
-//go:embed envoy_custom_metrics.yaml
-var envoyCustomConfig string
-
-//go:embed extproc_custom_metrics.yaml
-var extprocCustomConfig string
-
 func startTestEnvironment(t *testing.T, extprocBin, extprocConfig string, extprocEnv []string, envoyConfig string) *testenvironment.TestEnvironment {
 	return testenvironment.StartTestEnvironment(t,
-		requireUpstream, 11434,
-		extprocBin, extprocConfig, extprocEnv, envoyConfig, true,
+		requireUpstream, map[string]int{"upstream": 11434},
+		extprocBin, extprocConfig, extprocEnv, envoyConfig, true, false, 120*time.Second,
 	)
 }
 
-func requireUpstream(t *testing.T, out io.Writer, port int) {
-	openAIServer, err := testopenai.NewServer(out, port)
+func requireUpstream(t testing.TB, out io.Writer, ports map[string]int) {
+	openAIServer, err := testopenai.NewServer(out, ports["upstream"])
 	require.NoError(t, err, "failed to create test OpenAI server")
 	t.Cleanup(openAIServer.Close)
 }
@@ -55,12 +47,6 @@ func TestMain(m *testing.M) {
 	var err error
 	// Build extproc binary once for all tests.
 	if extprocBin, err = extproc.BuildExtProcOnDemand(); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to start tests due to build error: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Build the custom metrics extproc binary.
-	if extprocCustomBin, err = extproc.BuildExtProcCustom("extproc_custom_metrics", "./examples/extproc_custom_metrics"); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to start tests due to build error: %v\n", err)
 		os.Exit(1)
 	}

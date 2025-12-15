@@ -15,7 +15,7 @@ package v1alpha1
 type VersionedAPISchema struct {
 	// Name is the name of the API schema of the AIGatewayRoute or AIServiceBackend.
 	//
-	// +kubebuilder:validation:Enum=OpenAI;AWSBedrock;AzureOpenAI;GCPVertexAI;GCPAnthropic
+	// +kubebuilder:validation:Enum=OpenAI;Cohere;AWSBedrock;AzureOpenAI;GCPVertexAI;GCPAnthropic;Anthropic;AWSAnthropic
 	Name APISchema `json:"name"`
 
 	// Version is the version of the API schema.
@@ -43,6 +43,10 @@ const (
 	//
 	// https://github.com/openai/openai-openapi
 	APISchemaOpenAI APISchema = "OpenAI"
+	// APISchemaCohere is the Cohere schema.
+	//
+	// https://docs.cohere.com/v2
+	APISchemaCohere APISchema = "Cohere"
 	// APISchemaAWSBedrock is the AWS Bedrock schema.
 	//
 	// https://docs.aws.amazon.com/bedrock/latest/APIReference/API_Operations_Amazon_Bedrock_Runtime.html
@@ -57,11 +61,20 @@ const (
 	//
 	// https://cloud.google.com/vertex-ai/docs/reference/rest/v1/projects.locations.endpoints/generateContent?hl=en
 	APISchemaGCPVertexAI APISchema = "GCPVertexAI"
-	// APISchemaGCPAnthropic is the schema followed by Anthropic models hosted on GCP's Vertex AI platform.
-	// This is majorly the Anthropic API with some GCP specific parameters as described in below URL.
+	// APISchemaGCPAnthropic is the schema for Anthropic models hosted on GCP's Vertex AI platform.
+	// Returns native Anthropic format responses for seamless integration.
 	//
 	// https://docs.anthropic.com/en/api/claude-on-vertex-ai
 	APISchemaGCPAnthropic APISchema = "GCPAnthropic"
+	// APISchemaAnthropic is the native Anthropic API schema.
+	// https://docs.claude.com/en/home
+	APISchemaAnthropic APISchema = "Anthropic"
+	// APISchemaAWSAnthropic is the schema for Anthropic models hosted on AWS Bedrock.
+	// Uses the native Anthropic Messages API format for requests and responses.
+	//
+	// https://aws.amazon.com/bedrock/anthropic/
+	// https://docs.claude.com/en/api/claude-on-amazon-bedrock
+	APISchemaAWSAnthropic APISchema = "AWSAnthropic"
 )
 
 const (
@@ -80,7 +93,7 @@ type LLMRequestCost struct {
 	// and it uses "output token" as the cost. The other types are "InputToken", "TotalToken",
 	// and "CEL".
 	//
-	// +kubebuilder:validation:Enum=OutputToken;InputToken;TotalToken;CEL
+	// +kubebuilder:validation:Enum=OutputToken;InputToken;CachedInputToken;TotalToken;CEL
 	Type LLMRequestCostType `json:"type"`
 	// CEL is the CEL expression to calculate the cost of the request.
 	// The CEL expression must return a signed or unsigned integer. If the
@@ -91,6 +104,7 @@ type LLMRequestCost struct {
 	//	* model: the model name extracted from the request content. Type: string.
 	//	* backend: the backend name in the form of "name.namespace". Type: string.
 	//	* input_tokens: the number of input tokens. Type: unsigned integer.
+	//	* cached_input_tokens: the number of cached input tokens. Type: unsigned integer.
 	//	* output_tokens: the number of output tokens. Type: unsigned integer.
 	//	* total_tokens: the total number of tokens. Type: unsigned integer.
 	//
@@ -98,6 +112,7 @@ type LLMRequestCost struct {
 	//
 	// 	* "model == 'llama' ?  input_tokens + output_token * 0.5 : total_tokens"
 	//	* "backend == 'foo.default' ?  input_tokens + output_tokens : total_tokens"
+	//	* "backend == 'bar.default' ?  (input_tokens - cached_input_tokens) + cached_input_tokens * 0.1 + output_tokens : total_tokens"
 	//	* "input_tokens + output_tokens + total_tokens"
 	//	* "input_tokens * output_tokens"
 	//
@@ -111,6 +126,8 @@ type LLMRequestCostType string
 const (
 	// LLMRequestCostTypeInputToken is the cost type of the input token.
 	LLMRequestCostTypeInputToken LLMRequestCostType = "InputToken"
+	// LLMRequestCostTypeCachedInputToken is the cost type of the cached input token.
+	LLMRequestCostTypeCachedInputToken LLMRequestCostType = "CachedInputToken"
 	// LLMRequestCostTypeOutputToken is the cost type of the output token.
 	LLMRequestCostTypeOutputToken LLMRequestCostType = "OutputToken"
 	// LLMRequestCostTypeTotalToken is the cost type of the total token.

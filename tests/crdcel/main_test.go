@@ -33,18 +33,6 @@ func TestAIGatewayRoutes(t *testing.T) {
 		{name: "parent_refs.yaml"},
 		{name: "parent_refs_default_kind.yaml"},
 		{
-			name:   "non_openai_schema.yaml",
-			expErr: `spec.schema: Invalid value: "object": failed rule: self.name == 'OpenAI'`,
-		},
-		{
-			name:   "unknown_schema.yaml",
-			expErr: "spec.schema.name: Unsupported value: \"SomeRandomVendor\": supported values: \"OpenAI\", \"AWSBedrock\"",
-		},
-		{
-			name:   "target_refs_with_parent_refs.yaml",
-			expErr: `spec: Invalid value: "object": targetRefs is deprecated, use parentRefs only`,
-		},
-		{
 			name:   "parent_refs_invalid_kind.yaml",
 			expErr: `spec.parentRefs: Invalid value: "array": only Gateway is supported`,
 		},
@@ -63,7 +51,7 @@ func TestAIGatewayRoutes(t *testing.T) {
 		},
 		{
 			name:   "inference_pool_unsupported_group.yaml",
-			expErr: "spec.rules[0].backendRefs[0]: Invalid value: \"object\": only InferencePool from inference.networking.x-k8s.io group is supported",
+			expErr: "spec.rules[0].backendRefs[0]: Invalid value: \"object\": only InferencePool from inference.networking.k8s.io group is supported",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -93,12 +81,14 @@ func TestAIServiceBackends(t *testing.T) {
 		expErr string
 	}{
 		{name: "basic.yaml"},
+		{name: "anthropic-schema.yaml"},
 		{name: "basic-eg-backend-aws.yaml"},
 		{name: "basic-eg-backend-azure.yaml"},
 		{
 			name:   "unknown_schema.yaml",
-			expErr: "spec.schema.name: Unsupported value: \"SomeRandomVendor\": supported values: \"OpenAI\", \"AWSBedrock\"",
+			expErr: "spec.schema.name: Unsupported value: \"SomeRandomVendor\": supported values: \"OpenAI\", \"Cohere\", \"AWSBedrock\", \"AzureOpenAI\", \"GCPVertexAI\", \"GCPAnthropic\", \"Anthropic\"",
 		},
+		{name: "k8s-svc.yaml", expErr: "BackendRef must be a Backend resource of Envoy Gateway"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			data, err := testdata.ReadFile(path.Join("testdata/aiservicebackends", tc.name))
@@ -129,11 +119,11 @@ func TestBackendSecurityPolicies(t *testing.T) {
 		{name: "basic.yaml"},
 		{
 			name:   "unknown_provider.yaml",
-			expErr: "spec.type: Unsupported value: \"UnknownType\": supported values: \"APIKey\", \"AWSCredentials\", \"AzureCredentials\"",
+			expErr: "spec.type: Unsupported value: \"UnknownType\": supported values: \"APIKey\", \"AWSCredentials\", \"AzureAPIKey\", \"AzureCredentials\"",
 		},
 		{
 			name:   "missing_type.yaml",
-			expErr: "spec.type: Unsupported value: \"\": supported values: \"APIKey\", \"AWSCredentials\", \"AzureCredentials\"",
+			expErr: "spec.type: Unsupported value: \"\": supported values: \"APIKey\", \"AWSCredentials\", \"AzureAPIKey\", \"AzureCredentials\"",
 		},
 		{
 			name:   "multiple_security_policies.yaml",
@@ -184,12 +174,12 @@ func TestBackendSecurityPolicies(t *testing.T) {
 			name:   "gcp_with_apikey.yaml",
 			expErr: "When type is GCPCredentials, only gcpCredentials field should be set",
 		},
-		// Valid test cases - these should pass.
 		{name: "azure_oidc.yaml"},
 		{name: "azure_valid_credentials.yaml"},
 		{name: "aws_credential_file.yaml"},
 		{name: "aws_oidc.yaml"},
 		{name: "gcp_oidc.yaml"},
+		{name: "anthropic-apikey.yaml"},
 		{name: "targetrefs_basic.yaml"},
 		{name: "targetrefs_multiple.yaml"},
 		{
@@ -214,6 +204,66 @@ func TestBackendSecurityPolicies(t *testing.T) {
 			} else {
 				require.NoError(t, c.Create(ctx, backendSecurityPolicy))
 				require.NoError(t, c.Delete(ctx, backendSecurityPolicy))
+			}
+		})
+	}
+}
+
+func TestMCPRoutes(t *testing.T) {
+	c, _, _ := testsinternal.NewEnvTest(t)
+	ctx := t.Context()
+
+	for _, tc := range []struct {
+		name   string
+		expErr string
+	}{
+		{name: "basic.yaml"},
+		{
+			name:   "same_backend_names.yaml",
+			expErr: `MCPRoute.aigateway.envoyproxy.io "same-backend-names" is invalid: spec.backendRefs: Invalid value: "array": all backendRefs names must be unique`,
+		},
+		{
+			name:   "parent_refs_invalid_kind.yaml",
+			expErr: `spec.parentRefs: Invalid value: "array": only Gateway is supported`,
+		},
+		{
+			name:   "tool_selector_missing.yaml",
+			expErr: "spec.backendRefs[0].toolSelector: Invalid value: \"object\": exactly one of include or includeRegex must be specified",
+		},
+		{
+			name:   "tool_selector_both.yaml",
+			expErr: "spec.backendRefs[0].toolSelector: Invalid value: \"object\": exactly one of include or includeRegex must be specified",
+		},
+		{
+			name:   "backend_api_key_inline_and_secret.yaml",
+			expErr: "spec.backendRefs[0].securityPolicy.apiKey: Invalid value: \"object\": exactly one of secretRef or inline must be set",
+		},
+		{
+			name:   "backend_api_key_missing.yaml",
+			expErr: "spec.backendRefs[0].securityPolicy.apiKey: Invalid value: \"object\": exactly one of secretRef or inline must be set",
+		},
+		{
+			name:   "jwks_missing.yaml",
+			expErr: "spec.securityPolicy.oauth.jwks: Invalid value: \"object\": either remoteJWKS or localJWKS must be specified.",
+		},
+		{
+			name:   "jwks_both.yaml",
+			expErr: "spec.securityPolicy.oauth.jwks: Invalid value: \"object\": remoteJWKS and localJWKS cannot both be specified.",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := testdata.ReadFile(path.Join("testdata/mcpgatewayroutes", tc.name))
+			require.NoError(t, err)
+
+			mcpRoute := &aigv1a1.MCPRoute{}
+			err = yaml.UnmarshalStrict(data, mcpRoute)
+			require.NoError(t, err)
+
+			if tc.expErr != "" {
+				require.ErrorContains(t, c.Create(ctx, mcpRoute), tc.expErr)
+			} else {
+				require.NoError(t, c.Create(ctx, mcpRoute))
+				require.NoError(t, c.Delete(ctx, mcpRoute))
 			}
 		})
 	}

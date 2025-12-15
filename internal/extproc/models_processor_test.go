@@ -16,13 +16,13 @@ import (
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/stretchr/testify/require"
 
-	"github.com/envoyproxy/ai-gateway/filterapi"
 	"github.com/envoyproxy/ai-gateway/internal/apischema/openai"
+	"github.com/envoyproxy/ai-gateway/internal/filterapi"
 )
 
 func TestModels_ProcessRequestHeaders(t *testing.T) {
 	now := time.Now()
-	cfg := &processorConfig{declaredModels: []filterapi.Model{
+	cfg := &filterapi.RuntimeConfig{DeclaredModels: []filterapi.Model{
 		{
 			Name:      "openai",
 			OwnedBy:   "openai",
@@ -52,23 +52,13 @@ func TestModels_ProcessRequestHeaders(t *testing.T) {
 	var models openai.ModelList
 	require.NoError(t, json.Unmarshal(ir.ImmediateResponse.Body, &models))
 	require.Equal(t, "list", models.Object)
-	require.Len(t, models.Data, len(cfg.declaredModels))
-	for i, m := range cfg.declaredModels {
+	require.Len(t, models.Data, len(cfg.DeclaredModels))
+	for i, m := range cfg.DeclaredModels {
 		require.Equal(t, "model", models.Data[i].Object)
 		require.Equal(t, m.Name, models.Data[i].ID)
 		require.Equal(t, now.Unix(), time.Time(models.Data[i].Created).Unix())
 		require.Equal(t, m.OwnedBy, models.Data[i].OwnedBy)
 	}
-}
-
-func TestModels_UnimplementedMethods(t *testing.T) {
-	p := &modelsProcessor{}
-	_, err := p.ProcessRequestBody(t.Context(), &extprocv3.HttpBody{})
-	require.ErrorIs(t, err, errUnexpectedCall)
-	_, err = p.ProcessResponseHeaders(t.Context(), &corev3.HeaderMap{})
-	require.ErrorIs(t, err, errUnexpectedCall)
-	_, err = p.ProcessResponseBody(t.Context(), &extprocv3.HttpBody{})
-	require.ErrorIs(t, err, errUnexpectedCall)
 }
 
 func headers(in []*corev3.HeaderValueOption) map[string]string {

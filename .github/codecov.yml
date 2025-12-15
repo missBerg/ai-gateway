@@ -1,0 +1,20 @@
+# This file must be in sync with .testcoverage.yaml that can be used locally.
+coverage:
+  status:
+    project:
+      default:
+        target: 86%
+        threshold: 5%
+        if_ci_failed: error
+    patch:
+      default:
+        target: 80%
+        threshold: 5%
+        if_ci_failed: error
+ignore:
+  - "cmd"
+  - "examples"
+  - "**/zz_generated.*.go"
+  - "internal/testing"
+  - "tests/internal"
+  - "internal/controller/controller.go"

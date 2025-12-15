@@ -10,7 +10,9 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -63,10 +65,6 @@ func (c *AIBackendController) Reconcile(ctx context.Context, req reconcile.Reque
 // syncAIServiceBackend is the main logic for reconciling the AIServiceBackend resource.
 // This is decoupled from the Reconcile method to centralize the error handling and status updates.
 func (c *AIBackendController) syncAIServiceBackend(ctx context.Context, aiBackend *aigv1a1.AIServiceBackend) error {
-	if aiBackend.Spec.BackendSecurityPolicyRef != nil {
-		c.logger.Info("backendSecurityPolicyRef is deprecated. Use BackendSecurityPolicy.spec.targetRefs instead.")
-	}
-
 	var backendSecurityPolicyList aigv1a1.BackendSecurityPolicyList
 	key := fmt.Sprintf("%s.%s", aiBackend.Name, aiBackend.Namespace)
 	if err := c.client.List(ctx, &backendSecurityPolicyList, client.InNamespace(aiBackend.Namespace),
@@ -101,9 +99,19 @@ func (c *AIBackendController) syncAIServiceBackend(ctx context.Context, aiBacken
 }
 
 // updateAIServiceBackendStatus updates the status of the AIServiceBackend.
-func (c *AIBackendController) updateAIServiceBackendStatus(ctx context.Context, route *aigv1a1.AIServiceBackend, conditionType string, message string) {
-	route.Status.Conditions = newConditions(conditionType, message)
-	if err := c.client.Status().Update(ctx, route); err != nil {
-		c.logger.Error(err, "failed to update AIServiceBackend status")
+func (c *AIBackendController) updateAIServiceBackendStatus(ctx context.Context, backend *aigv1a1.AIServiceBackend, conditionType string, message string) {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := c.client.Get(ctx, client.ObjectKey{Name: backend.Name, Namespace: backend.Namespace}, backend); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
+		backend.Status.Conditions = newConditions(conditionType, message)
+		return c.client.Status().Update(ctx, backend)
+	})
+	if err != nil {
+		c.logger.Error(err, "failed to update AIServiceBackend status",
+			"namespace", backend.Namespace, "name", backend.Name)
 	}
 }

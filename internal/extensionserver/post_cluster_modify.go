@@ -13,14 +13,14 @@ import (
 	egextension "github.com/envoyproxy/gateway/proto/extension"
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	"google.golang.org/protobuf/types/known/durationpb"
-	gwaiev1a2 "sigs.k8s.io/gateway-api-inference-extension/api/v1alpha2"
+	gwaiev1 "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 
 	"github.com/envoyproxy/ai-gateway/internal/internalapi"
 )
 
 // clusterRefInferencePool generates a unique reference for an InferencePool cluster.
-func clusterRefInferencePool(namespace, name, serviceName string, servicePort uint32) string {
-	return fmt.Sprintf("%s/%s/%s/%d", namespace, name, serviceName, servicePort)
+func clusterRefInferencePool(namespace, name, serviceName string, servicePort uint32, bodyMode string, allowModeOverride string) string {
+	return fmt.Sprintf("%s/%s/%s/%d/%s/%s", namespace, name, serviceName, servicePort, bodyMode, allowModeOverride)
 }
 
 // PostClusterModify is called by Envoy Gateway to allow extensions to modify clusters after they are generated.
@@ -47,7 +47,7 @@ func (s *Server) PostClusterModify(_ context.Context, req *egextension.PostClust
 	// If we found an InferencePool, configure the cluster for ORIGINAL_DST.
 	if inferencePools := s.constructInferencePoolsFrom(req.PostClusterContext.BackendExtensionResources); inferencePools != nil {
 		if len(inferencePools) != 1 {
-			panic("BUG: at most one inferencepool can be referenced per route rule")
+			return nil, fmt.Errorf("BUG: at most one inferencepool can be referenced per route rule")
 		}
 		s.handleInferencePoolCluster(req.Cluster, inferencePools[0])
 	}
@@ -64,7 +64,7 @@ func (s *Server) PostClusterModify(_ context.Context, req *egextension.PostClust
 //
 // The ORIGINAL_DST cluster type tells Envoy to route requests to the destination specified
 // in the x-gateway-destination-endpoint header, enabling dynamic endpoint selection by the EPP.
-func (s *Server) handleInferencePoolCluster(cluster *clusterv3.Cluster, inferencePool *gwaiev1a2.InferencePool) {
+func (s *Server) handleInferencePoolCluster(cluster *clusterv3.Cluster, inferencePool *gwaiev1.InferencePool) {
 	// Configure cluster for ORIGINAL_DST with header-based load balancing.
 	// ORIGINAL_DST type allows Envoy to route to destinations specified in HTTP headers.
 	cluster.ClusterDiscoveryType = &clusterv3.Cluster_Type{Type: clusterv3.Cluster_ORIGINAL_DST}

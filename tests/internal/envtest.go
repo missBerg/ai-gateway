@@ -7,9 +7,7 @@ package testsinternal
 
 import (
 	"fmt"
-	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -41,29 +39,12 @@ func NewEnvTest(t *testing.T) (c client.Client, cfg *rest.Config, k kubernetes.I
 		k8sVersion = defaultK8sVersion
 	}
 	t.Logf("Using Kubernetes version %s", k8sVersion)
-	setupEnvTestCmd := exec.Command("go", "tool", "setup-envtest", "use", k8sVersion, "-p", "path")
-	output, err := setupEnvTestCmd.Output()
-	require.NoError(t, err, "Failed to setup envtest: %s", output)
-	t.Logf("Using envtest assets from %s", string(output))
-	t.Setenv("KUBEBUILDER_ASSETS", string(output))
+	output, err := RunGoTool("setup-envtest", "use", k8sVersion, "-p", "path")
+	require.NoError(t, err, "Failed to setup envtest: %s", err)
+	t.Logf("Using envtest assets from %s", output)
+	t.Setenv("KUBEBUILDER_ASSETS", output)
 
-	const (
-		egURLBase    = "https://raw.githubusercontent.com/envoyproxy/gateway/refs/tags/v1.3.0/charts/gateway-helm/crds/generated/"
-		gwAPIURLBase = "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/refs/tags/v1.2.1/config/crd/standard/"
-	)
-	for _, url := range []string{
-		egURLBase + "gateway.envoyproxy.io_envoyextensionpolicies.yaml",
-		egURLBase + "gateway.envoyproxy.io_httproutefilters.yaml",
-		gwAPIURLBase + "gateway.networking.k8s.io_httproutes.yaml",
-		gwAPIURLBase + "gateway.networking.k8s.io_gateways.yaml",
-	} {
-		path := filepath.Base(url) + "_for_tests.yaml"
-		crds = append(crds, requireThirdPartyCRDDownloaded(t, path, url))
-	}
-
-	const infExtURL = "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/v0.2.0/manifests.yaml"
-	crds = append(crds, requireThirdPartyCRDDownloaded(t, "inference_extension_for_tests.yaml", infExtURL))
-
+	crds = append(crds, requireThirdPartyCRDDownloaded(t))
 	env := &envtest.Environment{CRDDirectoryPaths: crds}
 	cfg, err = env.Start()
 	require.NoError(t, err)
@@ -79,21 +60,24 @@ func NewEnvTest(t *testing.T) (c client.Client, cfg *rest.Config, k kubernetes.I
 	return c, cfg, k
 }
 
-// requireThirdPartyCRDDownloaded downloads the CRD from the given URL if it does not exist at the given path.
-// It returns the path to the CRD as-is to make it easier to use in the caller.
-func requireThirdPartyCRDDownloaded(t *testing.T, path, url string) string {
+// requireThirdPartyCRDDownloaded downloads the CRD from the Envoy Gateway Helm chart if it does not exist,
+// including the compatible GWAPI CRDs.
+func requireThirdPartyCRDDownloaded(t *testing.T) string {
+	const path = "3rd_party_crds_for_tests.yaml"
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		var crd *http.Response
-		crd, err = http.DefaultClient.Get(url)
-		require.NoError(t, err)
-		var body *os.File
-		body, err = os.Create(path)
+		var f *os.File
+		f, err = os.Create(path)
 		defer func() {
-			_ = crd.Body.Close()
+			_ = f.Close()
 		}()
-		require.NoError(t, err)
-		_, err = body.ReadFrom(crd.Body)
-		require.NoError(t, err)
+		require.NoError(t, err, "Failed to create file for third-party CRD")
+
+		helm := GoToolCmd("helm", "show", "crds", "oci://docker.io/envoyproxy/gateway-helm",
+			"--version", "1.5.0",
+		)
+		helm.Stdout = f
+		helm.Stderr = os.Stderr
+		require.NoError(t, helm.Run(), "Failed to download third-party CRD")
 	} else if err != nil {
 		panic(fmt.Sprintf("Failed to check if CRD exists: %v", err))
 	}
