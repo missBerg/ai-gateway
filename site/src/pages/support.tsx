@@ -164,16 +164,86 @@ function AdopterSection() {
         </div>
 
         <div className={styles.modernAdopterGuide}>
+          <div className={styles.primaryMethod}>
+            <div className={styles.methodCard}>
+              <div className={styles.methodIcon}>
+                <Github size={48} />
+              </div>
+              <h3>Quick & Easy: Edit on GitHub</h3>
+              <p>
+                Click the button below to edit the adopters file directly in your browser.
+                Add your organization's details, and GitHub will automatically create a pull request for you!
+              </p>
+              <div className={styles.actionButtons}>
+                <Link
+                  className="button button--primary button--lg"
+                  href="https://github.com/envoyproxy/ai-gateway/edit/main/site/src/data/adopters/adopters.json"
+                  target="_blank"
+                  rel="noopener noreferrer">
+                  <Github size={20} />
+                  Edit adopters.json on GitHub
+                </Link>
+              </div>
+            </div>
+          </div>
+
           <Accordion type="single" collapsible className={styles.accordion}>
-            <AccordionItem value="github-issue" className={styles.accordionItem}>
+            <AccordionItem value="how-to-add" className={styles.accordionItem}>
               <AccordionTrigger className={styles.accordionTrigger}>
                 <div className={styles.optionHeader}>
                   <div className={styles.optionIcon}>
-                    <Github size={24} />
+                    <FileText size={24} />
                   </div>
                   <div className={styles.optionInfo}>
-                    <h3>Option 1: Quick GitHub Issue</h3>
-                    <p>Easiest method - we'll handle the technical details for you</p>
+                    <h3>What to Add</h3>
+                    <p>JSON format and field descriptions</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className={styles.accordionContent}>
+                <div className={styles.requirementsList}>
+                  <div className={styles.requirementGroup}>
+                    <h4>Add Your Entry</h4>
+                    <p>Add this JSON object to the array in <code>adopters/adopters.json</code>:</p>
+                    <div className={styles.jsonExample}>
+                      <pre>{`{
+  "name": "Your Organization Name",
+  "logoUrl": "https://yoursite.com/logo.svg",
+  "url": "https://yourcompany.com",
+  "description": "Brief description (shown on hover)"
+}`}</pre>
+                    </div>
+                  </div>
+                  <div className={styles.requirementGroup}>
+                    <h4>Fields</h4>
+                    <ul>
+                      <li><strong>name</strong> (required): Your organization's display name</li>
+                      <li><strong>logoUrl</strong> (required): URL to your logo - can be external (https://...) or local (/img/adopters/...)</li>
+                      <li><strong>url</strong> (optional): Your organization's website</li>
+                      <li><strong>description</strong> (optional): Brief description shown on hover</li>
+                    </ul>
+                  </div>
+                  <div className={styles.requirementGroup}>
+                    <h4>Logo Options</h4>
+                    <p><strong>Option 1 (Easiest):</strong> Use an external URL to your logo</p>
+                    <p><code>"logoUrl": "https://yourcompany.com/logo.svg"</code></p>
+                    <p><strong>Option 2:</strong> Upload logo to <code>site/static/img/adopters/</code> and reference it</p>
+                    <p><code>"logoUrl": "/img/adopters/your-logo.svg"</code></p>
+                    <p><em>Logo specs: SVG preferred, 240x160px or 3:2 ratio, transparent/white background</em></p>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="alternative" className={styles.accordionItem}>
+              <AccordionTrigger className={styles.accordionTrigger}>
+                <div className={styles.optionHeader}>
+                  <div className={styles.optionIcon}>
+                    <Wrench size={24} />
+                  </div>
+                  <div className={styles.optionInfo}>
+                    <h3>Alternative: GitHub Issue</h3>
+                    <p>Let us add it for you</p>
                   </div>
                 </div>
               </AccordionTrigger>
@@ -189,15 +259,8 @@ function AdopterSection() {
                   <div className={styles.step}>
                     <div className={styles.stepNumber}>2</div>
                     <div className={styles.stepContent}>
-                      <h4>Attach Your Logo</h4>
-                      <p>Upload your logo file (SVG preferred, PNG acceptable)</p>
-                    </div>
-                  </div>
-                  <div className={styles.step}>
-                    <div className={styles.stepNumber}>3</div>
-                    <div className={styles.stepContent}>
-                      <h4>Provide Organization Details</h4>
-                      <p>Include your organization name, website URL (optional), and brief description (optional)</p>
+                      <h4>Provide Details</h4>
+                      <p>Include your organization name, logo URL or file, website URL (optional), and description (optional)</p>
                     </div>
                   </div>
                   <div className={styles.actionButtons}>
@@ -207,101 +270,6 @@ function AdopterSection() {
                       <Github size={16} />
                       Create Issue
                     </Link>
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-            <AccordionItem value="pull-request" className={styles.accordionItem}>
-              <AccordionTrigger className={styles.accordionTrigger}>
-                <div className={styles.optionHeader}>
-                  <div className={styles.optionIcon}>
-                    <Wrench size={24} />
-                  </div>
-                  <div className={styles.optionInfo}>
-                    <h3>Option 2: Submit Pull Request</h3>
-                    <p>For developers who want to contribute directly</p>
-                  </div>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className={styles.accordionContent}>
-                <div className={styles.stepByStep}>
-                  <div className={styles.step}>
-                    <div className={styles.stepNumber}>1</div>
-                    <div className={styles.stepContent}>
-                      <h4>Fork Repository</h4>
-                      <p>Fork the ai-gateway repository to your GitHub account</p>
-                    </div>
-                  </div>
-                  <div className={styles.step}>
-                    <div className={styles.stepNumber}>2</div>
-                    <div className={styles.stepContent}>
-                      <h4>Add Logo File</h4>
-                      <p>Place your logo in <code>site/static/img/adopters/your-company.svg</code></p>
-                    </div>
-                  </div>
-                  <div className={styles.step}>
-                    <div className={styles.stepNumber}>3</div>
-                    <div className={styles.stepContent}>
-                      <h4>Create JSON File</h4>
-                      <p>Create <code>your-company.json</code> in <code>site/src/data/adopters/</code></p>
-                    </div>
-                  </div>
-                  <div className={styles.step}>
-                    <div className={styles.stepNumber}>4</div>
-                    <div className={styles.stepContent}>
-                      <h4>Update Index File</h4>
-                      <p>Add import and entry to <code>site/src/data/adopters/index.ts</code></p>
-                    </div>
-                  </div>
-                  <div className={styles.actionButtons}>
-                    <Link
-                      className="button button--primary"
-                      href="https://github.com/envoyproxy/ai-gateway">
-                      <ExternalLink size={16} />
-                      Fork Repository
-                    </Link>
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-            <AccordionItem value="requirements" className={styles.accordionItem}>
-              <AccordionTrigger className={styles.accordionTrigger}>
-                <div className={styles.optionHeader}>
-                  <div className={styles.optionIcon}>
-                    <FileText size={24} />
-                  </div>
-                  <div className={styles.optionInfo}>
-                    <h3>Requirements & Guidelines</h3>
-                    <p>Logo specifications and file naming conventions</p>
-                  </div>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className={styles.accordionContent}>
-                <div className={styles.requirementsList}>
-                  <div className={styles.requirementGroup}>
-                    <h4>File Naming</h4>
-                    <p>Use lowercase with hyphens: <code>acme-corporation.json</code></p>
-                  </div>
-                  <div className={styles.requirementGroup}>
-                    <h4>Logo Specifications</h4>
-                    <ul>
-                      <li><strong>Format:</strong> SVG preferred (PNG acceptable)</li>
-                      <li><strong>Dimensions:</strong> 240x160px or similar 3:2 ratio</li>
-                      <li><strong>Background:</strong> Transparent or white</li>
-                    </ul>
-                  </div>
-                  <div className={styles.requirementGroup}>
-                    <h4>JSON Structure</h4>
-                    <div className={styles.jsonExample}>
-                      <pre>{`{
-  "name": "Your Organization",
-  "logoUrl": "/img/adopters/your-org.svg",
-  "url": "https://yoursite.com",
-  "description": "Optional description"
-}`}</pre>
-                    </div>
                   </div>
                 </div>
               </AccordionContent>
