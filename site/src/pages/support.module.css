@@ -260,6 +260,49 @@
   margin: 3rem auto;
 }
 
+.primaryMethod {
+  margin-bottom: 2rem;
+}
+
+.methodCard {
+  background: white;
+  border-radius: 16px;
+  padding: 3rem 2.5rem;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(108, 24, 153, 0.15);
+  border: 2px solid var(--ifm-color-primary-lighter);
+}
+
+.methodIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  background: var(--ifm-color-primary);
+  color: white;
+  border-radius: 20px;
+  margin: 0 auto 1.5rem;
+  box-shadow: 0 4px 15px rgba(108, 24, 153, 0.3);
+}
+
+.methodCard h3 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--ifm-color-emphasis-900);
+  margin-bottom: 1rem;
+}
+
+.methodCard p {
+  font-size: 1.05rem;
+  color: var(--ifm-color-emphasis-700);
+  line-height: 1.6;
+  margin-bottom: 2rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .accordion {
   background: white;
   border-radius: 16px;

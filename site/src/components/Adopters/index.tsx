@@ -7,7 +7,11 @@ import styles from './styles.module.css';
 
 function AdopterLogo({ name, logoUrl, url, description }: Adopter) {
   const content = (
-    <div className={styles.adopterCard}>
+    <div
+      className={styles.adopterCard}
+      title={description || undefined}
+      aria-label={description ? `${name}: ${description}` : name}
+    >
       <div className={styles.adopterName}>{name}</div>
       <div className={styles.logoContainer}>
         <img
@@ -32,6 +36,7 @@ function AdopterLogo({ name, logoUrl, url, description }: Adopter) {
           target="_blank"
           rel="noopener noreferrer"
           className={styles.adopterLink}
+          aria-label={`Visit ${name}${description ? `: ${description}` : ''}`}
         >
           {content}
         </a>
@@ -71,8 +76,10 @@ export default function Adopters(): React.ReactElement {
           </p>
           <Link
             className="button button--primary button--lg"
-            to="/support#add-your-logo">
-            Add Your Logo
+            href="https://github.com/envoyproxy/ai-gateway/edit/main/site/src/data/adopters/adopters.json"
+            target="_blank"
+            rel="noopener noreferrer">
+            Add Your Organization
           </Link>
         </div>
       </div>
