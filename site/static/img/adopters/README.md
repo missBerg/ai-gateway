@@ -66,7 +66,6 @@ If you prefer to host the logo in this repository:
 ### Questions?
 
 If you have questions about adding your logo, please:
-- Check our [Support the Project](https://aigateway.envoyproxy.io/support) page
 - Ask in [GitHub Discussions](https://github.com/envoyproxy/ai-gateway/discussions)
 - Join our [Slack community](https://envoyproxy.slack.com/archives/C07Q4N24VAA)
 
