@@ -76,7 +76,7 @@ export default function Adopters(): React.ReactElement {
           </p>
           <Link
             className="button button--primary button--lg"
-            href="https://github.com/envoyproxy/ai-gateway/issues/new?template=add-adopter.yml"
+            href="https://github.com/envoyproxy/ai-gateway/edit/main/site/src/data/adopters/adopters.json"
             target="_blank"
             rel="noopener noreferrer">
             Add Your Logo
