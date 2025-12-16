@@ -54,7 +54,7 @@ If you prefer to host the logo in this repository:
        "url": "https://yourcompany.com"
      }
      ```
-   - Submit a pull request with the title "Add [Company Name] to adopters"
+   - Submit a pull request with the title "site: Add [Company Name] to adopters"
 
 ### Guidelines
 
@@ -67,6 +67,6 @@ If you prefer to host the logo in this repository:
 
 If you have questions about adding your logo, please:
 - Ask in [GitHub Discussions](https://github.com/envoyproxy/ai-gateway/discussions)
-- Join our [Slack community](https://envoyproxy.slack.com/archives/C07Q4N24VAA)
+- Join our [Slack community](https://communityinviter.com/apps/envoyproxy/envoy)
 
 Thank you for supporting Envoy AI Gateway!
