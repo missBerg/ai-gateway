@@ -75,7 +75,6 @@ Adopters are displayed alphabetically by organization name, so your position wil
 ### Need Help?
 
 If you have questions about adding your organization:
-- Check our [Support the Project](https://aigateway.envoyproxy.io/support) page
 - Ask in [GitHub Discussions](https://github.com/envoyproxy/ai-gateway/discussions)
 - Join our [Slack community](https://envoyproxy.slack.com/archives/C07Q4N24VAA)
 
