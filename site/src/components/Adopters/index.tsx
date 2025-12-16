@@ -72,14 +72,14 @@ export default function Adopters(): React.ReactElement {
         </div>
         <div className={styles.ctaSection}>
           <p className={styles.ctaText}>
-            Using Envoy AI Gateway? We'd love to feature your organization!
+            Using Envoy AI Gateway? We'd love to feature your logo!
           </p>
           <Link
             className="button button--primary button--lg"
             href="https://github.com/envoyproxy/ai-gateway/edit/main/site/src/data/adopters/adopters.json"
             target="_blank"
             rel="noopener noreferrer">
-            Add Your Organization
+            Add Your Logo
           </Link>
         </div>
       </div>
