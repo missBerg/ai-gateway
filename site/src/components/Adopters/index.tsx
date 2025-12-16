@@ -9,7 +9,6 @@ function AdopterLogo({ name, logoUrl, url, description }: Adopter) {
   const content = (
     <div
       className={styles.adopterCard}
-      title={description || undefined}
       aria-label={description ? `${name}: ${description}` : name}
     >
       <div className={styles.adopterName}>{name}</div>
@@ -25,6 +24,11 @@ function AdopterLogo({ name, logoUrl, url, description }: Adopter) {
           }}
         />
       </div>
+      {description && (
+        <div className={styles.adopterTooltip}>
+          {description}
+        </div>
+      )}
     </div>
   );
 
