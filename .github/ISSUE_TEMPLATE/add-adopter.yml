@@ -1,0 +1,120 @@
+name: Add Adopter
+description: Add your organization to the Envoy AI Gateway adopters list
+title: "[Adopter] Add <Your Organization Name>"
+labels: ["documentation", "adopter"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Add Your Organization to Envoy AI Gateway Adopters! 🎉
+
+        Thank you for using Envoy AI Gateway! We'd love to feature your organization on our website.
+
+        This form will guide you through creating a new adopter entry. After submission, you'll create a simple JSON file and submit a pull request.
+
+  - type: input
+    id: company_name
+    attributes:
+      label: Organization Name
+      description: The official name of your organization
+      placeholder: "e.g., Acme Corporation"
+    validations:
+      required: true
+
+  - type: input
+    id: website
+    attributes:
+      label: Website URL
+      description: Your organization's website (makes your logo clickable on our site)
+      placeholder: "https://yourcompany.com"
+    validations:
+      required: false
+
+  - type: input
+    id: logo_url
+    attributes:
+      label: Logo URL
+      description: |
+        Direct URL to your logo (SVG preferred, PNG also works).
+        You can use an external URL or add a logo to the repo at `site/static/img/adopters/your-company.svg` and reference it as `/img/adopters/your-company.svg`
+      placeholder: "https://yourcompany.com/logo.svg or /img/adopters/your-company.svg"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description (Optional)
+      description: Brief description of how you use Envoy AI Gateway (shown on hover)
+      placeholder: "e.g., Using Envoy AI Gateway for multi-model AI routing and load balancing across OpenAI and Azure"
+    validations:
+      required: false
+
+  - type: input
+    id: filename
+    attributes:
+      label: Filename
+      description: |
+        What should we name your JSON file? Use lowercase with hyphens (e.g., `acme-corp.json`).
+        This will be created at `site/src/data/adopters/YOUR-FILENAME.json`
+      placeholder: "your-company.json"
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+
+        ## Next Steps
+
+        After submitting this issue:
+
+        1. **Fork the repository**: https://github.com/envoyproxy/ai-gateway/fork
+
+        2. **Create your adopter file** at `site/src/data/adopters/YOUR-FILENAME.json` with this content:
+
+        ```json
+        {
+          "name": "Your Organization Name",
+          "logoUrl": "YOUR-LOGO-URL",
+          "url": "YOUR-WEBSITE-URL",
+          "description": "YOUR-DESCRIPTION (optional)"
+        }
+        ```
+
+        3. **(Optional) Add your logo** if using a local path:
+           - Place your logo at `site/static/img/adopters/your-company.svg`
+           - Update `logoUrl` to `/img/adopters/your-company.svg`
+
+        4. **Submit a Pull Request** with:
+           - Title: `Add [Your Company Name] to adopters`
+           - Link this issue in the PR description: `Closes #ISSUE_NUMBER`
+
+        5. **That's it!** Once merged, your logo will appear on https://aigateway.envoyproxy.io/
+
+        ### Example Files
+
+        See existing adopters for reference:
+        - https://github.com/envoyproxy/ai-gateway/tree/main/site/src/data/adopters
+
+        ### Need Help?
+
+        - Check the [README](https://github.com/envoyproxy/ai-gateway/blob/main/site/src/data/adopters/README.md)
+        - Ask in [GitHub Discussions](https://github.com/envoyproxy/ai-gateway/discussions)
+        - Join our [Slack](https://envoyproxy.slack.com/archives/C07Q4N24VAA)
+
+        Thank you for supporting Envoy AI Gateway! 🚀
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have the rights to use the logo and website information provided
+          required: true
+        - label: I understand that I need to create a PR with the JSON file after submitting this issue
+          required: true
+        - label: My logo meets the specifications (SVG/PNG, transparent or white background, ~240x160px or 3:2 ratio)
+          required: false

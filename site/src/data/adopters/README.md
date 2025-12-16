@@ -2,24 +2,42 @@
 
 This directory contains the adopters data for organizations that support Envoy AI Gateway.
 
+Each adopter is stored in their own JSON file to avoid merge conflicts and make contributions easier!
+
 ## Adding Your Organization
 
-We've made it super easy to add your organization! Just click the "Add Your Organization" button on the [homepage](https://aigateway.envoyproxy.io/) or follow the link below.
+We've made it super easy to add your organization! You can either use our issue form (recommended) or create a file directly.
 
-### Quick Add (Recommended)
+### Option 1: Issue Form (Recommended for New Contributors)
 
-**[Edit adopters.json on GitHub →](https://github.com/envoyproxy/ai-gateway/edit/main/site/src/data/adopters/adopters.json)**
+**[Submit an Adopter Form →](https://github.com/envoyproxy/ai-gateway/issues/new?template=add-adopter.yml)**
 
-This will open the GitHub editor in your browser where you can:
-1. Add your organization's entry to the JSON array
-2. Commit your changes
-3. GitHub will automatically create a pull request for you!
+Fill out the form and follow the instructions. You'll be guided through creating your adopter file.
 
-No need to clone the repository or set up a development environment.
+### Option 2: Direct PR (For GitHub Users)
+
+1. **Fork this repository**
+2. **Copy the template**: Duplicate `_template.json` and rename it to `your-company-name.json`
+3. **Edit your file**: Update the JSON with your organization's details
+4. **Submit a PR**: Create a pull request with your new file
+
+No merge conflicts since everyone adds their own file! 🎉
+
+### File Naming
+
+- Use lowercase with hyphens: `my-company.json`
+- Be descriptive but concise
+- Don't use special characters or spaces
+
+**Examples:**
+- ✅ `acme-corp.json`
+- ✅ `awesome-startup.json`
+- ❌ `My Company!.json`
+- ❌ `company123.json`
 
 ### JSON Format
 
-Add your organization to the array in `adopters/adopters.json`:
+Each adopter file should contain:
 
 ```json
 {
@@ -58,6 +76,8 @@ If you prefer to host the logo locally:
 - **Background**: Transparent or white background works best
 
 ### Example
+
+Create a file named `acme-corp.json`:
 
 ```json
 {
