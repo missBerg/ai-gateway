@@ -5,7 +5,6 @@ import * as AccordionPrimitive from "@radix-ui/react-accordion"
 import { ChevronDown } from "lucide-react"
 
 import { cn } from "@site/src/lib/utils"
-import styles from "@site/src/pages/support.module.css"
 
 const Accordion = AccordionPrimitive.Root
 
@@ -35,9 +34,7 @@ const AccordionTrigger = React.forwardRef<
       {...props}
     >
       {children}
-      <div className={styles.chevronDown}>
-        <ChevronDown size={20} style={{ flexShrink: 0, color: '#6c757d' }} />
-      </div>
+      <ChevronDown size={20} style={{ flexShrink: 0, color: '#6c757d' }} />
     </AccordionPrimitive.Trigger>
   </AccordionPrimitive.Header>
 ))
