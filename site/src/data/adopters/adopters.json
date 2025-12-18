@@ -18,6 +18,7 @@
   {
     "name": "Your Logo Here",
     "logoUrl": "/img/adopters/placeholder-company.svg",
-    "description": "Add your logo to show support for the project"
+    "description": "Add your logo to show support for the project",
+    "url": "https://github.com/envoyproxy/ai-gateway/edit/main/site/src/data/adopters/adopters.json"
   }
 ]
