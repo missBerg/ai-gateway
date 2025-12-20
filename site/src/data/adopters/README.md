@@ -11,6 +11,7 @@ We've made it super easy to add your organization! Just click the "Add Your Orga
 **[Edit adopters.json on GitHub →](https://github.com/envoyproxy/ai-gateway/edit/main/site/src/data/adopters/adopters.json)**
 
 This will open the GitHub editor in your browser where you can:
+
 1. Add your organization's entry to the JSON array
 2. Commit your changes
 3. GitHub will automatically create a pull request for you!
@@ -42,17 +43,22 @@ Add your organization to the array in `adopters/adopters.json`:
 ### Logo Options
 
 #### Option 1: External URL (Easiest)
+
 Simply provide a direct link to your logo hosted anywhere:
+
 ```json
 "logoUrl": "https://yourcompany.com/assets/logo.svg"
 ```
 
 #### Option 2: Local Logo (Better Performance)
+
 If you prefer to host the logo locally:
+
 1. Add your logo to `site/static/img/adopters/your-company.svg`
 2. Reference it as: `"logoUrl": "/img/adopters/your-company.svg"`
 
 **Logo Specifications:**
+
 - **Format**: SVG preferred (PNG also acceptable)
 - **Dimensions**: 240x160px or similar 3:2 ratio recommended
 - **Background**: Transparent or white background works best
@@ -75,6 +81,7 @@ Adopters are displayed alphabetically by organization name, so your position wil
 ### Need Help?
 
 If you have questions about adding your organization:
+
 - Ask in [GitHub Discussions](https://github.com/envoyproxy/ai-gateway/discussions)
 - Join our [Slack community](https://envoyproxy.slack.com/archives/C07Q4N24VAA)
 

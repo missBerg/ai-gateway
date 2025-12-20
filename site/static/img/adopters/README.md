@@ -24,17 +24,21 @@ Simply add your organization with a direct link to your logo:
 ### Logo Options
 
 #### Option 1: External URL (Easiest - No Upload Required!)
+
 Use a direct link to your logo hosted on your website or CDN:
+
 ```json
 "logoUrl": "https://yourcompany.com/assets/logo.svg"
 ```
 
 **Benefits:**
+
 - No file upload needed
 - You control the logo and can update it anytime
 - Works immediately
 
 #### Option 2: Local Logo (Better Performance)
+
 If you prefer to host the logo in this repository:
 
 1. **Prepare Your Logo**
@@ -66,6 +70,7 @@ If you prefer to host the logo in this repository:
 ### Questions?
 
 If you have questions about adding your logo, please:
+
 - Ask in [GitHub Discussions](https://github.com/envoyproxy/ai-gateway/discussions)
 - Join our [Slack community](https://communityinviter.com/apps/envoyproxy/envoy)
 
