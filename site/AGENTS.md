@@ -135,7 +135,7 @@ slug: short-url-slug
 title: Full Blog Post Title
 authors: [author-key]
 tags: [news, features]
-image: ./images/hero-image.png
+image: /img/blog/hero-image.png
 description: Short description for SEO and social cards
 ---
 ```
@@ -143,7 +143,7 @@ description: Short description for SEO and social cards
 - `slug`: URL-friendly identifier (appears in `/blog/slug`)
 - `authors`: Array of author keys from `blog/authors.yml`
 - `tags`: Array of tags (defined in `blog/tags.yml`)
-- `image`: Hero image for social sharing (store in `blog/YYYY/images/`)
+- `image`: Hero image for social sharing (store in `static/img/blog/`)
 - `description`: Used for SEO meta tags and social cards
 
 ### Authors
@@ -164,9 +164,10 @@ username:
 
 ### Images
 
-- Store blog images in `blog/YYYY/images/`
-- Reference with relative paths: `./images/filename.png`
+- Store blog images in `static/img/blog/`
+- Reference with absolute paths: `/img/blog/filename.png`
 - Use descriptive alt text for accessibility
+- Images in `static/img/blog/` are used by the homepage "Latest Blogs" component
 
 ### Truncation
 
