@@ -216,11 +216,11 @@ The `ApiField` component is available in all MDX files:
 ### Commands
 
 ```bash
-npm install          # Install dependencies
-npm start            # Start dev server (hot reload)
-npm run build        # Production build
-npm run serve        # Serve production build locally
-npm run typecheck    # TypeScript type checking
+npm install       # Install dependencies
+npm start         # Start dev server (hot reload)
+npm run build     # Production build
+npm run serve     # Serve production build locally
+npm run typecheck # TypeScript type checking
 ```
 
 ### Local Development

@@ -48,11 +48,13 @@ This directory includes an `AGENTS.md` file with guidelines for AI coding assist
 To enable it for your preferred tool, create a symlink:
 
 **Cursor:**
+
 ```
 ln -s AGENTS.md .cursorrules
 ```
 
 **Claude Code:**
+
 ```
 ln -s AGENTS.md CLAUDE.md
 ```
