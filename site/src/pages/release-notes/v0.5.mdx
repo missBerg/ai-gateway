@@ -53,16 +53,17 @@ export const patchReleases = releases.slice(1).reverse(); // Future patch releas
   <ItemList items={mainRelease.apiChanges} />
 )}
 
+### Deprecations
 {mainRelease.deprecations?.length > 0 && (
   <>
-    ### Deprecations
     <ItemList items={mainRelease.deprecations} />
   </>
 )}
 
+## ⚠️ Breaking Changes
+
 {mainRelease.breakingChanges?.length > 0 && (
   <>
-    ## ⚠️ Breaking Changes
     <ItemList items={mainRelease.breakingChanges} />
   </>
 )}
@@ -194,9 +195,10 @@ We extend our gratitude to all contributors who made this release possible. Spec
 
 We're already working on exciting features for future releases:
 
-- **Enhanced reasoning model support** - Deeper integration with extended thinking and reasoning capabilities
-- **Additional provider integrations** - Expanding the ecosystem of supported LLM providers
-- **Advanced caching strategies** - More sophisticated prompt caching and response caching options
-- **Performance optimizations** - Continued focus on reducing latency and improving throughput
+- **Additional provider integrations** - AWS Bedrock InvokeModel API support for Claude and GPT models, Gemini embeddings, and Azure/AKS workload identity
+- **Batch inference APIs** - Support for batch processing to improve throughput for high-volume workloads
+- **Advanced caching strategies** - Prompt cache key and retention controls for OpenAI chat completions
+- **Upstream provider quota policies** - New API for managing upstream provider quotas
+- **Sensitive data redaction** - Request and response body redaction for protecting sensitive information
 
 </ReleaseSeriesLayout>
