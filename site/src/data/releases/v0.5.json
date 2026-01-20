@@ -62,7 +62,7 @@
           "items": [
             {
               "title": "Fine-grained authorization with CEL, JWT claims, and external auth",
-              "description": "Comprehensive authorization system for MCP routes. Write expressive CEL rules using request attributes (HTTP method, headers, JWT claims, tool names), enforce access based on JWT claim values from your identity provider, or delegate to external gRPC/HTTP authorization services. Control which users can access which tools with precision."
+              "description": "Comprehensive authorization system for MCP routes. Write expressive CEL rules using request attributes (HTTP method, headers, JWT claims, tool names and call arguments), enforce access based on JWT claim values from your identity provider, or delegate to external gRPC/HTTP authorization services. Control which users can access which tools with precision."
             },
             {
               "title": "Zero-config OAuth with OIDC discovery",
