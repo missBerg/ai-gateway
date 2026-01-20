@@ -65,10 +65,6 @@
               "description": "Comprehensive authorization system for MCP routes. Write expressive CEL rules using request attributes (HTTP method, headers, JWT claims, tool names and call arguments), enforce access based on JWT claim values from your identity provider, or delegate to external gRPC/HTTP authorization services. Control which users can access which tools with precision."
             },
             {
-              "title": "Zero-config OAuth with OIDC discovery",
-              "description": "Simplify MCP OAuth setup by letting the gateway automatically discover JWKS URIs from your authorization server's <code>/.well-known/oauth-authorization-server</code> endpoint. No manual JWKS configuration required when using standard OIDC providers."
-            },
-            {
               "title": "Real-time tool list synchronization",
               "description": "MCP clients automatically stay in sync when you update MCPRoutes. The gateway sends <code>notifications/tools/list_changed</code> notifications, so clients refresh their available tools without manual intervention or reconnection."
             },
