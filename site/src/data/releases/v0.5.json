@@ -79,7 +79,12 @@
             {
               "title": "Improved OAuth metadata discovery",
               "description": "OAuth well-known endpoints now serve at the MCPRoute path prefix, ensuring MCP clients correctly discover authorization configuration even when multiple routes have different security policies."
-            },
+            }
+          ]
+        },
+        {
+          "title": "Inference Extension",
+          "items": [
             {
               "title": "Security policies for inference pools",
               "description": "Apply <code>BackendSecurityPolicy</code> to <code>InferencePool</code> resources, ensuring consistent authentication across all dynamically-selected inference endpoints in your pool."
@@ -121,16 +126,16 @@
             {
               "title": "AWS Bedrock service tier control",
               "description": "Choose between standard, flex, priority, and reserved for Bedrock requests. Set <code>service_tier</code> to prioritize latency-sensitive workloads or optimize costs for batch processing, with automatic fallback handling."
-            },
-            {
-              "title": "Per-provider cost attribution",
-              "description": "Track spending across AI providers with the new <code>gen_ai.provider.name</code> metric attribute. Filter dashboards and alerts by provider to identify cost drivers and optimize your multi-provider strategy."
             }
           ]
         },
         {
           "title": "Observability Enhancements",
           "items": [
+            {
+              "title": "Per-provider cost attribution",
+              "description": "Track spending across AI providers with the new <code>gen_ai.provider.name</code> metric attribute. Filter dashboards and alerts by provider to identify cost drivers and optimize your multi-provider strategy."
+            },
             {
               "title": "Full tracing for Anthropic Messages API",
               "description": "Debug Claude model requests end-to-end with OpenInference-compliant tracing for the native <code>/messages</code> endpoint. View prompts, responses, and timing in Arize Phoenix or any OpenTelemetry-compatible observability platform."
