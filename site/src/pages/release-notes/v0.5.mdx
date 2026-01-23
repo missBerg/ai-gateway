@@ -60,14 +60,6 @@ export const patchReleases = releases.slice(1).reverse(); // Future patch releas
   </>
 )}
 
-## ⚠️ Breaking Changes
-
-{mainRelease.breakingChanges?.length > 0 && (
-  <>
-    <ItemList items={mainRelease.breakingChanges} />
-  </>
-)}
-
 ## 🐛 Bug Fixes
 
 {mainRelease.bugFixes?.length > 0 && (
@@ -130,38 +122,6 @@ schema:
 schema:
   name: OpenAI
   prefix: "/v1beta/openai"
-```
-
-### CEL-based MCP Authorization
-
-If you're using MCP authorization, you can now use CEL expressions for complex authorization logic:
-
-```yaml
-authorization:
-  defaultAction: Deny
-  rules:
-    - cel: |
-        request.auth.jwt.claims["role"] == "admin" ||
-        (request.mcp.tool == "read_data" && "reader" in request.auth.jwt.scopes)
-      action: Allow
-```
-
-### Migrating from metricsRequestHeaderLabels
-
-If you were using the deprecated `metricsRequestHeaderLabels` helm value or controller flag, update to use `metricsRequestHeaderAttributes`:
-
-**Before (v0.4 - deprecated):**
-```yaml
-controller:
-  metricsRequestHeaderLabels:
-    - x-user-id
-```
-
-**After (v0.5+):**
-```yaml
-controller:
-  metricsRequestHeaderAttributes:
-    - x-user-id
 ```
 
 ## 📦 Dependencies Versions

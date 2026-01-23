@@ -9,7 +9,7 @@
   "releases": [
     {
       "version": "v0.5.0",
-      "date": "January 16, 2026",
+      "date": "January 23, 2026",
       "type": "minor",
       "tags": [
         { "text": "GatewayConfig CRD", "type": "feature" },
@@ -150,16 +150,12 @@
               "description": "Reduced gateway latency by migrating to bytedance/sonic for JSON encoding and decoding. Expect measurable latency improvements and lower CPU usage, especially for large payloads and high request volumes."
             },
             {
-              "title": "High-availability controller deployments",
-              "description": "Run multiple controller replicas for production resilience. Updated Helm charts properly handle leader election and prevent duplicate reconciliation, ensuring safe multi-instance deployments."
-            },
-            {
               "title": "Faster cross-namespace reference validation",
               "description": "Reduced controller reconciliation time with optimized ReferenceGrant indexing. Cross-namespace backend references now validate faster, improving startup time and configuration change responsiveness."
             },
             {
               "title": "Improved MCP proxy throughput",
-              "description": "MCP proxy now reuses HTTP connections across requests, eliminating per-request connection overhead. This significantly improves throughput when proxying to multiple MCP backend servers."
+              "description": "MCP proxy now reuses HTTP connections across requests, eliminating per-request connection overhead. This significantly improves throughput when proxying to multiple MCP backend servers. <a href=\"/blog/mcp-in-envoy-ai-gateway\">View the MCP performance blog post for details →</a>"
             }
           ]
         }
@@ -193,19 +189,14 @@
       "deprecations": [
         {
           "title": "<code>AIGatewayFilterConfigExternalProcessor.resources</code>",
-          "description": "The <code>resources</code> field in <code>AIGatewayFilterConfigExternalProcessor</code> is deprecated. Use <code>GatewayConfig</code> for gateway-scoped resource configuration instead. This field will be removed in a future version."
+          "description": "The <code>resources</code> field in <code>AIGatewayFilterConfigExternalProcessor</code> is deprecated. Use <code>GatewayConfig</code> for gateway-scoped resource configuration instead. This field will be removed in the next v0.6."
         },
         {
           "title": "<code>version</code> field as prefix for OpenAI schema",
-          "description": "Using the <code>version</code> field as a prefix for OpenAI schema is deprecated. Use the new <code>prefix</code> field instead. The legacy behavior will be removed in a future version."
+          "description": "Using the <code>version</code> field as a prefix for OpenAI schema is deprecated. Use the new <code>prefix</code> field instead. The legacy behavior will be removed in the next v0.6."
         }
       ],
-      "breakingChanges": [
-        {
-          "title": "Removed <code>metricsRequestHeaderLabels</code> helm value",
-          "description": "The <code>metricsRequestHeaderLabels</code> helm value and corresponding controller/extproc flags have been removed. Use <code>metricsRequestHeaderAttributes</code> instead, which was introduced in v0.4 as the replacement."
-        }
-      ],
+      "breakingChanges": [],
       "bugFixes": [
         {
           "title": "AWS Bedrock Claude streaming reliability",
