@@ -9,7 +9,7 @@ sidebar_position: 6
 This document provides compatibility information for Envoy AI Gateway releases with their dependencies.
 
 | AI Gateway | Envoy Gateway                 | Kubernetes | Gateway API | Support Status |
-|------------|-------------------------------| ---------- |-------------| -------------- |
+| ---------- | ----------------------------- | ---------- | ----------- | -------------- |
 | main       | v1.6.x+ (Envoy Proxy v1.36.x) | v1.32+     | v1.4.x      | Development    |
 | v0.5.x     | v1.6.x+ (Envoy Proxy v1.35.x) | v1.32+     | v1.4.x      | Supported      |
 | others     | N/A                           | N/A        | N/A         | End of Life    |
