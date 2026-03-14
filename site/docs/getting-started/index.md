@@ -10,9 +10,16 @@ Welcome to the Envoy AI Gateway getting started guide!
 
 This guide will walk you through setting up and using Envoy AI Gateway, a tool for managing GenAI traffic using Envoy.
 
-## Guide Structure
+## Deployment Paths
 
-This getting started guide is organized into several sections:
+Envoy AI Gateway supports two deployment models. Choose the one that fits your environment:
+
+- **Kubernetes** -- Full-featured deployment using Envoy Gateway and Helm. Follow the guide below starting with [Prerequisites](./prerequisites.md).
+- **Docker / Standalone** -- Run the gateway as a single process with Docker or the `aigw` CLI, no Kubernetes required. See the [Docker / Standalone Quick Start](./docker-standalone.md).
+
+## Kubernetes Guide
+
+The Kubernetes getting started guide is organized into several sections:
 
 1. [Prerequisites](./prerequisites.md)
    - Setting up your Kubernetes cluster
