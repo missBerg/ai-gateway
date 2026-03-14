@@ -56,8 +56,8 @@ spec:
   # Quota applied across all models and all clients.
   serviceQuota:
     quota:
-      limit: 100000   # Maximum tokens allowed in the window.
-      duration: "1h"   # Sliding window duration.
+      limit: 100000 # Maximum tokens allowed in the window.
+      duration: "1h" # Sliding window duration.
 ```
 
 ### Custom Cost Expression
@@ -92,13 +92,13 @@ perModelQuotas:
     quota:
       mode: Exclusive
       defaultBucket:
-        limit: 10000     # Strict limit for expensive model.
+        limit: 10000 # Strict limit for expensive model.
         duration: "1h"
   - modelName: gpt-3.5-turbo
     quota:
       mode: Exclusive
       defaultBucket:
-        limit: 100000    # Higher limit for cost-effective model.
+        limit: 100000 # Higher limit for cost-effective model.
         duration: "1h"
 ```
 
@@ -117,7 +117,7 @@ when a request matches one or more rules.
 perModelQuotas:
   - modelName: gpt-4
     quota:
-      mode: Shared          # Charge both default and matching rule buckets.
+      mode: Shared # Charge both default and matching rule buckets.
       defaultBucket:
         limit: 10000
         duration: "1h"
@@ -127,7 +127,7 @@ perModelQuotas:
                 - name: x-tenant-id
                   type: Distinct
           quota:
-            limit: 2000     # Per-tenant limit within the shared budget.
+            limit: 2000 # Per-tenant limit within the shared budget.
             duration: "1h"
 ```
 
@@ -148,7 +148,7 @@ perModelQuotas:
     quota:
       mode: Exclusive
       defaultBucket:
-        limit: 10000         # Fallback quota for unmatched tenants.
+        limit: 10000 # Fallback quota for unmatched tenants.
         duration: "1h"
       bucketRules:
         - clientSelectors:
@@ -157,7 +157,7 @@ perModelQuotas:
                   type: Exact
                   value: premium-tenant
           quota:
-            limit: 50000     # Premium tenant gets a larger budget.
+            limit: 50000 # Premium tenant gets a larger budget.
             duration: "1h"
 ```
 
@@ -168,7 +168,7 @@ bucketRules:
   - clientSelectors:
       - headers:
           - name: x-tenant-id
-            type: Distinct    # One bucket per unique tenant ID.
+            type: Distinct # One bucket per unique tenant ID.
     quota:
       limit: 5000
       duration: "1h"
@@ -190,7 +190,7 @@ bucketRules:
     quota:
       limit: 5000
       duration: "1h"
-    shadowMode: true    # Evaluate but do not enforce.
+    shadowMode: true # Evaluate but do not enforce.
 ```
 
 :::tip
@@ -203,7 +203,7 @@ set correctly before switching to enforcement by removing `shadowMode` (or setti
 The `duration` field on `QuotaValue` accepts a number followed by a unit suffix:
 
 | Suffix | Unit    | Example |
-|--------|---------|---------|
+| ------ | ------- | ------- |
 | `s`    | Seconds | `"30s"` |
 | `m`    | Minutes | `"15m"` |
 | `h`    | Hours   | `"1h"`  |
