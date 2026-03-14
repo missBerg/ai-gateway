@@ -168,6 +168,5 @@ When caching is active, the response includes cache information in the `usage` f
 ## Further Reading
 
 - [Prompt Caching Examples](https://github.com/envoyproxy/ai-gateway/tree/main/examples/cache) -- Detailed examples with curl commands for each provider.
-- [Connecting to Anthropic](../../getting-started/connect-providers/anthropic.md) -- Set up Direct Anthropic as a provider.
 - [Connecting to GCP Vertex AI](../../getting-started/connect-providers/gcp-vertexai.md) -- Set up GCP Vertex AI as a provider.
 - [Connecting to AWS Bedrock](../../getting-started/connect-providers/aws-bedrock.md) -- Set up AWS Bedrock as a provider.
