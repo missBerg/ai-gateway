@@ -10,11 +10,11 @@ Envoy AI Gateway provides provider-agnostic prompt caching through a unified `ca
 
 ## Supported Providers
 
-| Provider | API Schema | Cache Support |
-|----------|-----------|---------------|
-| Anthropic (Direct) | `Anthropic` | Native |
-| GCP Vertex AI (Claude) | `GCPAnthropic` | Translated |
-| AWS Bedrock (Claude) | `AWSBedrockAnthropic` | Translated |
+| Provider               | API Schema            | Cache Support |
+| ---------------------- | --------------------- | ------------- |
+| Anthropic (Direct)     | `Anthropic`           | Native        |
+| GCP Vertex AI (Claude) | `GCPAnthropic`        | Translated    |
+| AWS Bedrock (Claude)   | `AWSBedrockAnthropic` | Translated    |
 
 ## How It Works
 
@@ -42,7 +42,7 @@ Cache a system prompt so that subsequent requests reuse the cached content:
         {
           "type": "text",
           "text": "You are a helpful assistant with extensive knowledge...(long system prompt)...",
-          "cache_control": {"type": "ephemeral"}
+          "cache_control": { "type": "ephemeral" }
         }
       ]
     },
@@ -68,7 +68,7 @@ You can place up to 4 cache breakpoints in a single request to cache different p
         {
           "type": "text",
           "text": "System instructions...",
-          "cache_control": {"type": "ephemeral"}
+          "cache_control": { "type": "ephemeral" }
         }
       ]
     },
@@ -78,7 +78,7 @@ You can place up to 4 cache breakpoints in a single request to cache different p
         {
           "type": "text",
           "text": "Reference document content...",
-          "cache_control": {"type": "ephemeral"}
+          "cache_control": { "type": "ephemeral" }
         },
         {
           "type": "text",
@@ -119,7 +119,7 @@ Cache complex tool schemas that remain the same across requests:
           },
           "required": ["query"]
         },
-        "cache_control": {"type": "ephemeral"}
+        "cache_control": { "type": "ephemeral" }
       }
     }
   ]
@@ -148,22 +148,24 @@ When caching is active, the response includes cache information in the `usage` f
 ## Best Practices
 
 :::tip
+
 - Place `cache_control` on content that exceeds 1,024 tokens. Content below this threshold will not be cached.
 - Cache system prompts, tool definitions, and reference documents that do not change between requests.
 - Position cache breakpoints strategically -- cached content must appear at the beginning of the message.
 - Monitor `cached_tokens` in responses to verify caching effectiveness and measure cost savings.
-:::
+  :::
 
 ## Provider-Specific Notes
 
 :::note
+
 - **All providers**: Minimum 1,024 tokens per cached block, maximum 4 cache breakpoints per request.
 - **Anthropic Direct**: Uses the native `cache_control` field directly with no translation.
 - **GCP Vertex AI**: AI Gateway translates `cache_control` to Vertex AI's caching format automatically.
 - **AWS Bedrock**: AI Gateway translates `cache_control` to Bedrock's cachePoint format automatically.
 - All providers support the `"ephemeral"` cache type.
 - Existing requests without `cache_control` continue to work with no changes.
-:::
+  :::
 
 ## Further Reading
 
