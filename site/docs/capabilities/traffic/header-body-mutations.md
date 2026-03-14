@@ -86,14 +86,14 @@ bodyMutation:
 
 The `value` field is parsed as raw JSON. This means different value types require different formatting:
 
-| Type    | Example `value`          | Result in JSON body       |
-|---------|--------------------------|---------------------------|
-| String  | `'"scale"'`              | `"scale"`                 |
-| Number  | `"42"`                   | `42`                      |
-| Boolean | `"true"`                 | `true`                    |
-| Object  | `'{"key": "value"}'`     | `{"key": "value"}`        |
-| Array   | `"[1, 2, 3]"`            | `[1, 2, 3]`               |
-| Null    | `"null"`                 | `null`                    |
+| Type    | Example `value`      | Result in JSON body |
+| ------- | -------------------- | ------------------- |
+| String  | `'"scale"'`          | `"scale"`           |
+| Number  | `"42"`               | `42`                |
+| Boolean | `"true"`             | `true`              |
+| Object  | `'{"key": "value"}'` | `{"key": "value"}`  |
+| Array   | `"[1, 2, 3]"`        | `[1, 2, 3]`         |
+| Null    | `"null"`             | `null`              |
 
 :::tip
 String values require inner quotes. For example, to set a field to the string `"scale"`, use `'"scale"'` in YAML. Numeric and boolean values do not need inner quotes.
@@ -179,7 +179,7 @@ When both route-level and backend-level mutations are defined for the same backe
 
 - **Route-level mutations take precedence** over backend-level mutations for conflicting operations (e.g., both setting the same header name or body field path).
 - **Non-conflicting operations from both levels are applied together.** For example, if the backend-level sets header `x-org` and the route-level sets header `x-tier`, both headers are added to the request.
-:::
+  :::
 
 ## References
 
