@@ -1,0 +1,185 @@
+/* =============================================================
+   Envoy AI Gateway — Design Tokens
+   -----------------------------------------------------------------
+   Single source of truth for colors, spacing, radii, shadows,
+   typography, and motion. Consume these via var(--token-name)
+   in custom.css and component CSS modules. Raw hex/rgba/px values
+   outside this file should be considered bugs unless a comment
+   explains why (e.g., semantic literals like macOS terminal dots).
+
+   See site/DESIGN_SYSTEM.md for usage rules.
+   ============================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  /* ---------- Brand palette ---------- */
+  --brand-purple: #6c1899;
+  --brand-purple-soft: #8a20c4;
+  --brand-purple-bright: #a339dc;
+  --brand-navy: #1a0f2e;           /* near-black violet — navbar + dark sections */
+  --brand-navy-2: #231538;         /* subtle lighter shade for layered gradients */
+  --brand-navy-deep: #0a0613;      /* hero background bottom */
+  --brand-accent: #2BD9D9;         /* cyan — MCP / CTAs / eyebrows */
+  --brand-accent-dark: #12a8a8;
+  --brand-accent-bright: #3be8e8;
+  --brand-gradient-a: #3a1368;
+  --brand-gradient-b: #0c0820;
+  --brand-pink: #ec4899;           /* hero glow only */
+
+  /* Infima primary (docs links, mermaid, etc.) */
+  --ifm-color-primary: var(--brand-purple);
+  --ifm-color-primary-dark: #5c1482;
+  --ifm-color-primary-darker: #50166f;
+  --ifm-color-primary-darkest: #29073b;
+  --ifm-color-primary-light: var(--brand-purple-soft);
+  --ifm-color-primary-lighter: var(--brand-purple-bright);
+  --ifm-color-primary-lightest: #c257fc;
+
+  /* ---------- Neutral ramp ---------- */
+  --neutral-50: #fafafa;
+  --neutral-100: #f4f4f5;
+  --neutral-200: #e4e4e7;
+  --neutral-300: #d4d4d8;
+  --neutral-400: #a1a1aa;
+  --neutral-500: #71717a;
+  --neutral-600: #52525b;
+  --neutral-700: #3f3f46;
+  --neutral-800: #27272a;
+  --neutral-900: #18181b;
+  --neutral-950: #0b0b0e;
+
+  /* ---------- Brand tints / overlays ----------
+     Rule of thumb: if you need a see-through brand color, reach
+     for a tint token first. Named tints replace the ad-hoc
+     rgba(108,24,153,0.08) literals that drifted across components. */
+  --tint-purple-subtle: rgba(108, 24, 153, 0.08);   /* soft bg on cards, tag pills */
+  --tint-purple-soft: rgba(108, 24, 153, 0.18);     /* pill border */
+  --tint-purple-border: rgba(108, 24, 153, 0.35);   /* hover border */
+  --tint-purple-overlay: rgba(108, 24, 153, 0.5);   /* CommunityCta radial */
+  --tint-accent-subtle: rgba(43, 217, 217, 0.1);    /* MCP eyebrow bg */
+  --tint-accent-soft: rgba(43, 217, 217, 0.18);     /* CommunityCta radial edge */
+  --tint-accent-border: rgba(43, 217, 217, 0.25);   /* MCP eyebrow border */
+  --tint-accent-overlay: rgba(43, 217, 217, 0.14);  /* hover glow */
+  --tint-white-subtle: rgba(255, 255, 255, 0.06);   /* on-navy card frame */
+  --tint-white-soft: rgba(255, 255, 255, 0.12);     /* on-navy button border */
+  --tint-white-strong: rgba(255, 255, 255, 0.25);   /* ghost button border */
+  --overlay-navy-90: rgba(10, 6, 19, 0.9);          /* tooltip bg */
+
+  /* ---------- Status (badges) ---------- */
+  --status-new-bg: var(--brand-accent);
+  --status-new-text: var(--brand-navy);
+  --status-new-border: var(--tint-accent-border);
+  --status-coming-soon-bg: #fff7e6;
+  --status-coming-soon-text: #92580a;
+  --status-coming-soon-border: #fde68a;
+
+  /* ---------- Typography ---------- */
+  --ifm-font-family-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ifm-heading-font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ifm-font-family-monospace: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --ifm-code-font-size: 92%;
+  --ifm-heading-font-weight: 700;
+  --ifm-line-height-base: 1.6;
+
+  /* Type scale — use these in components */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.05rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+  --text-4xl: 2.5rem;
+
+  /* Infima heading scale — keep aligned with the tokens above */
+  --ifm-h1-font-size: 3.25rem;
+  --ifm-h2-font-size: 2.25rem;
+  --ifm-h3-font-size: 1.5rem;
+  --ifm-h4-font-size: 1.25rem;
+  --ifm-h5-font-size: 1.1rem;
+  --ifm-h6-font-size: 1rem;
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.35;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.7;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extra: 800;
+
+  /* Responsive title clamp (hero, section titles) */
+  --title-section: clamp(1.75rem, 2.5vw + 0.5rem, 2.5rem);
+  --title-hero: clamp(2.25rem, 4vw + 1rem, 3.75rem);
+
+  /* ---------- Layout ---------- */
+  --ifm-container-width: 1200px;
+  --ifm-container-width-xl: 1360px;
+  --ifm-navbar-background-color: var(--brand-navy);
+  --ifm-navbar-link-color: rgba(255, 255, 255, 0.82);
+  --ifm-navbar-link-hover-color: #fff;
+  --ifm-footer-background-color: var(--neutral-50);
+  --ifm-footer-color: var(--neutral-700);
+  --ifm-footer-link-color: var(--neutral-700);
+  --ifm-footer-title-color: var(--neutral-900);
+
+  /* ---------- Spacing (4px base) ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  /* ---------- Radius ---------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* ---------- Shadow ---------- */
+  --shadow-sm: 0 1px 2px rgba(15, 10, 30, 0.05);
+  --shadow-md: 0 4px 12px rgba(15, 10, 30, 0.06), 0 1px 2px rgba(15, 10, 30, 0.04);
+  --shadow-lg: 0 16px 40px rgba(15, 10, 30, 0.08), 0 2px 6px rgba(15, 10, 30, 0.04);
+  --shadow-xl: 0 24px 60px rgba(15, 10, 30, 0.12), 0 4px 10px rgba(15, 10, 30, 0.06);
+  --shadow-glow-accent: 0 0 0 1px rgba(43, 217, 217, 0.35), 0 8px 24px rgba(43, 217, 217, 0.18);
+
+  /* ---------- Motion ---------- */
+  --motion-fast: 150ms;
+  --motion-base: 250ms;
+  --motion-slow: 400ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---------- Markdown content ---------- */
+  --custom-content-line-height: var(--leading-relaxed);
+  --custom-paragraph-spacing: 1.25rem;
+  --custom-text-color: var(--neutral-800);
+  --custom-heading-color: var(--neutral-900);
+  --custom-link-color: var(--brand-purple);
+  --custom-link-hover-color: var(--brand-purple-soft);
+  --custom-code-background: var(--neutral-100);
+
+  /* ---------- API field badges ---------- */
+  --custom-required-badge-bg: #fef2f2;
+  --custom-required-badge-border: #fecaca;
+  --custom-required-badge-text: #dc2626;
+
+  --docusaurus-highlighted-code-line-bg: var(--tint-purple-subtle);
+}
+
+/* -----------------------------------------------------------------
+   Responsive breakpoints (documented; CSS @media can't consume vars)
+   - Small mobile:  max-width: 576px
+   - Mobile:        max-width: 768px
+   - Tablet:        max-width: 996px
+   - Desktop:       max-width: 1200px
+   Mobile-first is preferred when adding new components.
+   ----------------------------------------------------------------- */

@@ -6,37 +6,40 @@ sidebar_position: 2
 
 # Getting Started with Envoy AI Gateway
 
-Welcome to the Envoy AI Gateway getting started guide!
+Welcome! This guide walks you through setting up Envoy AI Gateway — the open-source gateway for managing GenAI traffic on top of Envoy.
 
-This guide will walk you through setting up and using Envoy AI Gateway, a tool for managing GenAI traffic using Envoy.
+## Start here
 
-## Guide Structure
+<DocCardGrid columns={2} cards={[
+  {
+    title: 'Prerequisites',
+    href: './prerequisites',
+    description: 'Set up a Kubernetes cluster, install the required tools, and deploy Envoy Gateway.',
+    icon: 'check'
+  },
+  {
+    title: 'Installation',
+    href: './installation',
+    description: 'Install Envoy AI Gateway, configure it, and verify the deployment.',
+    icon: 'package'
+  },
+  {
+    title: 'Basic Usage',
+    href: './basic-usage',
+    description: 'Deploy a basic configuration, send your first request, and read the response.',
+    icon: 'rocket'
+  },
+  {
+    title: 'Connect Providers',
+    href: './connect-providers',
+    description: 'Wire up OpenAI, AWS Bedrock, Azure, Vertex AI, and more with secure credentials.',
+    icon: 'plug'
+  }
+]} />
 
-This getting started guide is organized into several sections:
-
-1. [Prerequisites](./prerequisites.md)
-   - Setting up your Kubernetes cluster
-   - Installing required tools
-   - Setting up Envoy Gateway
-
-2. [Installation](./installation.md)
-   - Installing Envoy AI Gateway
-   - Configuring the gateway
-   - Verifying the installation
-
-3. [Basic Usage](./basic-usage.md)
-   - Deploying a basic configuration
-   - Making your first request
-   - Understanding the response format
-
-4. [Connect Providers](./connect-providers)
-   - Setting up OpenAI integration
-   - Configuring AWS Bedrock
-   - Managing credentials securely
-
-## Need Help?
+## Need help?
 
 If you run into any issues:
 
-- Join our [Community Slack](https://envoyproxy.slack.com/archives/C07Q4N24VAA)
-- File an issue on [GitHub](https://github.com/envoyproxy/ai-gateway/issues)
+- Join our [Community Slack](https://envoyproxy.slack.com/archives/C07Q4N24VAA).
+- File an issue on [GitHub](https://github.com/envoyproxy/ai-gateway/issues).

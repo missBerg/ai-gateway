@@ -1,0 +1,238 @@
+.section {
+  position: relative;
+  padding: var(--space-9) 0 var(--space-8);
+  background: linear-gradient(180deg, #ffffff 0%, #f8f6fc 100%);
+  overflow: hidden;
+}
+
+.section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle at 1px 1px, rgba(108, 24, 153, 0.06) 1px, transparent 0);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+  pointer-events: none;
+}
+
+.section > .container,
+.section > :global(.container) {
+  position: relative;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+.installCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: #fff;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  color: var(--neutral-900);
+  text-decoration: none;
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-base) var(--ease-out),
+    box-shadow var(--motion-base) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.installCard:hover {
+  border-color: var(--tint-purple-border);
+  box-shadow: var(--shadow-md);
+  color: var(--neutral-900);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.installCard > svg:last-child {
+  color: var(--neutral-400);
+  flex-shrink: 0;
+  transition: color var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out);
+}
+
+.installCard:hover > svg:last-child {
+  color: var(--brand-purple);
+  transform: translateX(2px);
+}
+
+.cardIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--neutral-100);
+  color: var(--neutral-700);
+  flex-shrink: 0;
+}
+
+.installCard.oneClick .cardIcon {
+  background: linear-gradient(135deg, var(--tint-purple-subtle), var(--tint-accent-overlay));
+  color: var(--brand-purple);
+}
+
+.cardBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.cardTitle {
+  font-size: 0.98rem;
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  color: var(--neutral-900);
+  margin: 0 0 2px;
+  letter-spacing: -0.01em;
+}
+
+.cardSubtitle {
+  font-size: 0.82rem;
+  color: var(--neutral-600);
+  margin: 0;
+  line-height: var(--leading-snug);
+}
+
+.prereqNote {
+  max-width: 780px;
+  margin: var(--space-4) auto 0;
+  font-size: 0.88rem;
+  color: var(--neutral-600);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.prereqNote strong {
+  color: var(--neutral-900);
+  font-weight: 600;
+}
+
+.prereqNote a {
+  color: var(--brand-purple);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.prereqNote a:hover {
+  color: var(--brand-purple-soft);
+  text-decoration: underline;
+}
+
+.urlDisplay {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  justify-content: center;
+  max-width: 780px;
+  margin: var(--space-5) auto 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.urlLabel {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--neutral-500);
+  flex-shrink: 0;
+}
+
+.urlValue {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.88rem;
+  color: var(--brand-purple);
+  background: var(--tint-purple-subtle);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.prompts {
+  max-width: 780px;
+  margin: var(--space-6) auto 0;
+  text-align: center;
+}
+
+.promptsLabel {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: var(--weight-semibold);
+  color: var(--neutral-400);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-3);
+}
+
+.promptList {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.prompt {
+  display: inline-block;
+  padding: 6px 14px;
+  font-size: 0.88rem;
+  color: var(--neutral-700);
+  background: #fff;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+
+.footer {
+  text-align: center;
+  margin-top: var(--space-6);
+}
+
+.docsLink {
+  font-size: 0.95rem;
+  font-weight: var(--weight-semibold);
+  color: var(--brand-purple);
+  text-decoration: none;
+  transition: color var(--motion-base) var(--ease-out);
+}
+
+.docsLink:hover {
+  color: var(--brand-purple-soft);
+  text-decoration: underline;
+}
+
+@media screen and (max-width: 768px) {
+  .section {
+    padding: var(--space-7) 0;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .urlDisplay {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .urlValue {
+    font-size: 0.8rem;
+    width: 100%;
+  }
+  .prompt {
+    white-space: normal;
+  }
+}

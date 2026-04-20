@@ -59,14 +59,13 @@ export default function Adopters(): React.ReactElement {
   return (
     <section id="adopters" className={styles.adoptersSection}>
       <div className="container">
-        <div className={styles.sectionHeader}>
-          <Heading as="h2" className={styles.sectionTitle}>
+        <div className="sectionHeader">
+          <span className="sectionEyebrow sectionEyebrow--purple">Community</span>
+          <Heading as="h2" className="sectionTitle">
             Adopters
           </Heading>
-          <div className={styles.titleUnderline}></div>
-          <p className={styles.sectionDescription}>
+          <p className="sectionSubtitle">
             See who's using Envoy AI Gateway.
-            <br />
           </p>
         </div>
         <div className={styles.adoptersGrid}>

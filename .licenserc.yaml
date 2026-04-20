@@ -15,8 +15,10 @@ header:
   paths-ignore:
     - site
     - out
+    - ".git"
     - ".github"
     - ".bin"
+    - ".claude"
     - "**/go.mod"
     - "**/go.sum"
     - "**/*.md"

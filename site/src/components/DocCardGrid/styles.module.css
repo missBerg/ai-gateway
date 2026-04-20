@@ -1,0 +1,111 @@
+.grid {
+  display: grid;
+  gap: var(--space-4);
+  margin: var(--space-5) 0 var(--space-6);
+}
+
+.cols2 {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.cols3 {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.cols4 {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  background: #fff;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+  color: inherit;
+  transition:
+    box-shadow var(--motion-base) var(--ease-out),
+    border-color var(--motion-base) var(--ease-out),
+    transform var(--motion-base) var(--ease-out);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--tint-purple-border);
+  transform: translateY(-2px);
+  text-decoration: none;
+  color: inherit;
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--brand-purple);
+  outline-offset: 2px;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--tint-purple-subtle), var(--tint-accent-overlay));
+  color: var(--brand-purple);
+  margin-bottom: var(--space-2);
+  transition: transform var(--motion-base) var(--ease-out);
+}
+
+.card:hover .icon {
+  transform: scale(1.05);
+}
+
+.title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--neutral-900);
+  letter-spacing: -0.01em;
+  line-height: var(--leading-snug);
+}
+
+.card:hover .title {
+  color: var(--brand-purple);
+}
+
+.description {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--neutral-600);
+}
+
+.arrow {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  font-size: var(--text-lg);
+  color: var(--neutral-400);
+  transition:
+    transform var(--motion-base) var(--ease-out),
+    color var(--motion-base) var(--ease-out);
+}
+
+.card:hover .arrow {
+  color: var(--brand-purple);
+  transform: translateX(3px);
+}
+
+@media screen and (max-width: 576px) {
+  .cols2,
+  .cols3,
+  .cols4 {
+    grid-template-columns: 1fr;
+  }
+
+  .card {
+    padding: var(--space-4);
+  }
+}

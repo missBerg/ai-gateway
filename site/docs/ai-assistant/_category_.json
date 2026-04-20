@@ -1,0 +1,9 @@
+{
+  "label": "AI Assistant",
+  "position": 2,
+  "link": {
+    "type": "generated-index",
+    "title": "AI Assistant",
+    "description": "Plug the Envoy AI Gateway docs into your coding agent via MCP, or ask questions directly in the browser."
+  }
+}

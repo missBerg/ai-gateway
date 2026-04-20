@@ -6,7 +6,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Envoy AI Gateway',
-  tagline: 'Envoy AI Gateway is an open source project for using Envoy Gateway to handle request traffic from application clients to GenAI services.',
+  tagline: 'The open-source AI Gateway for Envoy. Route, govern, and observe traffic to any LLM from one unified control plane.',
   favicon: 'img/favicon.ico',
 
   scripts: [
@@ -206,7 +206,13 @@ const config: Config = {
           href: 'https://github.com/envoyproxy/ai-gateway',
           label: 'GitHub',
           position: 'right',
-        }
+        },
+        {
+          to: '/docs/ai-assistant/install-mcp',
+          label: 'Install MCP',
+          position: 'right',
+          className: 'navbar-cta',
+        },
       ],
     },
     footer: {
