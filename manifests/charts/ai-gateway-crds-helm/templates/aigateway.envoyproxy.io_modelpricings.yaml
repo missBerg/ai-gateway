@@ -1,0 +1,317 @@
+# Copyright Envoy AI Gateway Authors
+# SPDX-License-Identifier: Apache-2.0
+# The full text of the Apache license is available in the LICENSE file at
+# the root of the repo.
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.0
+  name: modelpricings.aigateway.envoyproxy.io
+spec:
+  group: aigateway.envoyproxy.io
+  names:
+    kind: ModelPricing
+    listKind: ModelPricingList
+    plural: modelpricings
+    singular: modelpricing
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[-1:].type
+      name: Status
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          ModelPricing describes the per-model pricing factors used by QuotaPolicy
+          resources that reference money-denominated limits.
+
+          A ModelPricing resource carries one currency + unit for the whole table, and
+          one entry per model with a default set of pricing factors. Entries may
+          optionally declare (region, tier) overrides to express regional or
+          service-tier price variance without duplicating the table.
+
+          Pricing factors are authored as decimal strings (e.g. "3.0" for $3 per 1M
+          input tokens) so that CRD authors can express provider pricing verbatim.
+          The controller pre-scales each factor to a uint64 micro-units-per-1M-tokens
+          integer before serializing into the data plane filter configuration, so the
+          ExtProc hot path can compute cost with plain uint64 arithmetic.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Spec defines the details of the ModelPricing.
+            properties:
+              currency:
+                description: |-
+                  Currency is the ISO-4217 currency code the pricing factors are denominated in.
+                  All entries in this table share the same currency.
+                enum:
+                - USD
+                - EUR
+                - GBP
+                - JPY
+                type: string
+              defaultRegion:
+                description: |-
+                  DefaultRegion is the region used for model lookup when a request does not
+                  carry an explicit region (either via QuotaPolicy pricingRef.region or the
+                  x-ai-eg-region header). Empty means "no regional default".
+                maxLength: 63
+                type: string
+              defaultTier:
+                description: |-
+                  DefaultTier is the service tier used for model lookup when a request does
+                  not carry an explicit tier. Empty means "no tier default".
+                maxLength: 63
+                type: string
+              models:
+                description: Models lists the per-model pricing entries. Model names
+                  must be unique.
+                items:
+                  description: ModelPricingEntry is the pricing row for a single model.
+                  properties:
+                    default:
+                      description: |-
+                        Default contains the baseline pricing factors applied when no override
+                        matches the request's resolved (region, tier) tuple.
+                      properties:
+                        cacheCreationInputTokenCost:
+                          description: CacheCreationInputTokenCost is the per-1M-cache-creation-input-token
+                            cost, as a decimal string.
+                          maxLength: 32
+                          pattern: ^[0-9]+(\.[0-9]+)?$
+                          type: string
+                        cachedInputTokenCost:
+                          description: CachedInputTokenCost is the per-1M-cached-input-token
+                            cost, as a decimal string.
+                          maxLength: 32
+                          pattern: ^[0-9]+(\.[0-9]+)?$
+                          type: string
+                        inputTokenCost:
+                          description: |-
+                            InputTokenCost is the per-1M-input-token cost, as a decimal string.
+                            Example: "3.0" meaning $3.00 per 1M input tokens.
+                          maxLength: 32
+                          pattern: ^[0-9]+(\.[0-9]+)?$
+                          type: string
+                        outputTokenCost:
+                          description: OutputTokenCost is the per-1M-output-token
+                            cost, as a decimal string.
+                          maxLength: 32
+                          pattern: ^[0-9]+(\.[0-9]+)?$
+                          type: string
+                        reasoningTokenCost:
+                          description: ReasoningTokenCost is the per-1M-reasoning-token
+                            cost, as a decimal string.
+                          maxLength: 32
+                          pattern: ^[0-9]+(\.[0-9]+)?$
+                          type: string
+                      type: object
+                    extensionFactors:
+                      additionalProperties:
+                        type: string
+                      description: |-
+                        ExtensionFactors captures forward-compatible extension token classes
+                        (e.g. provider-specific audio or image tokens) as decimal strings keyed
+                        by the extension name. The data plane treats unknown extension keys as
+                        zero-cost; operators opt in per provider.
+                      maxProperties: 16
+                      type: object
+                    name:
+                      description: |-
+                        Name is the model identifier matched against the request model name
+                        (after any modelNameOverride has been applied on the route).
+                      maxLength: 253
+                      minLength: 1
+                      type: string
+                    overrides:
+                      description: |-
+                        Overrides expresses per-(region, tier) variance on top of Default. Each
+                        override must specify at least one of region or tier; the canonical
+                        matching key is "region|tier" with empty strings acting as wildcards.
+                        A pair (region, tier) may appear at most once.
+                      items:
+                        description: |-
+                          PricingOverride is an optional set of factor overrides for a particular
+                          (region, tier) tuple. Fields left unset on the inner PricingFactors inherit
+                          from the entry's Default.
+                        properties:
+                          cacheCreationInputTokenCost:
+                            description: CacheCreationInputTokenCost is the per-1M-cache-creation-input-token
+                              cost, as a decimal string.
+                            maxLength: 32
+                            pattern: ^[0-9]+(\.[0-9]+)?$
+                            type: string
+                          cachedInputTokenCost:
+                            description: CachedInputTokenCost is the per-1M-cached-input-token
+                              cost, as a decimal string.
+                            maxLength: 32
+                            pattern: ^[0-9]+(\.[0-9]+)?$
+                            type: string
+                          inputTokenCost:
+                            description: |-
+                              InputTokenCost is the per-1M-input-token cost, as a decimal string.
+                              Example: "3.0" meaning $3.00 per 1M input tokens.
+                            maxLength: 32
+                            pattern: ^[0-9]+(\.[0-9]+)?$
+                            type: string
+                          outputTokenCost:
+                            description: OutputTokenCost is the per-1M-output-token
+                              cost, as a decimal string.
+                            maxLength: 32
+                            pattern: ^[0-9]+(\.[0-9]+)?$
+                            type: string
+                          reasoningTokenCost:
+                            description: ReasoningTokenCost is the per-1M-reasoning-token
+                              cost, as a decimal string.
+                            maxLength: 32
+                            pattern: ^[0-9]+(\.[0-9]+)?$
+                            type: string
+                          region:
+                            description: Region is the region this override applies
+                              to. Empty means "any region".
+                            maxLength: 63
+                            type: string
+                          tier:
+                            description: Tier is the service tier this override applies
+                              to. Empty means "any tier".
+                            maxLength: 63
+                            type: string
+                        type: object
+                      maxItems: 16
+                      type: array
+                      x-kubernetes-validations:
+                      - message: each (region, tier) pair may appear at most once
+                          in overrides
+                        rule: 'self.all(o1, self.exists_one(o2, (has(o1.region) ?
+                          o1.region : '''') == (has(o2.region) ? o2.region : '''')
+                          && (has(o1.tier) ? o1.tier : '''') == (has(o2.tier) ? o2.tier
+                          : '''')))'
+                  required:
+                  - default
+                  - name
+                  type: object
+                maxItems: 256
+                minItems: 1
+                type: array
+                x-kubernetes-validations:
+                - message: models[].name must be unique within a ModelPricing
+                  rule: self.all(m1, self.exists_one(m2, m1.name == m2.name))
+              perMillionTokens:
+                default: true
+                description: |-
+                  PerMillionTokens controls whether the factor values are expressed per
+                  1M tokens (true, the default and recommended form) or per-token (false).
+                  The controller performs any scaling required before emitting the pre-scaled
+                  integer factors into the filter configuration.
+                type: boolean
+              unit:
+                description: |-
+                  Unit is the minor-unit the data plane will use for cost metadata values.
+                  MicroDollar (10^-6 USD) is the default for USD. Use CentiDollar (10^-2 USD)
+                  when a single request may accrue more than $1000 of cost, because Envoy
+                  enforces a hits_addend ceiling of 1_000_000_000 per descriptor.
+                enum:
+                - MicroDollar
+                - MicroEuro
+                - CentiDollar
+                type: string
+            required:
+            - currency
+            - models
+            - unit
+            type: object
+            x-kubernetes-validations:
+            - message: each pricing override must specify at least one of region or
+                tier
+              rule: self.models.all(m, !has(m.overrides) || m.overrides.all(o, has(o.region)
+                || has(o.tier)))
+          status:
+            description: Status defines the status details of the ModelPricing.
+            properties:
+              conditions:
+                description: |-
+                  Conditions is the list of conditions by the reconciliation result.
+
+                  Known .status.conditions.type are: "Accepted", "NotAccepted".
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

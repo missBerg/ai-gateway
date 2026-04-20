@@ -1,0 +1,33 @@
+# Copyright Envoy AI Gateway Authors
+# SPDX-License-Identifier: Apache-2.0
+# The full text of the Apache license is available in the LICENSE file at
+# the root of the repo.
+
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: ModelPricing
+metadata:
+  name: anthropic-prices-multi-region
+  namespace: default
+spec:
+  currency: USD
+  unit: MicroDollar
+  defaultRegion: us-east-1
+  defaultTier: standard
+  models:
+    - name: claude-3-5-sonnet
+      default:
+        inputTokenCost: "3.0"
+        outputTokenCost: "15.0"
+      overrides:
+        - region: eu-west-1
+          inputTokenCost: "3.3"
+          outputTokenCost: "16.5"
+        - tier: premium
+          inputTokenCost: "4.5"
+          outputTokenCost: "22.5"
+        - region: eu-west-1
+          tier: premium
+          inputTokenCost: "4.9"
+          outputTokenCost: "24.75"
+      extensionFactors:
+        cacheCreationReasoningTokenCost: "37.5"

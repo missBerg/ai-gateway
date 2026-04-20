@@ -48,8 +48,19 @@ type QuotaPolicySpec struct {
 	// +kubebuilder:validation:MaxItems=128
 	// +optional
 	PerModelQuotas []PerModelQuota `json:"perModelQuotas,omitempty"`
+	// CostTransparency opts this policy into surfacing the computed per-request
+	// cost back to the caller. Exposure is additionally gated by the caller
+	// sending the "x-ai-eg-cost-visibility: true" request header, so that both
+	// the administrator and the caller must agree before pricing is revealed.
+	// Disabled by default.
+	//
+	// +optional
+	CostTransparency *CostTransparencyConfig `json:"costTransparency,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!(has(self.costExpression) && has(self.pricingRef))",message="serviceQuota.costExpression and serviceQuota.pricingRef are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="!(has(self.quota) && has(self.monetaryQuota))",message="serviceQuota.quota and serviceQuota.monetaryQuota are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="has(self.pricingRef) ? has(self.monetaryQuota) : true",message="serviceQuota.pricingRef requires serviceQuota.monetaryQuota"
 type ServiceQuotaDefinition struct {
 	// CostExpression specifies a CEL expression for computing the quota burndown of the LLM-related request.
 	// If no expression is specified the "total_tokens" value is used.
@@ -57,12 +68,99 @@ type ServiceQuotaDefinition struct {
 	//
 	//  * "input_tokens + cached_input_tokens * 0.1 + output_tokens * 6"
 	//
+	// CostExpression and PricingRef are mutually exclusive.
+	//
 	// +optional
 	CostExpression *string `json:"costExpression,omitempty"`
+	// PricingRef selects a ModelPricing resource that drives money-denominated
+	// cost computation for this quota. When set, the data plane uses the
+	// referenced pricing table (along with optional region and tier) to compute
+	// per-request cost in the unit declared on the pricing table, bypassing
+	// CostExpression.
+	//
+	// CostExpression and PricingRef are mutually exclusive.
+	//
+	// +optional
+	PricingRef *PricingRef `json:"pricingRef,omitempty"`
 	// Quota value applicable to all requests.
 	// A response with 429 HTTP status code is sent back to the client when
 	// the selected requests have exceeded the quota.
-	Quota QuotaValue `json:"quota"`
+	//
+	// Quota and MonetaryQuota are mutually exclusive.
+	//
+	// +optional
+	Quota *QuotaValue `json:"quota,omitempty"`
+	// MonetaryQuota expresses the quota as an amount of currency in the unit
+	// declared on the referenced ModelPricing table. Required when PricingRef
+	// is set, and mutually exclusive with Quota.
+	//
+	// +optional
+	MonetaryQuota *MonetaryQuotaValue `json:"monetaryQuota,omitempty"`
+}
+
+// PricingRef references a ModelPricing resource and optionally pins the
+// region/tier lookup used for factor resolution. When Region or Tier is left
+// unset, the data plane falls back to the x-ai-eg-region / x-ai-eg-tier
+// request headers, then to the ModelPricing defaults, then to the empty
+// wildcard.
+type PricingRef struct {
+	// Name is the name of the ModelPricing resource in the same namespace as
+	// the QuotaPolicy.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	Name string `json:"name"`
+	// Region pins the region used for factor lookup. Empty means "use request
+	// header or pricing-table default".
+	//
+	// +optional
+	// +kubebuilder:validation:MaxLength=63
+	Region *string `json:"region,omitempty"`
+	// Tier pins the service tier used for factor lookup. Empty means "use
+	// request header or pricing-table default".
+	//
+	// +optional
+	// +kubebuilder:validation:MaxLength=63
+	Tier *string `json:"tier,omitempty"`
+}
+
+// MonetaryQuotaValue defines the quota limit in a currency unit (for example
+// MicroDollar or CentiDollar) over a fixed time window.
+type MonetaryQuotaValue struct {
+	// Amount is the limit allotted for the specified Duration, expressed in the
+	// Unit declared below. For example, Amount=1_000_000 with Unit=MicroDollar
+	// represents a $1.00 cap.
+	//
+	// +kubebuilder:validation:Minimum=0
+	Amount uint64 `json:"amount"`
+	// Currency is the ISO-4217 currency code. Must match the currency declared
+	// on the referenced ModelPricing.
+	//
+	// +kubebuilder:validation:Enum=USD;EUR;GBP;JPY
+	Currency string `json:"currency"`
+	// Unit is the minor currency unit the Amount is denominated in. Must match
+	// the unit declared on the referenced ModelPricing.
+	//
+	// +kubebuilder:validation:Enum=MicroDollar;MicroEuro;CentiDollar
+	Unit string `json:"unit"`
+	// Duration is the time window over which Amount applies. Suffix units are:
+	// * s - seconds
+	// * m - minutes
+	// * h - hours
+	// * d - days
+	Duration string `json:"duration"`
+}
+
+// CostTransparencyConfig gates whether a QuotaPolicy exposes per-request cost
+// back to callers. Both this administrator gate AND the caller header
+// "x-ai-eg-cost-visibility: true" must be present for the data plane to emit
+// cost information on a response.
+type CostTransparencyConfig struct {
+	// Enabled turns on the administrator-side gate. Disabled by default.
+	//
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
 }
 
 type PerModelQuota struct {
@@ -107,14 +205,30 @@ type QuotaDefinition struct {
 	BucketRules []QuotaRule `json:"bucketRules"`
 }
 
-// QuotaBucketMode specifies whether the default and per request buckets values are exclusive or inclusive.
+// QuotaBucketMode specifies how quota is charged across the default bucket and
+// any matching bucket rules.
 //
-// +kubebuilder:validation:Enum=Exclusive;Shared
+// +kubebuilder:validation:Enum=Exclusive;Shared;MostGenerous
 type QuotaBucketMode string
 
 const (
-	QuoteBucketModeShared    QuotaBucketMode = "Shared"
-	QuoteBucketModeExclusive QuotaBucketMode = "Exclusive"
+	// QuotaBucketModeShared charges the request against every matching bucket
+	// (including the default). The request is allowed only when every matching
+	// bucket has capacity.
+	QuotaBucketModeShared QuotaBucketMode = "Shared"
+	// QuotaBucketModeExclusive charges the request against matching bucket rules
+	// (or the default bucket when no rules match) and denies the request only
+	// when all matching buckets are out of quota.
+	QuotaBucketModeExclusive QuotaBucketMode = "Exclusive"
+	// QuotaBucketModeMostGenerous charges the request against the single
+	// matching bucket with the largest configured cap. Remaining matching
+	// buckets are not touched. Ties are broken by declaration order.
+	QuotaBucketModeMostGenerous QuotaBucketMode = "MostGenerous"
+
+	// Deprecated: Use QuotaBucketModeShared.
+	QuoteBucketModeShared = QuotaBucketModeShared
+	// Deprecated: Use QuotaBucketModeExclusive.
+	QuoteBucketModeExclusive = QuotaBucketModeExclusive
 )
 
 type QuotaRule struct {

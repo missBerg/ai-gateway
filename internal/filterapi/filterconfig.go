@@ -40,6 +40,95 @@ type Config struct {
 	Models []Model `json:"models,omitempty"`
 	// MCPConfig is the configuration for the MCPRoute implementations.
 	MCPConfig *MCPConfig `json:"mcpConfig,omitempty"`
+	// Pricing is the pre-scaled, data-plane view of the ModelPricing resources
+	// referenced by QuotaPolicies active on this filter. Keyed by model name.
+	// All pricing factors in this map are stored as uint64 micro-units per 1M
+	// tokens so the ExtProc can compute per-request cost with integer math.
+	Pricing map[string]ModelPricingResolved `json:"pricing,omitempty"`
+	// Buckets carries pre-resolved bucket selection metadata for policies that
+	// use the MostGenerous QuotaBucketMode. The data plane picks exactly one
+	// winning bucket per request before emitting the cost descriptor so that
+	// Envoy's AND-across-descriptors rate-limit semantics produce the expected
+	// "largest configured cap wins" behavior.
+	Buckets []BucketSelectionGroup `json:"buckets,omitempty"`
+	// CostTransparency describes the per-policy admin gate for exposing
+	// computed per-request cost back to callers. Nil means no policies on this
+	// filter opted in.
+	CostTransparency *CostTransparencyRuntime `json:"costTransparency,omitempty"`
+}
+
+// ModelPricingResolved is the controller's pre-scaled view of a single row of
+// a ModelPricing resource. All factor values are uint64 micro-units per 1M
+// tokens regardless of how the operator authored them in the CRD.
+type ModelPricingResolved struct {
+	// Unit is the minor currency unit the factors are denominated in, for
+	// example "MicroDollar" or "CentiDollar".
+	Unit string `json:"unit"`
+	// Currency is the ISO-4217 currency code (e.g. "USD").
+	Currency string `json:"currency"`
+	// PerMillion is true when factor values represent per-1M-token cost.
+	// The data plane divides by 1_000_000 after multiplying by token counts.
+	PerMillion bool `json:"perMillion,omitempty"`
+	// Default is the baseline factors applied when no override matches.
+	Default PricingFactorsMicroUnits `json:"default"`
+	// Overrides is keyed by canonical "region|tier" (empty halves act as
+	// wildcards). The data plane looks up the most specific entry first, then
+	// falls back through "region|", "|tier", "|", and finally Default.
+	Overrides map[string]PricingFactorsMicroUnits `json:"overrides,omitempty"`
+}
+
+// PricingFactorsMicroUnits is the set of per-token-class factors in uint64
+// micro-units per 1M tokens. Names mirror LLMRequestCostType values.
+type PricingFactorsMicroUnits struct {
+	InputTokenCost              uint64            `json:"inputTokenCost,omitempty"`
+	OutputTokenCost             uint64            `json:"outputTokenCost,omitempty"`
+	CachedInputTokenCost        uint64            `json:"cachedInputTokenCost,omitempty"`
+	CacheCreationInputTokenCost uint64            `json:"cacheCreationInputTokenCost,omitempty"`
+	ReasoningTokenCost          uint64            `json:"reasoningTokenCost,omitempty"`
+	Extension                   map[string]uint64 `json:"extension,omitempty"`
+}
+
+// BucketSelectionGroup is the controller-compiled view of one QuotaPolicy rule
+// set used for MostGenerous bucket pre-selection in the data plane. The data
+// plane evaluates Rules in order and picks the single rule whose selector
+// matches the request and whose Cap is the largest among matchers.
+type BucketSelectionGroup struct {
+	// PolicyNamespace identifies the owning QuotaPolicy.
+	PolicyNamespace string `json:"policyNamespace"`
+	// PolicyName identifies the owning QuotaPolicy.
+	PolicyName string `json:"policyName"`
+	// Rules are the candidate buckets in declaration order. Declaration index
+	// serves as the tie-breaker when multiple matching rules share the largest
+	// Cap.
+	Rules []BucketSelectionRule `json:"rules"`
+}
+
+// BucketSelectionRule is one candidate bucket within a BucketSelectionGroup.
+type BucketSelectionRule struct {
+	// Name uniquely identifies this rule within its group. Used as a metric
+	// label and as the tag stamped into the request identity metadata so the
+	// downstream rate-limit filter only fires the winner's descriptor.
+	Name string `json:"name"`
+	// Cap is the configured Amount for this bucket in the policy's declared
+	// cost unit. MostGenerous selects the largest Cap.
+	Cap uint64 `json:"cap"`
+	// Selector is the serialized ClientSelector expression evaluated against
+	// the request. Empty selector matches every request.
+	Selector string `json:"selector,omitempty"`
+	// Shadow indicates this rule runs in shadow mode: the data plane still
+	// counts and reports the hit but never enforces a 429 on it.
+	Shadow bool `json:"shadow,omitempty"`
+}
+
+// CostTransparencyRuntime is the data-plane view of per-policy opt-in to cost
+// visibility. Presence of a key means the admin gate is set; the data plane
+// must still require the x-ai-eg-cost-visibility request header before
+// emitting cost fields onto a response.
+type CostTransparencyRuntime struct {
+	// PolicyNamespaces and PolicyNames are parallel arrays identifying the
+	// opted-in QuotaPolicies active on this filter.
+	PolicyNamespaces []string `json:"policyNamespaces,omitempty"`
+	PolicyNames      []string `json:"policyNames,omitempty"`
 }
 
 // Model corresponds to the OpenAI model object in the OpenAI-compatible APIs

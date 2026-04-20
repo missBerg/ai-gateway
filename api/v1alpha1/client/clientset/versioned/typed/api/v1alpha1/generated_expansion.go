@@ -17,4 +17,6 @@ type GatewayConfigExpansion interface{}
 
 type MCPRouteExpansion interface{}
 
+type ModelPricingExpansion interface{}
+
 type QuotaPolicyExpansion interface{}

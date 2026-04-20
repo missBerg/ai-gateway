@@ -54,6 +54,22 @@ spec:
             description: QuotaPolicySpec specifies rules for computing token based
               costs of requests.
             properties:
+              costTransparency:
+                description: |-
+                  CostTransparency opts this policy into surfacing the computed per-request
+                  cost back to the caller. Exposure is additionally gated by the caller
+                  sending the "x-ai-eg-cost-visibility: true" request header, so that both
+                  the administrator and the caller must agree before pricing is revealed.
+                  Disabled by default.
+                properties:
+                  enabled:
+                    default: false
+                    description: Enabled turns on the administrator-side gate. Disabled
+                      by default.
+                    type: boolean
+                required:
+                - enabled
+                type: object
               perModelQuotas:
                 description: |-
                   PerModelQuotas specifies quota for different models served by the AIServiceBackend(s) where this
@@ -339,6 +355,7 @@ spec:
                           enum:
                           - Exclusive
                           - Shared
+                          - MostGenerous
                           type: string
                       required:
                       - mode
@@ -361,12 +378,95 @@ spec:
                       For example:
 
                        * "input_tokens + cached_input_tokens * 0.1 + output_tokens * 6"
+
+                      CostExpression and PricingRef are mutually exclusive.
                     type: string
+                  monetaryQuota:
+                    description: |-
+                      MonetaryQuota expresses the quota as an amount of currency in the unit
+                      declared on the referenced ModelPricing table. Required when PricingRef
+                      is set, and mutually exclusive with Quota.
+                    properties:
+                      amount:
+                        description: |-
+                          Amount is the limit allotted for the specified Duration, expressed in the
+                          Unit declared below. For example, Amount=1_000_000 with Unit=MicroDollar
+                          represents a $1.00 cap.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      currency:
+                        description: |-
+                          Currency is the ISO-4217 currency code. Must match the currency declared
+                          on the referenced ModelPricing.
+                        enum:
+                        - USD
+                        - EUR
+                        - GBP
+                        - JPY
+                        type: string
+                      duration:
+                        description: |-
+                          Duration is the time window over which Amount applies. Suffix units are:
+                          * s - seconds
+                          * m - minutes
+                          * h - hours
+                          * d - days
+                        type: string
+                      unit:
+                        description: |-
+                          Unit is the minor currency unit the Amount is denominated in. Must match
+                          the unit declared on the referenced ModelPricing.
+                        enum:
+                        - MicroDollar
+                        - MicroEuro
+                        - CentiDollar
+                        type: string
+                    required:
+                    - amount
+                    - currency
+                    - duration
+                    - unit
+                    type: object
+                  pricingRef:
+                    description: |-
+                      PricingRef selects a ModelPricing resource that drives money-denominated
+                      cost computation for this quota. When set, the data plane uses the
+                      referenced pricing table (along with optional region and tier) to compute
+                      per-request cost in the unit declared on the pricing table, bypassing
+                      CostExpression.
+
+                      CostExpression and PricingRef are mutually exclusive.
+                    properties:
+                      name:
+                        description: |-
+                          Name is the name of the ModelPricing resource in the same namespace as
+                          the QuotaPolicy.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                      region:
+                        description: |-
+                          Region pins the region used for factor lookup. Empty means "use request
+                          header or pricing-table default".
+                        maxLength: 63
+                        type: string
+                      tier:
+                        description: |-
+                          Tier pins the service tier used for factor lookup. Empty means "use
+                          request header or pricing-table default".
+                        maxLength: 63
+                        type: string
+                    required:
+                    - name
+                    type: object
                   quota:
                     description: |-
                       Quota value applicable to all requests.
                       A response with 429 HTTP status code is sent back to the client when
                       the selected requests have exceeded the quota.
+
+                      Quota and MonetaryQuota are mutually exclusive.
                     properties:
                       duration:
                         description: |-
@@ -383,9 +483,16 @@ spec:
                     - duration
                     - limit
                     type: object
-                required:
-                - quota
                 type: object
+                x-kubernetes-validations:
+                - message: serviceQuota.costExpression and serviceQuota.pricingRef
+                    are mutually exclusive
+                  rule: '!(has(self.costExpression) && has(self.pricingRef))'
+                - message: serviceQuota.quota and serviceQuota.monetaryQuota are mutually
+                    exclusive
+                  rule: '!(has(self.quota) && has(self.monetaryQuota))'
+                - message: serviceQuota.pricingRef requires serviceQuota.monetaryQuota
+                  rule: 'has(self.pricingRef) ? has(self.monetaryQuota) : true'
               targetRefs:
                 description: TargetRefs are the names of the AIServiceBackend resources
                   this QuotaPolicy is being attached to.
@@ -431,9 +538,9 @@ spec:
               conditions:
                 description: |-
                   Conditions is the list of conditions by the reconciliation result.
-                  Currently, at most one condition is set.
 
-                  Known .status.conditions.type are: "Accepted", "NotAccepted".
+                  Known .status.conditions.type are: "Accepted", "NotAccepted",
+                  "PricingResolved", "ModelNotPriced", "BackendTrafficPolicyGenerated".
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

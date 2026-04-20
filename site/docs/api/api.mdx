@@ -25,6 +25,8 @@ API group.
 - [GatewayConfigList](#gatewayconfiglist)
 - [MCPRoute](#mcproute)
 - [MCPRouteList](#mcproutelist)
+- [ModelPricing](#modelpricing)
+- [ModelPricingList](#modelpricinglist)
 - [QuotaPolicy](#quotapolicy)
 - [QuotaPolicyList](#quotapolicylist)
 
@@ -469,6 +471,97 @@ MCPRouteList contains a list of MCPRoute.
 />
 
 
+#### ModelPricing
+
+
+
+**Appears in:**
+- [ModelPricingList](#modelpricinglist)
+
+ModelPricing describes the per-model pricing factors used by QuotaPolicy
+resources that reference money-denominated limits.
+
+A ModelPricing resource carries one currency + unit for the whole table, and
+one entry per model with a default set of pricing factors. Entries may
+optionally declare (region, tier) overrides to express regional or
+service-tier price variance without duplicating the table.
+
+Pricing factors are authored as decimal strings (e.g. "3.0" for $3 per 1M
+input tokens) so that CRD authors can express provider pricing verbatim.
+The controller pre-scales each factor to a uint64 micro-units-per-1M-tokens
+integer before serializing into the data plane filter configuration, so the
+ExtProc hot path can compute cost with plain uint64 arithmetic.
+
+##### Fields
+
+<ApiField
+  name="apiVersion"
+  type="String"
+  required="true"
+  description="We are on version <code>aigateway.envoyproxy.io/v1alpha1</code> of the API."
+/>
+
+<ApiField
+  name="kind"
+  type="String"
+  required="true"
+  description="This is a <code>ModelPricing</code> resource"
+/>
+
+<ApiField
+  name="metadata"
+  type="[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#objectmeta-v1-meta)"
+  required="true"
+  description="Refer to Kubernetes API documentation for fields of `metadata`."
+/><ApiField
+  name="spec"
+  type="[ModelPricingSpec](#modelpricingspec)"
+  required="true"
+  description="Spec defines the details of the ModelPricing."
+/><ApiField
+  name="status"
+  type="[ModelPricingStatus](#modelpricingstatus)"
+  required="true"
+  description="Status defines the status details of the ModelPricing."
+/>
+
+
+#### ModelPricingList
+
+
+
+
+ModelPricingList contains a list of ModelPricing.
+
+##### Fields
+
+<ApiField
+  name="apiVersion"
+  type="String"
+  required="true"
+  description="We are on version <code>aigateway.envoyproxy.io/v1alpha1</code> of the API."
+/>
+
+<ApiField
+  name="kind"
+  type="String"
+  required="true"
+  description="This is a <code>ModelPricingList</code> resource"
+/>
+
+<ApiField
+  name="metadata"
+  type="[ListMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#listmeta-v1-meta)"
+  required="true"
+  description="Refer to Kubernetes API documentation for fields of `metadata`."
+/><ApiField
+  name="items"
+  type="[ModelPricing](#modelpricing) array"
+  required="true"
+  description=""
+/>
+
+
 #### QuotaPolicy
 
 
@@ -574,6 +667,7 @@ QuotaPolicyList contains a list of QuotaPolicy
 - [BackendSecurityPolicySpec](#backendsecuritypolicyspec)
 - [BackendSecurityPolicyStatus](#backendsecuritypolicystatus)
 - [BackendSecurityPolicyType](#backendsecuritypolicytype)
+- [CostTransparencyConfig](#costtransparencyconfig)
 - [GCPCredentialsFile](#gcpcredentialsfile)
 - [GCPOIDCExchangeToken](#gcpoidcexchangetoken)
 - [GCPServiceAccountImpersonationConfig](#gcpserviceaccountimpersonationconfig)
@@ -601,7 +695,14 @@ QuotaPolicyList contains a list of QuotaPolicy
 - [MCPRouteSpec](#mcproutespec)
 - [MCPRouteStatus](#mcproutestatus)
 - [MCPToolFilter](#mcptoolfilter)
+- [ModelPricingEntry](#modelpricingentry)
+- [ModelPricingSpec](#modelpricingspec)
+- [ModelPricingStatus](#modelpricingstatus)
+- [MonetaryQuotaValue](#monetaryquotavalue)
 - [PerModelQuota](#permodelquota)
+- [PricingFactors](#pricingfactors)
+- [PricingOverride](#pricingoverride)
+- [PricingRef](#pricingref)
 - [ProtectedResourceMetadata](#protectedresourcemetadata)
 - [QuotaBucketMode](#quotabucketmode)
 - [QuotaDefinition](#quotadefinition)
@@ -1341,6 +1442,31 @@ BackendSecurityPolicyType specifies the type of auth mechanism used to access a 
   required="false"
   description=""
 />
+#### CostTransparencyConfig
+
+
+
+**Appears in:**
+- [QuotaPolicySpec](#quotapolicyspec)
+
+CostTransparencyConfig gates whether a QuotaPolicy exposes per-request cost
+back to callers. Both this administrator gate AND the caller header
+"x-ai-eg-cost-visibility: true" must be present for the data plane to emit
+cost information on a response.
+
+##### Fields
+
+
+
+<ApiField
+  name="enabled"
+  type="boolean"
+  required="true"
+  defaultValue="false"
+  description="Enabled turns on the administrator-side gate. Disabled by default."
+/>
+
+
 #### GCPCredentialsFile
 
 
@@ -2135,6 +2261,147 @@ a tool must match an include rule AND not match any exclude rule to be allowed.
 />
 
 
+#### ModelPricingEntry
+
+
+
+**Appears in:**
+- [ModelPricingSpec](#modelpricingspec)
+
+ModelPricingEntry is the pricing row for a single model.
+
+##### Fields
+
+
+
+<ApiField
+  name="name"
+  type="string"
+  required="true"
+  description="Name is the model identifier matched against the request model name<br />(after any modelNameOverride has been applied on the route)."
+/><ApiField
+  name="default"
+  type="[PricingFactors](#pricingfactors)"
+  required="true"
+  description="Default contains the baseline pricing factors applied when no override<br />matches the request's resolved (region, tier) tuple."
+/><ApiField
+  name="overrides"
+  type="[PricingOverride](#pricingoverride) array"
+  required="false"
+  description="Overrides expresses per-(region, tier) variance on top of Default. Each<br />override must specify at least one of region or tier; the canonical<br />matching key is `region\|tier` with empty strings acting as wildcards.<br />A pair (region, tier) may appear at most once."
+/><ApiField
+  name="extensionFactors"
+  type="object (keys:string, values:string)"
+  required="false"
+  description="ExtensionFactors captures forward-compatible extension token classes<br />(e.g. provider-specific audio or image tokens) as decimal strings keyed<br />by the extension name. The data plane treats unknown extension keys as<br />zero-cost; operators opt in per provider."
+/>
+
+
+#### ModelPricingSpec
+
+
+
+**Appears in:**
+- [ModelPricing](#modelpricing)
+
+ModelPricingSpec specifies the pricing factors for a set of models.
+
+##### Fields
+
+
+
+<ApiField
+  name="currency"
+  type="string"
+  required="true"
+  description="Currency is the ISO-4217 currency code the pricing factors are denominated in.<br />All entries in this table share the same currency."
+/><ApiField
+  name="unit"
+  type="string"
+  required="true"
+  description="Unit is the minor-unit the data plane will use for cost metadata values.<br />MicroDollar (10^-6 USD) is the default for USD. Use CentiDollar (10^-2 USD)<br />when a single request may accrue more than $1000 of cost, because Envoy<br />enforces a hits_addend ceiling of 1_000_000_000 per descriptor."
+/><ApiField
+  name="perMillionTokens"
+  type="boolean"
+  required="false"
+  defaultValue="true"
+  description="PerMillionTokens controls whether the factor values are expressed per<br />1M tokens (true, the default and recommended form) or per-token (false).<br />The controller performs any scaling required before emitting the pre-scaled<br />integer factors into the filter configuration."
+/><ApiField
+  name="defaultRegion"
+  type="string"
+  required="false"
+  description="DefaultRegion is the region used for model lookup when a request does not<br />carry an explicit region (either via QuotaPolicy pricingRef.region or the<br />x-ai-eg-region header). Empty means `no regional default`."
+/><ApiField
+  name="defaultTier"
+  type="string"
+  required="false"
+  description="DefaultTier is the service tier used for model lookup when a request does<br />not carry an explicit tier. Empty means `no tier default`."
+/><ApiField
+  name="models"
+  type="[ModelPricingEntry](#modelpricingentry) array"
+  required="true"
+  description="Models lists the per-model pricing entries. Model names must be unique."
+/>
+
+
+#### ModelPricingStatus
+
+
+
+**Appears in:**
+- [ModelPricing](#modelpricing)
+
+ModelPricingStatus contains the conditions by the reconciliation result.
+
+##### Fields
+
+
+
+<ApiField
+  name="conditions"
+  type="[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#condition-v1-meta) array"
+  required="true"
+  description="Conditions is the list of conditions by the reconciliation result.<br />Known .status.conditions.type are: `Accepted`, `NotAccepted`."
+/>
+
+
+#### MonetaryQuotaValue
+
+
+
+**Appears in:**
+- [ServiceQuotaDefinition](#servicequotadefinition)
+
+MonetaryQuotaValue defines the quota limit in a currency unit (for example
+MicroDollar or CentiDollar) over a fixed time window.
+
+##### Fields
+
+
+
+<ApiField
+  name="amount"
+  type="integer"
+  required="true"
+  description="Amount is the limit allotted for the specified Duration, expressed in the<br />Unit declared below. For example, Amount=1_000_000 with Unit=MicroDollar<br />represents a $1.00 cap."
+/><ApiField
+  name="currency"
+  type="string"
+  required="true"
+  description="Currency is the ISO-4217 currency code. Must match the currency declared<br />on the referenced ModelPricing."
+/><ApiField
+  name="unit"
+  type="string"
+  required="true"
+  description="Unit is the minor currency unit the Amount is denominated in. Must match<br />the unit declared on the referenced ModelPricing."
+/><ApiField
+  name="duration"
+  type="string"
+  required="true"
+  description="Duration is the time window over which Amount applies. Suffix units are:<br />* s - seconds<br />* m - minutes<br />* h - hours<br />* d - days"
+/>
+
+
 #### PerModelQuota
 
 
@@ -2158,6 +2425,141 @@ a tool must match an include rule AND not match any exclude rule to be allowed.
   type="[QuotaDefinition](#quotadefinition)"
   required="true"
   description="Expression for computing request cost and rules for matching requests to quota buckets."
+/>
+
+
+#### PricingFactors
+
+
+
+**Appears in:**
+- [ModelPricingEntry](#modelpricingentry)
+- [PricingOverride](#pricingoverride)
+
+PricingFactors is the set of per-token-class cost factors for a single model.
+All values are non-negative decimal strings; the controller pre-scales each
+to uint64 micro-units-per-1M-tokens before the data plane consumes them.
+
+The factor names mirror LLMRequestCostType so operators can map pricing
+inputs 1:1 with the usage fields surfaced by existing LLM providers.
+
+##### Fields
+
+
+
+<ApiField
+  name="inputTokenCost"
+  type="string"
+  required="false"
+  description="InputTokenCost is the per-1M-input-token cost, as a decimal string.<br />Example: `3.0` meaning $3.00 per 1M input tokens."
+/><ApiField
+  name="outputTokenCost"
+  type="string"
+  required="false"
+  description="OutputTokenCost is the per-1M-output-token cost, as a decimal string."
+/><ApiField
+  name="cachedInputTokenCost"
+  type="string"
+  required="false"
+  description="CachedInputTokenCost is the per-1M-cached-input-token cost, as a decimal string."
+/><ApiField
+  name="cacheCreationInputTokenCost"
+  type="string"
+  required="false"
+  description="CacheCreationInputTokenCost is the per-1M-cache-creation-input-token cost, as a decimal string."
+/><ApiField
+  name="reasoningTokenCost"
+  type="string"
+  required="false"
+  description="ReasoningTokenCost is the per-1M-reasoning-token cost, as a decimal string."
+/>
+
+
+#### PricingOverride
+
+
+
+**Appears in:**
+- [ModelPricingEntry](#modelpricingentry)
+
+PricingOverride is an optional set of factor overrides for a particular
+(region, tier) tuple. Fields left unset on the inner PricingFactors inherit
+from the entry's Default.
+
+##### Fields
+
+
+
+<ApiField
+  name="region"
+  type="string"
+  required="false"
+  description="Region is the region this override applies to. Empty means `any region`."
+/><ApiField
+  name="tier"
+  type="string"
+  required="false"
+  description="Tier is the service tier this override applies to. Empty means `any tier`."
+/><ApiField
+  name="inputTokenCost"
+  type="string"
+  required="false"
+  description="InputTokenCost is the per-1M-input-token cost, as a decimal string.<br />Example: `3.0` meaning $3.00 per 1M input tokens."
+/><ApiField
+  name="outputTokenCost"
+  type="string"
+  required="false"
+  description="OutputTokenCost is the per-1M-output-token cost, as a decimal string."
+/><ApiField
+  name="cachedInputTokenCost"
+  type="string"
+  required="false"
+  description="CachedInputTokenCost is the per-1M-cached-input-token cost, as a decimal string."
+/><ApiField
+  name="cacheCreationInputTokenCost"
+  type="string"
+  required="false"
+  description="CacheCreationInputTokenCost is the per-1M-cache-creation-input-token cost, as a decimal string."
+/><ApiField
+  name="reasoningTokenCost"
+  type="string"
+  required="false"
+  description="ReasoningTokenCost is the per-1M-reasoning-token cost, as a decimal string."
+/>
+
+
+#### PricingRef
+
+
+
+**Appears in:**
+- [ServiceQuotaDefinition](#servicequotadefinition)
+
+PricingRef references a ModelPricing resource and optionally pins the
+region/tier lookup used for factor resolution. When Region or Tier is left
+unset, the data plane falls back to the x-ai-eg-region / x-ai-eg-tier
+request headers, then to the ModelPricing defaults, then to the empty
+wildcard.
+
+##### Fields
+
+
+
+<ApiField
+  name="name"
+  type="string"
+  required="true"
+  description="Name is the name of the ModelPricing resource in the same namespace as<br />the QuotaPolicy."
+/><ApiField
+  name="region"
+  type="string"
+  required="false"
+  description="Region pins the region used for factor lookup. Empty means `use request<br />header or pricing-table default`."
+/><ApiField
+  name="tier"
+  type="string"
+  required="false"
+  description="Tier pins the service tier used for factor lookup. Empty means `use<br />request header or pricing-table default`."
 />
 
 
@@ -2218,7 +2620,8 @@ References:
 **Appears in:**
 - [QuotaDefinition](#quotadefinition)
 
-QuotaBucketMode specifies whether the default and per request buckets values are exclusive or inclusive.
+QuotaBucketMode specifies how quota is charged across the default bucket and
+any matching bucket rules.
 
 
 
@@ -2228,12 +2631,17 @@ QuotaBucketMode specifies whether the default and per request buckets values are
   name="Shared"
   type="enum"
   required="false"
-  description=""
+  description="QuotaBucketModeShared charges the request against every matching bucket<br />(including the default). The request is allowed only when every matching<br />bucket has capacity.<br />"
 /><ApiField
   name="Exclusive"
   type="enum"
   required="false"
-  description=""
+  description="QuotaBucketModeExclusive charges the request against matching bucket rules<br />(or the default bucket when no rules match) and denies the request only<br />when all matching buckets are out of quota.<br />"
+/><ApiField
+  name="MostGenerous"
+  type="enum"
+  required="false"
+  description="QuotaBucketModeMostGenerous charges the request against the single<br />matching bucket with the largest configured cap. Remaining matching<br />buckets are not touched. Ties are broken by declaration order.<br />"
 />
 #### QuotaDefinition
 
@@ -2299,6 +2707,11 @@ QuotaPolicySpec specifies rules for computing token based costs of requests.
   type="[PerModelQuota](#permodelquota) array"
   required="false"
   description="PerModelQuotas specifies quota for different models served by the AIServiceBackend(s) where this<br />policy is attached."
+/><ApiField
+  name="costTransparency"
+  type="[CostTransparencyConfig](#costtransparencyconfig)"
+  required="false"
+  description="CostTransparency opts this policy into surfacing the computed per-request<br />cost back to the caller. Exposure is additionally gated by the caller<br />sending the `x-ai-eg-cost-visibility: true` request header, so that both<br />the administrator and the caller must agree before pricing is revealed.<br />Disabled by default."
 />
 
 
@@ -2319,7 +2732,7 @@ QuotaPolicyStatus contains the conditions by the reconciliation result.
   name="conditions"
   type="[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#condition-v1-meta) array"
   required="true"
-  description="Conditions is the list of conditions by the reconciliation result.<br />Currently, at most one condition is set.<br />Known .status.conditions.type are: `Accepted`, `NotAccepted`."
+  description="Conditions is the list of conditions by the reconciliation result.<br />Known .status.conditions.type are: `Accepted`, `NotAccepted`,<br />`PricingResolved`, `ModelNotPriced`, `BackendTrafficPolicyGenerated`."
 />
 
 
@@ -2399,12 +2812,22 @@ QuotaValue defines the quota limits using sliding window.
   name="costExpression"
   type="string"
   required="false"
-  description="CostExpression specifies a CEL expression for computing the quota burndown of the LLM-related request.<br />If no expression is specified the `total_tokens` value is used.<br />For example:<br /> * `input_tokens + cached_input_tokens * 0.1 + output_tokens * 6`"
+  description="CostExpression specifies a CEL expression for computing the quota burndown of the LLM-related request.<br />If no expression is specified the `total_tokens` value is used.<br />For example:<br /> * `input_tokens + cached_input_tokens * 0.1 + output_tokens * 6`<br />CostExpression and PricingRef are mutually exclusive."
+/><ApiField
+  name="pricingRef"
+  type="[PricingRef](#pricingref)"
+  required="false"
+  description="PricingRef selects a ModelPricing resource that drives money-denominated<br />cost computation for this quota. When set, the data plane uses the<br />referenced pricing table (along with optional region and tier) to compute<br />per-request cost in the unit declared on the pricing table, bypassing<br />CostExpression.<br />CostExpression and PricingRef are mutually exclusive."
 /><ApiField
   name="quota"
   type="[QuotaValue](#quotavalue)"
-  required="true"
-  description="Quota value applicable to all requests.<br />A response with 429 HTTP status code is sent back to the client when<br />the selected requests have exceeded the quota."
+  required="false"
+  description="Quota value applicable to all requests.<br />A response with 429 HTTP status code is sent back to the client when<br />the selected requests have exceeded the quota.<br />Quota and MonetaryQuota are mutually exclusive."
+/><ApiField
+  name="monetaryQuota"
+  type="[MonetaryQuotaValue](#monetaryquotavalue)"
+  required="false"
+  description="MonetaryQuota expresses the quota as an amount of currency in the unit<br />declared on the referenced ModelPricing table. Required when PricingRef<br />is set, and mutually exclusive with Quota."
 />
 
 

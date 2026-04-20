@@ -23,6 +23,8 @@ type Interface interface {
 	GatewayConfigs() GatewayConfigInformer
 	// MCPRoutes returns a MCPRouteInformer.
 	MCPRoutes() MCPRouteInformer
+	// ModelPricings returns a ModelPricingInformer.
+	ModelPricings() ModelPricingInformer
 	// QuotaPolicies returns a QuotaPolicyInformer.
 	QuotaPolicies() QuotaPolicyInformer
 }
@@ -61,6 +63,11 @@ func (v *version) GatewayConfigs() GatewayConfigInformer {
 // MCPRoutes returns a MCPRouteInformer.
 func (v *version) MCPRoutes() MCPRouteInformer {
 	return &mCPRouteInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ModelPricings returns a ModelPricingInformer.
+func (v *version) ModelPricings() ModelPricingInformer {
+	return &modelPricingInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // QuotaPolicies returns a QuotaPolicyInformer.

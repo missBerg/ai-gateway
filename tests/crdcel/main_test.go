@@ -212,6 +212,98 @@ func TestBackendSecurityPolicies(t *testing.T) {
 	}
 }
 
+func TestModelPricings(t *testing.T) {
+	c, _, _ := testsinternal.NewEnvTest(t)
+	ctx := t.Context()
+
+	for _, tc := range []struct {
+		name   string
+		expErr string
+	}{
+		{name: "basic.yaml"},
+		{name: "overrides.yaml"},
+		{
+			name:   "invalid_currency.yaml",
+			expErr: `spec.currency: Unsupported value: "XYZ": supported values: "USD", "EUR", "GBP", "JPY"`,
+		},
+		{
+			name:   "duplicate_region_tier.yaml",
+			expErr: "each (region, tier) pair may appear at most once in overrides",
+		},
+		{
+			name:   "override_missing_region_and_tier.yaml",
+			expErr: "each pricing override must specify at least one of region or tier",
+		},
+		{
+			name:   "invalid_factor.yaml",
+			expErr: "spec.models[0].default.inputTokenCost in body should match",
+		},
+		{
+			name:   "no_models.yaml",
+			expErr: "spec.models in body should have at least 1 items",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := testdata.ReadFile(path.Join("testdata/modelpricings", tc.name))
+			require.NoError(t, err)
+
+			modelPricing := &aigv1a1.ModelPricing{}
+			err = yaml.UnmarshalStrict(data, modelPricing)
+			require.NoError(t, err)
+
+			if tc.expErr != "" {
+				require.ErrorContains(t, c.Create(ctx, modelPricing), tc.expErr)
+			} else {
+				require.NoError(t, c.Create(ctx, modelPricing))
+				require.NoError(t, c.Delete(ctx, modelPricing))
+			}
+		})
+	}
+}
+
+func TestQuotaPolicies(t *testing.T) {
+	c, _, _ := testsinternal.NewEnvTest(t)
+	ctx := t.Context()
+
+	for _, tc := range []struct {
+		name   string
+		expErr string
+	}{
+		{name: "basic.yaml"},
+		{name: "pricing_ref.yaml"},
+		{name: "most_generous.yaml"},
+		{name: "cost_transparency.yaml"},
+		{
+			name:   "cost_expression_and_pricing_ref.yaml",
+			expErr: "serviceQuota.costExpression and serviceQuota.pricingRef are mutually exclusive",
+		},
+		{
+			name:   "quota_and_monetary_quota.yaml",
+			expErr: "serviceQuota.quota and serviceQuota.monetaryQuota are mutually exclusive",
+		},
+		{
+			name:   "pricing_ref_without_monetary_quota.yaml",
+			expErr: "serviceQuota.pricingRef requires serviceQuota.monetaryQuota",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := testdata.ReadFile(path.Join("testdata/quotapolicies", tc.name))
+			require.NoError(t, err)
+
+			quotaPolicy := &aigv1a1.QuotaPolicy{}
+			err = yaml.UnmarshalStrict(data, quotaPolicy)
+			require.NoError(t, err)
+
+			if tc.expErr != "" {
+				require.ErrorContains(t, c.Create(ctx, quotaPolicy), tc.expErr)
+			} else {
+				require.NoError(t, c.Create(ctx, quotaPolicy))
+				require.NoError(t, c.Delete(ctx, quotaPolicy))
+			}
+		})
+	}
+}
+
 func TestMCPRoutes(t *testing.T) {
 	c, _, _ := testsinternal.NewEnvTest(t)
 	ctx := t.Context()

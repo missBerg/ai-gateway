@@ -37,6 +37,10 @@ func (c *FakeAigatewayV1alpha1) MCPRoutes(namespace string) v1alpha1.MCPRouteInt
 	return newFakeMCPRoutes(c, namespace)
 }
 
+func (c *FakeAigatewayV1alpha1) ModelPricings(namespace string) v1alpha1.ModelPricingInterface {
+	return newFakeModelPricings(c, namespace)
+}
+
 func (c *FakeAigatewayV1alpha1) QuotaPolicies(namespace string) v1alpha1.QuotaPolicyInterface {
 	return newFakeQuotaPolicies(c, namespace)
 }

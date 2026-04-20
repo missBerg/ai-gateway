@@ -47,6 +47,14 @@ type MCPRouteListerExpansion interface{}
 // MCPRouteNamespaceLister.
 type MCPRouteNamespaceListerExpansion interface{}
 
+// ModelPricingListerExpansion allows custom methods to be added to
+// ModelPricingLister.
+type ModelPricingListerExpansion interface{}
+
+// ModelPricingNamespaceListerExpansion allows custom methods to be added to
+// ModelPricingNamespaceLister.
+type ModelPricingNamespaceListerExpansion interface{}
+
 // QuotaPolicyListerExpansion allows custom methods to be added to
 // QuotaPolicyLister.
 type QuotaPolicyListerExpansion interface{}
