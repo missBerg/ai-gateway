@@ -11,30 +11,30 @@ Welcome! This guide walks you through setting up Envoy AI Gateway — the open-s
 ## Start here
 
 <DocCardGrid columns={2} cards={[
-  {
-    title: 'Prerequisites',
-    href: './prerequisites',
-    description: 'Set up a Kubernetes cluster, install the required tools, and deploy Envoy Gateway.',
-    icon: 'check'
-  },
-  {
-    title: 'Installation',
-    href: './installation',
-    description: 'Install Envoy AI Gateway, configure it, and verify the deployment.',
-    icon: 'package'
-  },
-  {
-    title: 'Basic Usage',
-    href: './basic-usage',
-    description: 'Deploy a basic configuration, send your first request, and read the response.',
-    icon: 'rocket'
-  },
-  {
-    title: 'Connect Providers',
-    href: './connect-providers',
-    description: 'Wire up OpenAI, AWS Bedrock, Azure, Vertex AI, and more with secure credentials.',
-    icon: 'plug'
-  }
+{
+title: 'Prerequisites',
+href: './prerequisites',
+description: 'Set up a Kubernetes cluster, install the required tools, and deploy Envoy Gateway.',
+icon: 'check'
+},
+{
+title: 'Installation',
+href: './installation',
+description: 'Install Envoy AI Gateway, configure it, and verify the deployment.',
+icon: 'package'
+},
+{
+title: 'Basic Usage',
+href: './basic-usage',
+description: 'Deploy a basic configuration, send your first request, and read the response.',
+icon: 'rocket'
+},
+{
+title: 'Connect Providers',
+href: './connect-providers',
+description: 'Wire up OpenAI, AWS Bedrock, Azure, Vertex AI, and more with secure credentials.',
+icon: 'plug'
+}
 ]} />
 
 ## Need help?

@@ -32,19 +32,21 @@ literals (see **"When to add a new token"** below for the one exception).
 ```css
 /* ✅ correct */
 .card {
-  background: #fff;                    /* literal white is fine */
+  background: #fff; /* literal white is fine */
   border: 1px solid var(--neutral-200);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   transition: box-shadow var(--motion-base) var(--ease-out);
 }
-.card:hover { border-color: var(--tint-purple-border); }
+.card:hover {
+  border-color: var(--tint-purple-border);
+}
 
 /* ❌ do not */
 .card {
-  border: 1px solid #e4e4e7;           /* use --neutral-200 */
-  box-shadow: 0 1px 2px rgba(0,0,0,.05); /* use --shadow-sm */
-  transition: box-shadow 0.25s ease;   /* use --motion-base + --ease-out */
+  border: 1px solid #e4e4e7; /* use --neutral-200 */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); /* use --shadow-sm */
+  transition: box-shadow 0.25s ease; /* use --motion-base + --ease-out */
 }
 ```
 
@@ -62,9 +64,15 @@ Every homepage section uses the same header pattern. Don't reinvent it.
 <section className={styles.section}>
   <div className="container">
     <div className="sectionHeader">
-      <span className="sectionEyebrow sectionEyebrow--purple">Capabilities</span>
-      <Heading as="h2" className="sectionTitle">One gateway, every major LLM</Heading>
-      <p className="sectionSubtitle">Route traffic through a single OpenAI-compatible API.</p>
+      <span className="sectionEyebrow sectionEyebrow--purple">
+        Capabilities
+      </span>
+      <Heading as="h2" className="sectionTitle">
+        One gateway, every major LLM
+      </Heading>
+      <p className="sectionSubtitle">
+        Route traffic through a single OpenAI-compatible API.
+      </p>
     </div>
     {/* section body */}
   </div>
@@ -73,17 +81,17 @@ Every homepage section uses the same header pattern. Don't reinvent it.
 
 Available primitives (all defined in `custom.css`):
 
-| Class                          | Purpose                                                      |
-| ------------------------------ | ------------------------------------------------------------ |
-| `.sectionWrap`                 | Standard vertical padding + max-width container.             |
-| `.sectionHeader`               | Centered header block (eyebrow / title / subtitle).          |
-| `.sectionEyebrow`              | Pill label above the title. Add a color modifier.            |
-| `.sectionEyebrow--purple`      | Purple eyebrow on light backgrounds (most sections).         |
-| `.sectionEyebrow--accent`      | Cyan eyebrow for MCP / interactive sections.                 |
-| `.sectionTitle`                | Clamp-sized section title (`--title-section`).               |
-| `.sectionSubtitle`             | Lead paragraph under the title.                              |
-| `.sectionOverlay--brand`       | Radial brand-purple glow — use on `--brand-navy` cards.      |
-| `.card-base`                   | White card with border / radius / shadow hover baseline.     |
+| Class                     | Purpose                                                  |
+| ------------------------- | -------------------------------------------------------- |
+| `.sectionWrap`            | Standard vertical padding + max-width container.         |
+| `.sectionHeader`          | Centered header block (eyebrow / title / subtitle).      |
+| `.sectionEyebrow`         | Pill label above the title. Add a color modifier.        |
+| `.sectionEyebrow--purple` | Purple eyebrow on light backgrounds (most sections).     |
+| `.sectionEyebrow--accent` | Cyan eyebrow for MCP / interactive sections.             |
+| `.sectionTitle`           | Clamp-sized section title (`--title-section`).           |
+| `.sectionSubtitle`        | Lead paragraph under the title.                          |
+| `.sectionOverlay--brand`  | Radial brand-purple glow — use on `--brand-navy` cards.  |
+| `.card-base`              | White card with border / radius / shadow hover baseline. |
 
 Per-component CSS should not redeclare these — the LLMProviders / LatestBlogs / Adopters refactor
 removed every local `.sectionTitle` and `.titleUnderline`.
@@ -118,20 +126,23 @@ Markdown tables render full-width with horizontal scroll on narrow viewports. Do
 Use on docs landing pages instead of a bulleted list of sub-links.
 
 ```mdx
-<DocCardGrid columns={3} cards={[
-  {
-    title: 'Connect providers',
-    href: './llm-integrations/connect-providers',
-    description: 'Establish connectivity with any supported AI provider.',
-    icon: '🔌'
-  },
-  {
-    title: 'Supported providers',
-    href: './llm-integrations/supported-providers',
-    description: 'Compatible AI/LLM service providers.',
-    icon: '🧭'
-  }
-]} />
+<DocCardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Connect providers",
+      href: "./llm-integrations/connect-providers",
+      description: "Establish connectivity with any supported AI provider.",
+      icon: "🔌",
+    },
+    {
+      title: "Supported providers",
+      href: "./llm-integrations/supported-providers",
+      description: "Compatible AI/LLM service providers.",
+      icon: "🧭",
+    },
+  ]}
+/>
 ```
 
 `columns` accepts `2 | 3 | 4`, defaults to `3`. Collapses to one column below 576px.
@@ -157,12 +168,12 @@ is load-bearing.
 
 Mobile-first. CSS `@media` cannot consume custom properties, so treat these as shared constants:
 
-| Breakpoint | Max width | Typical use                             |
-| ---------- | --------- | --------------------------------------- |
-| Small      | 576px     | Phones — stack to one column.           |
-| Mobile     | 768px     | Larger phones & small tablets.          |
-| Tablet     | 996px     | Tablets & small laptops.                |
-| Desktop    | 1200px    | Full grid layouts.                      |
+| Breakpoint | Max width | Typical use                    |
+| ---------- | --------- | ------------------------------ |
+| Small      | 576px     | Phones — stack to one column.  |
+| Mobile     | 768px     | Larger phones & small tablets. |
+| Tablet     | 996px     | Tablets & small laptops.       |
+| Desktop    | 1200px    | Full grid layouts.             |
 
 Always test at 576 / 768 / 996 / 1200 / 1400 via `preview_resize`. No horizontal scroll on the
 homepage at any size.
@@ -213,11 +224,11 @@ Add tokens to the appropriate section of `tokens.css`. Name them by role, not va
 
 ## File map
 
-| File                                                 | Contains                                           |
-| ---------------------------------------------------- | -------------------------------------------------- |
-| `src/css/tokens.css`                                 | All CSS custom properties. Source of truth.        |
-| `src/css/custom.css`                                 | Selectors, primitives, markdown, admonitions.      |
-| `src/components/<Section>/styles.module.css`         | Per-section styles. Tokens only.                   |
-| `src/components/DocCardGrid/`                        | `<DocCardGrid>` MDX component.                     |
-| `src/components/ApiField.tsx`                        | `<ApiField>` MDX component for API reference.      |
-| `src/theme/MDXComponents.tsx`                        | Registers MDX-visible components.                  |
+| File                                         | Contains                                      |
+| -------------------------------------------- | --------------------------------------------- |
+| `src/css/tokens.css`                         | All CSS custom properties. Source of truth.   |
+| `src/css/custom.css`                         | Selectors, primitives, markdown, admonitions. |
+| `src/components/<Section>/styles.module.css` | Per-section styles. Tokens only.              |
+| `src/components/DocCardGrid/`                | `<DocCardGrid>` MDX component.                |
+| `src/components/ApiField.tsx`                | `<ApiField>` MDX component for API reference. |
+| `src/theme/MDXComponents.tsx`                | Registers MDX-visible components.             |
