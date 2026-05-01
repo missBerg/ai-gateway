@@ -58,6 +58,11 @@
   transform: translateY(-1px);
 }
 
+.installCard:focus-visible {
+  outline: 2px solid var(--brand-purple);
+  outline-offset: 2px;
+}
+
 .installCard > svg:last-child {
   color: var(--neutral-400);
   flex-shrink: 0;

@@ -89,7 +89,7 @@ export default function McpInstall(): React.ReactElement {
     <section id="mcp-install" className={styles.section}>
       <div className="container">
         <div className="sectionHeader">
-          <span className="sectionEyebrow">AI-native Docs</span>
+          <span className="sectionEyebrow sectionEyebrow--accent">AI-native Docs</span>
           <h2 className="sectionTitle">
             Bring the Envoy AI Gateway docs to where you do your work
           </h2>

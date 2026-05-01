@@ -64,6 +64,9 @@
   --tint-white-subtle: rgba(255, 255, 255, 0.06);   /* on-navy card frame */
   --tint-white-soft: rgba(255, 255, 255, 0.12);     /* on-navy button border */
   --tint-white-strong: rgba(255, 255, 255, 0.25);   /* ghost button border */
+  --tint-white-strong-2: rgba(255, 255, 255, 0.5);  /* ghost button hover border */
+  --text-on-navy: rgba(255, 255, 255, 0.92);        /* body text on brand-navy */
+  --text-on-navy-soft: rgba(255, 255, 255, 0.78);   /* muted subtitle on brand-navy */
   --overlay-navy-90: rgba(10, 6, 19, 0.9);          /* tooltip bg */
 
   /* ---------- Status (badges) ---------- */
@@ -73,6 +76,13 @@
   --status-coming-soon-bg: #fff7e6;
   --status-coming-soon-text: #92580a;
   --status-coming-soon-border: #fde68a;
+  /* Providers compatibility-matrix row status. Semantic green/amber — not
+     part of the brand palette — so hex values stay here as the single
+     source of truth. */
+  --status-ok-bg: rgba(34, 197, 94, 0.12);
+  --status-ok-text: #15803d;
+  --status-warn-bg: rgba(245, 158, 11, 0.12);
+  --status-warn-text: #b45309;
 
   /* ---------- Typography ---------- */
   --ifm-font-family-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -150,6 +160,8 @@
   --shadow-lg: 0 16px 40px rgba(15, 10, 30, 0.08), 0 2px 6px rgba(15, 10, 30, 0.04);
   --shadow-xl: 0 24px 60px rgba(15, 10, 30, 0.12), 0 4px 10px rgba(15, 10, 30, 0.06);
   --shadow-glow-accent: 0 0 0 1px rgba(43, 217, 217, 0.35), 0 8px 24px rgba(43, 217, 217, 0.18);
+  --shadow-accent-hover: 0 8px 20px rgba(43, 217, 217, 0.28); /* primary CTA lift */
+  --shadow-tooltip: 0 4px 12px rgba(0, 0, 0, 0.3); /* dark tooltip — intentional black, not navy tint */
 
   /* ---------- Motion ---------- */
   --motion-fast: 150ms;
