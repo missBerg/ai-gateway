@@ -1,0 +1,298 @@
+{
+  "series": {
+    "version": "v0.6",
+    "title": "Envoy AI Gateway v0.6.x",
+    "subtitle": "v1beta1 API graduation, AWS Bedrock InvokeModel for Claude, Anthropic endpoint on OpenAI backends, Gemini embeddings and context caching, MCP per-backend header forwarding, GKE Workload Identity, and request/response body redaction",
+    "badge": "Latest",
+    "badgeType": "milestone"
+  },
+  "releases": [
+    {
+      "version": "v0.6.0",
+      "date": "May 15, 2026",
+      "type": "minor",
+      "tags": [
+        { "text": "v1beta1 APIs", "type": "feature" },
+        { "text": "Bedrock InvokeModel", "type": "feature" },
+        { "text": "Anthropic on OpenAI", "type": "feature" },
+        { "text": "Gemini Embeddings", "type": "feature" },
+        { "text": "Gemini Context Caching", "type": "feature" },
+        { "text": "MCP Header Forwarding", "type": "feature" },
+        { "text": "GKE Workload Identity", "type": "feature" },
+        { "text": "Body Redaction", "type": "feature" }
+      ],
+      "overview": "Envoy AI Gateway v0.6.0 graduates the core CRDs (AIGatewayRoute, AIServiceBackend, BackendSecurityPolicy, GatewayConfig, MCPRoute) to v1beta1, signaling production-readiness of the API surface. AWS Bedrock gains native InvokeModel support for Claude alongside cross-provider translation between OpenAI and Anthropic schemas. Gemini gets first-class embeddings and prefix-based context caching. MCP gains per-backend header forwarding with rename and JWT claim propagation. Operators get GKE Workload Identity, configurable webhook host networking, sensitive data redaction, and faster Go 1.26 builds.",
+      "features": [
+        {
+          "title": "AWS Bedrock",
+          "items": [
+            {
+              "title": "Native <code>InvokeModel</code> API for Claude",
+              "description": "Send requests to Claude models on Bedrock through Bedrock's native <code>InvokeModel</code> endpoint, complementing the existing Converse API path. Useful when applications already speak the Anthropic Messages format and want a thin translation layer."
+            },
+            {
+              "title": "OpenAI → Bedrock embeddings translation",
+              "description": "Call Amazon Titan and Cohere embedding models on Bedrock through the standard OpenAI <code>/v1/embeddings</code> contract. Switch embedding providers without changing client code."
+            },
+            {
+              "title": "Bedrock Titan embeddings routing",
+              "description": "Dataplane routing for Titan embeddings models is now wired up by default, so Titan endpoints work out of the box."
+            }
+          ]
+        },
+        {
+          "title": "Anthropic and Cross-Provider Translation",
+          "items": [
+            {
+              "title": "Anthropic <code>/v1/messages</code> endpoint on OpenAI backends",
+              "description": "Expose any OpenAI-compatible backend through Anthropic's Messages API. Lets Claude-style clients reach OpenAI, Azure OpenAI, or any other OpenAI-compatible provider behind the gateway without rewriting requests."
+            },
+            {
+              "title": "Structured output for Claude models",
+              "description": "Pass JSON schema constraints through to Claude so responses conform to your declared shape. Applies across Anthropic, AWS Bedrock, and GCP Vertex AI Claude backends."
+            },
+            {
+              "title": "Default <code>max_tokens</code> for Anthropic translator",
+              "description": "Anthropic requests without an explicit <code>max_tokens</code> now get a sensible default instead of failing at the provider, smoothing over a common footgun when forwarding OpenAI-shaped requests."
+            },
+            {
+              "title": "Adaptive thinking for <code>claude-opus-4.6</code>",
+              "description": "Translate the new adaptive thinking mode end-to-end so callers can opt into Claude's latest reasoning controls without bespoke provider code."
+            },
+            {
+              "title": "Reasoning effort mapping for Claude",
+              "description": "Map OpenAI's <code>reasoning_effort</code> field onto Claude's thinking budgets via the Anthropic API, giving you a single knob across providers."
+            }
+          ]
+        },
+        {
+          "title": "Gemini Provider",
+          "items": [
+            {
+              "title": "Gemini embeddings translation",
+              "description": "Use Gemini embedding models through the OpenAI <code>/v1/embeddings</code> contract, completing Gemini coverage alongside chat completions and Responses."
+            },
+            {
+              "title": "Gemini context caching with prefix-style API",
+              "description": "Activate Gemini's context caching using the same Anthropic-style prefix caching surface already supported elsewhere. Cut input token costs on long, repeated system prompts without a Gemini-specific code path."
+            },
+            {
+              "title": "Reasoning effort mapping for <code>gemini-3-flash</code>",
+              "description": "<code>reasoning_effort</code> now maps to Gemini 3's thinking controls, so the same client knob works across Anthropic, OpenAI, and Gemini."
+            },
+            {
+              "title": "Gemini reasoning surfaced as thinking blocks",
+              "description": "Non-streaming Gemini reasoning is now exposed as both string content and structured <code>thinking_blocks</code>, matching the shape clients already use for Anthropic responses."
+            }
+          ]
+        },
+        {
+          "title": "OpenAI API Compatibility",
+          "items": [
+            {
+              "title": "Open Responses API compatibility",
+              "description": "Improved compatibility with the open ecosystem variant of the Responses API, broadening which Responses-aware clients can sit in front of the gateway."
+            },
+            {
+              "title": "Responses API — phase 2",
+              "description": "Second wave of Responses API work fills in features such as context management and richer streaming so the <code>/v1/responses</code> path is closer to parity with chat completions."
+            },
+            {
+              "title": "Text-to-speech endpoint <code>/v1/audio/speech</code>",
+              "description": "Route OpenAI text-to-speech requests through the gateway, so audio workloads benefit from the same auth, rate limiting, and observability as chat traffic."
+            },
+            {
+              "title": "Batch inference APIs",
+              "description": "Forward OpenAI batch inference endpoints, enabling cheaper async workloads to flow through the same gateway as interactive traffic."
+            }
+          ]
+        },
+        {
+          "title": "MCP Gateway",
+          "items": [
+            {
+              "title": "Per-backend header forwarding with rename",
+              "description": "<code>MCPRouteBackendRef</code> now accepts <code>forwardHeaders</code> entries, including renaming, so each MCP backend can receive its own set of inbound request headers (e.g., trace context or tenant identifiers)."
+            },
+            {
+              "title": "JWT claim forwarding to MCP backends",
+              "description": "Project verified JWT claims into headers the gateway forwards to backend MCP servers, enabling identity-aware tool execution without re-authenticating downstream."
+            },
+            {
+              "title": "Exclude / <code>excludeRegex</code> on tool selectors",
+              "description": "Hide tools from clients with explicit deny patterns alongside the existing include rules, useful when a backend exposes more capabilities than a given route should surface."
+            },
+            {
+              "title": "Tool name in access logs and response metadata",
+              "description": "Tool invocations now show up in access logs and response metadata, making per-tool debugging and analytics straightforward."
+            },
+            {
+              "title": "Per-backend capability tracking",
+              "description": "The gateway tracks which capabilities each backend supports, so capability negotiation reflects what's actually reachable from a given route."
+            }
+          ]
+        },
+        {
+          "title": "Authentication and Identity",
+          "items": [
+            {
+              "title": "GKE Workload Identity via Application Default Credentials",
+              "description": "GCP backends now authenticate using the standard ADC chain, so workloads running on GKE pick up Workload Identity automatically — no static service account keys needed."
+            },
+            {
+              "title": "Hardened bearer token parsing",
+              "description": "Malformed <code>Authorization</code> headers no longer panic the extproc; they now fall through to the standard auth failure path."
+            }
+          ]
+        },
+        {
+          "title": "Security and Privacy",
+          "items": [
+            {
+              "title": "Request and response body redaction",
+              "description": "Strip or mask sensitive fields in request and response bodies before they hit logs, traces, or metrics. Lets you keep observability on while meeting privacy and compliance constraints."
+            }
+          ]
+        },
+        {
+          "title": "Observability",
+          "items": [
+            {
+              "title": "OTLP access logging auto-configured by <code>aigw</code>",
+              "description": "Standalone <code>aigw</code> wires up OTLP access logging out of the box when an OTLP endpoint is configured, removing a manual step from the local-dev and demo paths."
+            },
+            {
+              "title": "ReasoningToken cost type",
+              "description": "<code>LLMRequestCostType</code> now includes <code>ReasoningToken</code>, so you can budget and bill against thinking tokens separately from input and output."
+            },
+            {
+              "title": "Response model metadata",
+              "description": "Responses now carry the resolved upstream model in metadata, which clients and downstream tools can read to confirm exactly which model served a request."
+            },
+            {
+              "title": "OTEL attribute count cap removed for large contexts",
+              "description": "Removed the OTEL span attribute count limit so long-context requests no longer have parts of their trace silently dropped."
+            }
+          ]
+        },
+        {
+          "title": "Operations and Extensibility",
+          "items": [
+            {
+              "title": "Custom webhook port and host network",
+              "description": "The conversion webhook can now bind to a configurable port and run on the host network, smoothing installs in clusters with restrictive admission webhook networking (e.g., GKE private clusters)."
+            },
+            {
+              "title": "Lua filter in <code>afterExtProcFilterPrefixes</code>",
+              "description": "Insert Lua filters after the ExtProc stage in the standard filter chain, useful for last-mile request shaping without writing a custom EnvoyExtensionPolicy."
+            },
+            {
+              "title": "Route-scoped LLM request costs with global defaults",
+              "description": "Costs can be set per-route, with global defaults applied otherwise. Makes per-tenant or per-backend cost tracking straightforward without per-route boilerplate."
+            }
+          ]
+        }
+      ],
+      "apiChanges": [
+        {
+          "title": "Core CRDs promoted to <code>aigateway.envoyproxy.io/v1beta1</code>",
+          "description": "<code>AIGatewayRoute</code>, <code>AIServiceBackend</code>, <code>BackendSecurityPolicy</code>, and <code>GatewayConfig</code> are now served at v1beta1. v1alpha1 is still served as a conversion target during the upgrade window."
+        },
+        {
+          "title": "<code>MCPRoute</code> promoted to v1beta1",
+          "description": "MCPRoute moves to v1beta1, signaling that the MCP routing API is stable enough for production use."
+        },
+        {
+          "title": "<code>MCPRouteBackendRef.forwardHeaders</code>",
+          "description": "New per-backend list of headers to forward, with optional rename. Replaces the need for a single route-wide header forwarding rule when backends expect different headers."
+        },
+        {
+          "title": "<code>MCPRouteSecurityPolicy</code> JWT claim forwarding",
+          "description": "Configure which verified JWT claims should be projected into outbound headers to MCP backends."
+        },
+        {
+          "title": "<code>MCPToolSelector</code> exclude / <code>excludeRegex</code>",
+          "description": "Tool selectors now support exclusion alongside inclusion, with both literal and regex forms."
+        },
+        {
+          "title": "<code>LLMRequestCostType.ReasoningToken</code>",
+          "description": "New cost type for thinking-token usage, complementing the existing input, output, and cache cost types."
+        },
+        {
+          "title": "Backend quota policy API",
+          "description": "New API surface for declaring upstream-provider quota policies, laying the groundwork for quota-aware routing."
+        }
+      ],
+      "deprecations": [],
+      "breakingChanges": [
+        {
+          "title": "<code>AIGatewayRoute.spec.filterConfig</code> removed",
+          "description": "The <code>filterConfig</code> field on <code>AIGatewayRoute</code> has been removed. Move external-processor configuration (resources, env vars, image overrides) to a <code>GatewayConfig</code> resource referenced from the <code>Gateway</code> via the <code>aigateway.envoyproxy.io/gateway-config</code> annotation. Note: v0.5 shipped without an explicit deprecation warning for this field, so users still relying on it must migrate as part of the v0.6 upgrade."
+        }
+      ],
+      "bugFixes": [
+        {
+          "title": "Webhook cache race during extProc injection",
+          "description": "The conversion webhook now uses a non-cached reader to avoid a race where stale cache reads could cause extProc injection to misfire on freshly applied resources."
+        },
+        {
+          "title": "Field ownership preserved on updates",
+          "description": "Controller updates no longer claim ownership of fields they shouldn't, preventing churn and conflicts when other controllers or operators co-manage adjacent fields."
+        },
+        {
+          "title": "Orphan cleanup for MCPRoute backendrefs",
+          "description": "Resources tied to MCPRoute backend references are now cleaned up when the route or reference is removed, fixing a leak that could leave stale config in the cluster."
+        },
+        {
+          "title": "Standalone Envoy startup failures surfaced by CLI",
+          "description": "<code>aigw</code> now reports standalone Envoy startup failures cleanly instead of hanging or printing an unhelpful trace, making local dev and CI loops much faster to diagnose."
+        },
+        {
+          "title": "Bedrock Titan embeddings dataplane route",
+          "description": "Restored the Envoy route for Titan embeddings in dataplane tests so Titan workloads exercise the full pipeline."
+        },
+        {
+          "title": "Bearer token parsing panic",
+          "description": "Malformed bearer tokens in the <code>Authorization</code> header used to panic the subject extractor; they now return a clean auth failure."
+        },
+        {
+          "title": "Request context propagation in <code>PostTranslateModify</code>",
+          "description": "The request context now flows into Kubernetes client calls made from <code>PostTranslateModify</code>, so cancellation and deadlines work as expected."
+        },
+        {
+          "title": "Case-sensitive JSON marshalling and unmarshalling",
+          "description": "JSON encoding now consistently honors case, fixing subtle mismatches when round-tripping fields whose names differ only in case."
+        }
+      ],
+      "dependencies": [
+        {
+          "title": "Go 1.26.2",
+          "description": "Updated to Go 1.26.2 to pick up the latest security and performance fixes."
+        },
+        {
+          "title": "Envoy Gateway v1.7.0",
+          "description": "Built on Envoy Gateway v1.7.0 for the newest data plane capabilities and stability fixes."
+        },
+        {
+          "title": "Envoy v1.37",
+          "description": "Leveraging Envoy Proxy v1.37.0 for the latest networking and security features."
+        },
+        {
+          "title": "Gateway API v1.4.1",
+          "description": "Support for Gateway API v1.4.1 specifications."
+        },
+        {
+          "title": "Gateway API Inference Extension v1.0.2",
+          "description": "Continued integration with Gateway API Inference Extension v1.0.2 for stable intelligent endpoint selection."
+        },
+        {
+          "title": "MCP Go SDK 1.4.1",
+          "description": "Updated to modelcontextprotocol/go-sdk v1.4.1 for the latest MCP protocol features and fixes."
+        }
+      ]
+    }
+  ],
+  "navigation": {
+    "previous": { "version": "v0.5.x Series", "path": "/release-notes/v0.5" }
+  }
+}
