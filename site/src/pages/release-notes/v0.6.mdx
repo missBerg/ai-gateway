@@ -118,6 +118,26 @@ metadata:
     aigateway.envoyproxy.io/gateway-config: my-gateway-config
 ```
 
+### Migrating `VersionedAPISchema.version` to `prefix`
+
+The deprecated v0.5 behavior of using `VersionedAPISchema.version` as an endpoint path prefix for OpenAI-schema backends has been removed in v0.6. Use the dedicated `prefix` field instead.
+
+**Before (v0.5):**
+
+```yaml
+schema:
+  name: OpenAI
+  version: /v1beta/openai   # legacy: version field overloaded as path prefix
+```
+
+**After (v0.6):**
+
+```yaml
+schema:
+  name: OpenAI
+  prefix: /v1beta/openai    # explicit prefix field
+```
+
 ### Adopting `v1beta1` APIs
 
 `AIGatewayRoute`, `AIServiceBackend`, `BackendSecurityPolicy`, `GatewayConfig`, and `MCPRoute` are now served at `aigateway.envoyproxy.io/v1beta1`. Existing `v1alpha1` manifests continue to work via conversion, but new manifests should target `v1beta1` directly:
