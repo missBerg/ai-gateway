@@ -92,10 +92,6 @@
             {
               "title": "Text-to-speech endpoint <code>/v1/audio/speech</code>",
               "description": "Route OpenAI text-to-speech requests through the gateway, so audio workloads benefit from the same auth, rate limiting, and observability as chat traffic."
-            },
-            {
-              "title": "Batch inference APIs",
-              "description": "Forward OpenAI batch inference endpoints, enabling cheaper async workloads to flow through the same gateway as interactive traffic."
             }
           ]
         },
