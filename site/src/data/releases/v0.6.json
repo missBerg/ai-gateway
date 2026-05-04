@@ -9,7 +9,7 @@
   "releases": [
     {
       "version": "v0.6.0",
-      "date": "May 15, 2026",
+      "date": "May 5, 2026",
       "type": "minor",
       "tags": [
         { "text": "v1beta1 APIs", "type": "feature" },
