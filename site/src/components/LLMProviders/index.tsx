@@ -1,140 +1,58 @@
 import React from 'react';
 import clsx from 'clsx';
+import Link from '@docusaurus/Link';
 import Heading from '@theme/Heading';
+import {LANDING_PROVIDERS, type Provider} from '@site/src/data/providers';
 import styles from './styles.module.css';
 
-type LLMProvider = {
-  name: string;
-  logoUrl: string;
-  status: 'supported' | 'in-progress';
-};
+const PLACEHOLDER = '/img/providers/placeholder.svg';
 
-const LLMProvidersList: LLMProvider[] = [
-  {
-    name: 'OpenAI',
-    logoUrl: '/img/providers/openai.svg',
-    status: 'supported',
-  },
-  {
-    name: 'AWS Bedrock',
-    logoUrl: '/img/providers/aws-bedrock.svg',
-    status: 'supported',
-  },
-  {
-    name: 'Azure OpenAI',
-    logoUrl: '/img/providers/azure-openai.svg',
-    status: 'supported',
-  },
-  {
-    name: 'Google Gemini',
-    logoUrl: '/img/providers/google-gemini.svg',
-    status: 'supported',
-  },
-  {
-    name: 'Groq',
-    logoUrl: '/img/providers/groq.svg',
-    status: 'supported',
-  },
-  {
-    name: 'Mistral',
-    logoUrl: '/img/providers/mistral.svg',
-    status: 'supported',
-  },
-  {
-    name: 'Cohere',
-    logoUrl: '/img/providers/cohere.svg',
-    status: 'supported',
-  },
-  {
-    name: 'Together AI',
-    logoUrl: '/img/providers/together-ai.svg',
-    status: 'supported',
-  },
-  {
-    name: 'DeepInfra',
-    logoUrl: '/img/providers/deepinfra.svg',
-    status: 'supported',
-  },
-  {
-    name: 'DeepSeek',
-    logoUrl: '/img/providers/deepseek.svg',
-    status: 'supported',
-  },
-  {
-    name: 'Hunyuan',
-    logoUrl: '/img/providers/hunyuan.svg',
-    status: 'supported',
-  },
-  {
-    name: 'SambaNova',
-    logoUrl: '/img/providers/sambanova.svg',
-    status: 'supported',
-  },
-  {
-    name: 'Grok',
-    logoUrl: '/img/providers/grok.svg',
-    status: 'supported',
-  },
-  {
-    name: 'Vertex AI',
-    logoUrl: '/img/providers/vertex-ai.svg',
-    status: 'supported',
-  },
-  {
-    name: 'Tetrate Agent Router Service',
-    logoUrl: '/img/providers/tars.svg',
-    status: 'supported',
-  },
-  {
-    name: 'Anthropic',
-    logoUrl: '/img/providers/anthropic.svg',
-    status: 'supported',
-  }
-].sort((a, b) => a.name.localeCompare(b.name)) as LLMProvider[];
-
-function ProviderLogo({ name, logoUrl, status }: LLMProvider) {
+function ProviderTile({provider}: {provider: Provider}): React.ReactElement {
+  const label = provider.gridLabel ?? provider.name;
+  const comingSoon = provider.status !== 'supported';
   return (
-    <div className={styles.providerCol}>
-      <div className={clsx(styles.providerCard, status === 'in-progress' && styles.inProgress)}>
-        <div className={styles.logoContainer}>
-          <img
-            src={logoUrl}
-            alt={`${name} logo`}
-            className={styles.providerLogo}
-            loading="lazy"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.src = '/img/providers/placeholder.svg';
-            }}
-          />
-        </div>
-        <div className={styles.providerName}>{name}</div>
-        {status === 'in-progress' && (
-          <div className={styles.statusBadge}>Coming Soon</div>
-        )}
+    <div className={clsx(styles.tile, comingSoon && styles.tileMuted)}>
+      <div className={styles.logoWrap}>
+        <img
+          src={provider.logoUrl ?? PLACEHOLDER}
+          alt={`${label} logo`}
+          className={styles.logo}
+          width={44}
+          height={44}
+          loading="lazy"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = PLACEHOLDER;
+          }}
+        />
       </div>
+      <div className={styles.name}>{label}</div>
+      {comingSoon && <span className={styles.badge}>Coming soon</span>}
     </div>
   );
 }
 
 export default function LLMProviders(): React.ReactElement {
   return (
-    <section id="llm-providers" className={styles.providersSection}>
+    <section
+      id="llm-providers"
+      className={clsx('sectionWrap', styles.section)}
+      aria-labelledby="providers-heading">
       <div className="container">
-        <div className={styles.sectionHeader}>
-          <Heading as="h2" className={styles.sectionTitle}>
-            Supported LLM Providers
+        <div className="sectionHeader">
+          <span className="sectionEyebrow sectionEyebrow--purple">Providers</span>
+          <Heading as="h2" id="providers-heading" className="sectionTitle">
+            One API, every major LLM provider
           </Heading>
-          <div className={styles.titleUnderline}></div>
-          <p className={styles.sectionDescription}>
-            With the <code>latest</code> version of Envoy AI Gateway you can route traffic to these LLM providers, displayed alphabetically, out of the box.
-            <br /><br />For more information and the most up-to-date provider integrations, check out our <a href="/docs/capabilities/llm-integrations/supported-providers" className={styles.docsLink}>
-            provider documentation</a>.
+          <p className="sectionSubtitle">
+            Route to any of these out of the box — no SDK changes, just a model name.{' '}
+            <Link to="/docs/capabilities/llm-integrations/supported-providers">
+              See the full compatibility matrix →
+            </Link>
           </p>
         </div>
-        <div className={styles.providersGrid}>
-          {LLMProvidersList.map((provider, idx) => (
-            <ProviderLogo key={idx} {...provider} />
+        <div className={styles.grid}>
+          {LANDING_PROVIDERS.map((provider) => (
+            <ProviderTile key={provider.name} provider={provider} />
           ))}
         </div>
       </div>

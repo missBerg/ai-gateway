@@ -1,0 +1,340 @@
+/* =============================================================
+   Hero — always-dark band (both themes). Modern, credibility-first:
+   lineage → headline → subhead → CTAs → factual stats → trust logos.
+   Consumes brand tokens; navy stays dark in light + dark mode.
+   ============================================================= */
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: var(--space-9) var(--space-5) var(--space-8);
+  background:
+    linear-gradient(180deg, var(--brand-navy-deep) 0%, var(--brand-navy) 100%);
+  color: #fff;
+}
+
+/* ---------- Background texture: technical grid + brand glow ---------- */
+.bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  /* Fade the grid out toward the edges so it reads as subtle texture. */
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 35%, #000 0%, transparent 78%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 35%, #000 0%, transparent 78%);
+}
+/* Pink-purple haze behind the hexagon watermark, so the mark reads as glowing. */
+.hexagonGlow {
+  position: absolute;
+  top: 50%;
+  right: -4%;
+  width: min(680px, 66%);
+  aspect-ratio: 1 / 1;
+  transform: translateY(-50%);
+  background:
+    radial-gradient(circle at 56% 44%, var(--brand-pink) 0%, transparent 55%),
+    radial-gradient(circle at 44% 60%, var(--brand-purple-glow) 0%, transparent 60%);
+  opacity: 0.22;
+  filter: blur(64px);
+}
+
+/* Large faded Envoy hexagon watermark, bleeding off the right edge. */
+.hexagon {
+  position: absolute;
+  top: 50%;
+  right: -8%;
+  width: min(720px, 70%);
+  aspect-ratio: 1 / 1;
+  transform: translateY(-50%);
+  background: url('/img/logo-white.svg') no-repeat center / contain;
+  opacity: 0.05;
+  /* Soften the edges so the mark dissolves into the band. */
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 35%, transparent 72%);
+  mask-image: radial-gradient(circle at 50% 50%, #000 35%, transparent 72%);
+}
+
+.glow {
+  position: absolute;
+  left: 50%;
+  bottom: -28%;
+  width: 1100px;
+  max-width: 130%;
+  aspect-ratio: 2 / 1;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(ellipse at center, var(--brand-magenta) 0%, transparent 62%),
+    radial-gradient(ellipse 70% 80% at 30% 60%, var(--brand-accent) 0%, transparent 60%);
+  opacity: 0.34;
+  filter: blur(72px);
+}
+
+/* ---------- Layout ----------
+   Desktop: two columns — logo left, content right.
+   Small screens: stack and center (see the responsive block at the bottom). */
+.inner {
+  position: relative;
+  max-width: 1080px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: var(--space-8);
+  align-items: center;
+}
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  min-width: 0;
+}
+
+/* ---------- Large brand lockup ---------- */
+.logo {
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+  justify-self: center;
+  /* Lift the white mark off the navy with a soft brand glow. */
+  filter: drop-shadow(0 8px 40px rgba(183, 52, 212, 0.35));
+}
+
+/* ---------- Headline ---------- */
+.title {
+  font-size: var(--title-hero);
+  font-weight: var(--weight-extra);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  margin: 0 0 var(--space-4);
+  max-width: 16ch;
+  color: #fff;
+}
+.titleAccent {
+  background: linear-gradient(120deg, #ffffff 0%, #e6d8fb 45%, var(--brand-accent-bright) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+  max-width: 60ch;
+  margin: 0 0 var(--space-6);
+  font-size: var(--text-lg);
+  line-height: var(--leading-normal);
+  color: var(--text-on-navy-soft);
+  font-weight: var(--weight-regular);
+}
+
+/* ---------- CTAs ---------- */
+.ctas {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-7);
+}
+
+/* Hero CTA tiers — richer treatment than the base .btn on dark surfaces.
+   Scoped to the hero via :global() so they don't leak to other .btn usages. */
+.ctas :global(.btn--accent) {
+  position: relative;
+  background: linear-gradient(135deg, rgba(109, 92, 245, 0.34) 0%, rgba(109, 92, 245, 0.18) 100%);
+  color: #f3f1ff;
+  border-color: transparent;
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  isolation: isolate;
+  box-shadow: 0 0 24px rgba(109, 92, 245, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.ctas :global(.btn--accent)::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(157, 146, 255, 1) 0%, rgba(109, 92, 245, 0.85) 45%, rgba(195, 107, 255, 0.85) 70%, rgba(255, 45, 142, 0.9) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity var(--motion-base) var(--ease-out);
+}
+.ctas :global(.btn--accent):hover {
+  background: linear-gradient(135deg, rgba(109, 92, 245, 0.46) 0%, rgba(109, 92, 245, 0.26) 100%);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 0 32px rgba(109, 92, 245, 0.55), 0 10px 28px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+/* Primary "Get started" — brighter, pinker magenta→purple gradient + glow */
+.ctas :global(.btn--primary) {
+  background: linear-gradient(135deg, var(--brand-magenta) 0%, var(--brand-purple) 100%);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 1px rgba(183, 52, 212, 0.35), 0 6px 18px rgba(138, 32, 196, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.ctas :global(.btn--primary):hover {
+  background: linear-gradient(135deg, #c247dd 0%, #8a20c4 100%);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px rgba(195, 107, 255, 0.5), 0 8px 24px rgba(159, 37, 201, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* GitHub CTA with a live star count chip on the right */
+.githubCta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.85rem 1.1rem;
+  font-size: var(--text-base);
+  line-height: 1.2; /* match .btn so this CTA aligns with the others (was inheriting 1.6) */
+  font-weight: var(--weight-semibold);
+  color: var(--text-on-navy);
+  background: var(--tint-white-subtle);
+  border: 1px solid var(--tint-white-soft);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: border-color var(--motion-base) var(--ease-out),
+    background var(--motion-base) var(--ease-out), color var(--motion-base) var(--ease-out);
+}
+.githubCta:hover {
+  color: #fff;
+  background: var(--tint-white-soft);
+  border-color: var(--tint-white-strong);
+  text-decoration: none;
+}
+.starCount {
+  padding: 1px 8px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: #fff;
+  background: var(--tint-white-soft);
+  border-radius: var(--radius-pill);
+}
+
+/* ---------- Factual stat row ---------- */
+.stats {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.statValue {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.statLabel {
+  font-size: var(--text-xs);
+  color: var(--text-on-navy-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.statSep {
+  width: 1px;
+  height: 28px;
+  background: var(--tint-white-soft);
+}
+.statVersion {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: #fff;
+  text-decoration: none;
+  transition: color var(--motion-fast) var(--ease-out);
+}
+.statVersion:hover {
+  color: var(--brand-accent-bright);
+  text-decoration: none;
+}
+.statDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand-accent-bright);
+  box-shadow: 0 0 8px var(--brand-accent-bright);
+}
+
+/* ---------- Responsive ---------- */
+/* Stack the two columns: logo on top, content below, all centered. */
+@media screen and (max-width: 900px) {
+  .inner {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+    max-width: 720px;
+    justify-items: center;
+  }
+  .logo {
+    max-width: 360px;
+  }
+  .content {
+    align-items: center;
+    text-align: center;
+  }
+  .ctas {
+    justify-content: center;
+  }
+  .stats {
+    justify-content: center;
+  }
+  .title,
+  .subtitle {
+    margin-inline: auto;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .hero {
+    padding: var(--space-8) var(--space-4) var(--space-7);
+  }
+  .ctas {
+    flex-direction: column;
+    width: 100%;
+  }
+  .ctas > * {
+    width: 100%;
+    max-width: 360px;
+    justify-content: center;
+  }
+  .subtitle {
+    font-size: var(--text-base);
+  }
+  /* Drop the vertical separators; let stats wrap as a clean cluster. */
+  .statSep {
+    display: none;
+  }
+  .stats {
+    gap: var(--space-3) var(--space-5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .githubCta,
+  .statVersion {
+    transition: none;
+  }
+}

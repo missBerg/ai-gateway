@@ -27,6 +27,9 @@ site/build
 site/.docusaurus
 site/.cache-loader
 
+# Local-only design-system showcase (dev reference, never ships)
+site/src/pages/design-system/
+
 # misc
 site/.DS_Store
 site/.env.local

@@ -1,182 +1,225 @@
 /**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
+ * Global styles. Infima is bundled by the classic template; design
+ * tokens come from tokens.css (loaded first via theme.customCss).
+ *
+ * Dark-mode rule: never hardcode a surface/text/border color here —
+ * route it through a semantic token (--surface-*, --text-*,
+ * --border-*) so it flips under [data-theme='dark']. Always-dark
+ * bands (hero, navbar, CommunityCta) use --brand-navy* on purpose.
  */
-@import url('https://fonts.googleapis.com/css?family=Nunito:400,700,800');
 
-/* You can override the default Infima variables here. */
-:root {
-  --ifm-color-primary: #6c1899;
-  --ifm-color-primary-dark: #50166f;
-  --ifm-color-primary-darker: #3a124f;
-  --ifm-color-primary-darkest: #29073b;
-  --ifm-color-primary-light: #8a20c4;
-  --ifm-color-primary-lighter: #a339dc;
-  --ifm-color-primary-lightest: #c257fc;
-  --ifm-navbar-link-hover-color: var(--ifm-color-primary-darker);
-  --ifm-code-font-size: 95%;
-  --ifm-code-font-family: "Nunito", "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --ifm-heading-font-family: "Nunito", "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --ifm-font-family-base: "Nunito", "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
-  --ifm-navbar-background-color: #b923ff;
-  --ifm-footer-background-color: #f8ebff;
-  --ifm-navbar-link-color: #fff;
-  --ifm-line-height-base: 1.5;
-  --ifm-container-width: 1340px;
-  --ifm-container-width-xl: 1520px;
-  --ifm-h1-font-size: 2.5rem;
-  --ifm-h2-font-size: 2rem;
-  --ifm-h3-font-size: 1.7rem;
-  --ifm-h4-font-size: 1.4rem;
-  --ifm-h5-font-size: 1.2rem;
-  --ifm-h6-font-size: 1rem;
-
-  /* New custom variables */
-  --custom-content-line-height: 1.7;
-  --custom-paragraph-spacing: 1.5rem;
-  --custom-text-color: #2c3e50;
-  --custom-heading-color: #1a202c;
-  --custom-link-color: #6c1899;
-  --custom-link-hover-color: #8a20c4;
-  --custom-code-background: #f8f9fa;
-  /* Required field badge colors */
-  --custom-required-badge-bg: #fef2f2;
-  --custom-required-badge-border: #fecaca;
-  --custom-required-badge-text: #dc2626;
-
-
+/* Crisp Inter rendering, especially on the dark surfaces. */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11", "ss01";
 }
 
-/* Index Header */
-.heroBanner {
-  font-family: "Nunito", "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  padding: 2rem 0rem 10rem 0rem;
-  text-align: center;
-  overflow: hidden;
-  background-color: #6c1899;
-  background-image: linear-gradient(0deg, #6c1899, #b923ff);
-  clip-path: polygon(0 0, 100% 0, 100% 80%, 0 100%);
-  color: #fff;
-  position: relative;
+/* =============================================================
+   Hero lives in src/components/Hero/ (own CSS module). The previous
+   .heroBanner styles were removed when that component replaced the
+   inline homepage header.
+   ============================================================= */
 
-
-  .hero__subtitle{
-    max-width: 800px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .heroImage{
-    max-height: 30vh;
-  }
-  .buttons{
-    display: flex;
-    justify-content: center;
-    gap: 1.5rem;
-    margin-top: 3rem;
-    .button{
-      background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.1) 0%,
-        rgba(255, 20, 147, 0.1) 100%
-      );
-      backdrop-filter: blur(10px);
-      color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 25px;
-      padding: 0.8rem 2rem;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      transition: all 0.3s ease;
-      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
-      box-shadow: 0 4px 15px rgba(108, 24, 153, 0.2);
-      position: relative;
-
-      &::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(
-          90deg,
-          rgba(255, 119, 0, 0.1) 0%,
-          rgba(255, 255, 255, 0.1) 100%
-        );
-        opacity: 0;
-        transition: opacity 0.3s ease;
-        border-radius: inherit;
-      }
-
-      &:hover {
-        background: linear-gradient(
-          90deg,
-          rgba(255, 255, 255, 0.15) 0%,
-          rgba(255, 20, 147, 0.15) 100%
-        );
-        border-color: rgba(255, 255, 255, 0.4);
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(108, 24, 153, 0.3);
-
-        &::before {
-          opacity: 1;
-          border-radius: inherit;
-        }
-      }
-
-      &:active {
-        transform: translateY(0);
-        box-shadow: 0 2px 10px rgba(108, 24, 153, 0.2);
-      }
-    }
-  }
-}
-
-  @media screen and (max-width: 996px) {
-  .heroBanner {
-    padding: 2rem 0rem 10rem 0rem;
-    align-items: start;
-    clip-path: polygon(0 0, 100% 0, 100% 87%, 0 100%);
-
-    .hero__subtitle{
-      font-size: 1.2rem;
-    }
-
-    .buttons{
-      flex-direction: column-reverse;
-
-    }
-  }
-
-}
-  @media screen and (max-width: 500px) {
-    .heroBanner {
-      padding: 2rem 0rem 5rem 0rem;
-      align-items: start;
-      clip-path: polygon(0 0, 100% 0, 100% 90%, 0 100%);
-      .heroImage{
-        max-height: 15vh;
-      }
-    }
-  }
-
-.navbar {
-    box-shadow: none;
-}
-
-.navbar-sidebar .menu__link{
-  color: #fff;
-}
-
-.buttons {
-  display: flex;
+/* =============================================================
+   Buttons
+   ============================================================= */
+.btn {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  padding: 0.7rem 1.25rem;
+  font-family: var(--ifm-font-family-base);
+  font-size: 0.95rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    background-color var(--motion-base) var(--ease-out),
+    border-color var(--motion-base) var(--ease-out),
+    box-shadow var(--motion-base) var(--ease-out),
+    color var(--motion-base) var(--ease-out);
 }
 
-/* Word wrapping rules */
+.btn:hover { text-decoration: none; }
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.btn--primary { background: var(--brand-purple); color: #fff; border-color: var(--brand-purple); }
+.btn--primary:hover { background: var(--brand-purple-soft); border-color: var(--brand-purple-soft); color: #fff; box-shadow: var(--shadow-md); }
+
+.btn--accent {
+  background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-accent-dark) 100%);
+  color: #fff;
+  border-color: var(--tint-accent-border);
+  box-shadow: var(--shadow-glow-accent);
+}
+/* Darken on hover (not brighten) so white text keeps AA contrast — brightening
+   to --brand-accent-bright drops white to ~2.6:1. Deeper fill + glow signals
+   the hover instead. */
+.btn--accent:hover {
+  background: linear-gradient(135deg, var(--brand-accent-dark) 0%, var(--brand-accent-deeper) 100%);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-accent-hover);
+}
+
+.btn--outline { background: transparent; color: var(--text-primary); border-color: var(--border-strong); }
+.btn--outline:hover { background: var(--surface-raised); border-color: var(--border-strong); color: var(--text-primary); }
+
+.btn--ghost { background: transparent; color: var(--text-secondary); border-color: transparent; padding: 0.7rem 0.5rem; }
+.btn--ghost:hover { color: var(--text-primary); background: var(--surface-raised); }
+
+.btn--lg { padding: 0.85rem 1.5rem; font-size: var(--text-base); }
+
+/* (Hero-specific CTA tiers now live in src/components/Hero/styles.module.css,
+   scoped to the hero via :global() so they don't leak to other .btn usages.) */
+
+/* Map Infima button classes so existing markup adopts the look */
+.button.button--primary {
+  background: var(--brand-purple);
+  border-color: var(--brand-purple);
+  color: #fff;
+  border-radius: var(--radius-md);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  transition: all var(--motion-base) var(--ease-out);
+}
+.button.button--primary:hover { background: var(--brand-purple-soft); border-color: var(--brand-purple-soft); color: #fff; box-shadow: var(--shadow-md); }
+
+.button.button--secondary {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  font-weight: var(--weight-semibold);
+}
+.button.button--secondary:hover { background: var(--surface-raised); border-color: var(--border-strong); color: var(--text-primary); }
+
+/* =============================================================
+   Navbar — always-dark band; persistent Install MCP CTA
+   ============================================================= */
+.navbar {
+  background: var(--brand-navy);
+  border-bottom: 1px solid var(--tint-white-subtle);
+  box-shadow: none;
+}
+.navbar__brand { color: #fff; }
+.navbar__title { color: #fff; font-weight: var(--weight-bold); letter-spacing: -0.01em; }
+.navbar__logo { height: 26px; }
+.navbar__link { color: rgba(255,255,255,0.78); font-weight: var(--weight-medium); font-size: 0.93rem; }
+.navbar__link:hover { color: #fff; }
+.navbar__link--active { color: #fff; }
+.navbar__item.dropdown .dropdown__menu {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-md);
+}
+.navbar-sidebar { background: var(--brand-navy); }
+.navbar-sidebar .menu__link { color: #fff; }
+
+.navbar__item.navbar-cta,
+.navbar__link.navbar-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.4rem 0.85rem;
+  margin-left: 0.25rem;
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-accent-dark) 100%);
+  border-radius: var(--radius-md);
+  font-weight: var(--weight-semibold);
+  font-size: 0.85rem;
+  letter-spacing: -0.01em;
+  border: 1px solid var(--tint-accent-border);
+  transition: all var(--motion-base) var(--ease-out);
+}
+.navbar__item.navbar-cta:hover,
+.navbar__link.navbar-cta:hover {
+  background: linear-gradient(135deg, var(--brand-accent-bright) 0%, var(--brand-accent) 100%);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-accent-hover);
+}
+
+/* =============================================================
+   Section & card primitives (shared across homepage components)
+   ============================================================= */
+.sectionWrap { padding: var(--space-9) 0; }
+.sectionWrap--tight { padding: var(--space-7) 0; }
+.sectionWrap--band { background: var(--surface-band); }
+
+.sectionHeader { max-width: 720px; margin: 0 auto var(--space-7); text-align: center; }
+
+.sectionEyebrow,
+.sectionEyebrow--accent {
+  display: inline-block;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand-accent-dark);
+  padding: 4px 12px;
+  background: var(--tint-accent-subtle);
+  border: 1px solid var(--tint-accent-border);
+  border-radius: var(--radius-pill);
+  margin-bottom: var(--space-4);
+}
+.sectionEyebrow--purple {
+  color: var(--ifm-color-primary);
+  background: var(--tint-purple-subtle);
+  border-color: var(--tint-purple-soft);
+}
+
+.sectionTitle {
+  font-size: var(--title-section);
+  font-weight: var(--weight-extra);
+  letter-spacing: -0.03em;
+  margin-bottom: var(--space-3);
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+.sectionSubtitle {
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
+  margin: 0 auto;
+  max-width: 620px;
+}
+
+.card-base {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--motion-base) var(--ease-out), border-color var(--motion-base) var(--ease-out);
+}
+.card-base:hover { box-shadow: var(--shadow-lg); border-color: var(--card-hover-border); }
+
+.sectionOverlay--brand {
+  background-image:
+    radial-gradient(ellipse 70% 80% at 0% 50%, var(--tint-purple-overlay), transparent 60%),
+    radial-gradient(ellipse 60% 80% at 100% 50%, var(--tint-accent-soft), transparent 60%);
+}
+
+@media screen and (max-width: 996px) {
+  .sectionWrap { padding: var(--space-7) 0; }
+}
+
+/* =============================================================
+   Markdown content
+   ============================================================= */
 .markdown {
   overflow-wrap: break-word;
   word-wrap: break-word;
@@ -185,128 +228,145 @@
   color: var(--custom-text-color);
   line-height: var(--custom-content-line-height);
 }
-
-.markdown p {
-  margin-bottom: var(--custom-paragraph-spacing);
-}
-
+.markdown p { margin-bottom: var(--custom-paragraph-spacing); }
 .markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 {
   color: var(--custom-heading-color);
-  font-weight: 700;
-  margin-bottom: 1em;
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.02em;
+  margin-bottom: 0.6em;
 }
-
-.markdown h3 {
-  color: var(--ifm-color-primary-light);
-}
-
-/* Enhanced Links */
+.markdown h3 { color: var(--ifm-color-primary); }
 .markdown a {
   color: var(--custom-link-color);
   text-decoration: none;
   border-bottom: 1px solid transparent;
-  transition: border-color 0.2s ease;
+  transition: border-color var(--motion-base) var(--ease-out), color var(--motion-base) var(--ease-out);
 }
-
-.markdown a:hover {
-  color: var(--custom-link-hover-color);
-  border-bottom-color: currentColor;
-}
-
+.markdown a:hover { color: var(--custom-link-hover-color); border-bottom-color: currentColor; }
 .markdown table {
-  width: fit-content;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid rgba(60, 60, 67, 0.15);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+.markdown table thead { background: var(--surface-raised); }
+
+/* =============================================================
+   Code blocks — dark-mode panel
+   Prism applies its theme background as an INLINE style on <pre>, which
+   (1) is dracula's lighter slate (mismatched against our deep dark palette)
+   and (2) renders with the LIGHT theme during the pre-hydration flash on
+   dark-mode loads — i.e. white code blocks on a dark page. A scoped
+   !important beats the inline style (which has no !important) and applies
+   pre-hydration, so code is always a brand-matched dark panel in dark mode.
+   Syntax-token colors still come from the Prism theme.
+   ============================================================= */
+[data-theme='dark'] .theme-code-block,
+[data-theme='dark'] pre.prism-code,
+[data-theme='dark'] div[class*='codeBlockContainer'] {
+  background-color: #15111f !important;
 }
 
-/* API Field Component Styles */
+/* =============================================================
+   Admonitions — tokenized; tints flip in dark mode
+   ============================================================= */
+.theme-admonition { border-left-width: 4px; border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
+.theme-admonition-note,
+.theme-admonition-info { border-left-color: var(--ifm-color-primary) !important; background: var(--tint-purple-subtle) !important; }
+.theme-admonition-tip { border-left-color: var(--brand-accent-dark) !important; background: var(--tint-accent-subtle) !important; }
+.theme-admonition-caution,
+.theme-admonition-warning { border-left-color: #d97706 !important; background: var(--status-warn-bg) !important; }
+.theme-admonition-danger { border-left-color: #dc2626 !important; background: var(--custom-required-badge-bg) !important; }
+
+/* =============================================================
+   Documentation step sequences — wrap an <ol> in .doc-steps
+   ============================================================= */
+.doc-steps { counter-reset: step; list-style: none; padding-left: 0; margin: var(--space-5) 0; }
+.doc-steps > li {
+  position: relative;
+  counter-increment: step;
+  padding: 0 0 var(--space-5) var(--space-7);
+  margin-left: 14px;
+  border-left: 2px solid var(--border-subtle);
+}
+.doc-steps > li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.doc-steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: -15px;
+  top: -2px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--brand-purple);
+  color: #fff;
+  font-weight: var(--weight-bold);
+  font-size: var(--text-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* =============================================================
+   API Field Component (tokenized, dark-mode aware)
+   ============================================================= */
 .api-field {
   display: flex;
   gap: 2rem;
   padding: 1.25rem;
   margin: 1rem 0;
-  border: 1px solid rgba(60, 60, 67, 0.15);
+  border: 1px solid var(--border-subtle);
   flex-wrap: wrap;
-  background-color: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04), 0 0 1px rgba(0, 0, 0, 0.08);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background-color: var(--surface-card);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--motion-base) var(--ease-out), box-shadow var(--motion-base) var(--ease-out);
 }
+.api-field:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
 
-.api-field:hover {
-  border-color: rgba(60, 60, 67, 0.2);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.04), 0 0 2px rgba(0, 0, 0, 0.1);
-}
-
-/* Enum specific styling */
 .api-field[data-type="enum"] {
   background-color: var(--custom-code-background);
   padding: 0.75rem 1rem;
   margin: 0.5rem 0;
-  border-radius: 6px;
-  border: 1px solid rgba(60, 60, 67, 0.12);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
 }
-
 .api-field[data-type="enum"] .api-field__name {
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.9rem;
   color: var(--ifm-color-primary);
   background-color: var(--custom-code-background);
 }
-
 .api-field[data-type="enum"] .api-field__description {
-  font-size: 0.875rem;
-  color: var(--ifm-color-emphasis-700);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
   margin-top: 0.25rem;
 }
 
-.api-field__left {
-  flex: 0 0 400px;
-  min-width: 0;
-  margin-right: 1rem;
-  position: relative;
-}
-
-.api-field__right {
-  flex: 1;
-  min-width: 300px;
-  position: relative;
-}
+.api-field__left { flex: 0 0 400px; min-width: 0; margin-right: 1rem; position: relative; }
+.api-field__right { flex: 1; min-width: 300px; position: relative; }
 
 .api-field__name {
   font-family: var(--ifm-font-family-monospace);
-  font-size: 1rem;
+  font-size: var(--text-base);
   padding: 0.2rem 0.4rem;
   margin-right: 0.5rem;
-  background: var(--ifm-color-gray-100);
+  background: var(--surface-sunken);
   border-radius: 4px;
   display: inline-block;
   word-break: break-word;
   max-width: 100%;
   vertical-align: middle;
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--ifm-color-primary);
 }
 
-.api-field__type {
-  margin-top: 0.5rem;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.875rem;
-  color: var(--ifm-color-emphasis-700);
-}
-
-.api-field__type > div {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.api-field__type::before {
-  content: "Type: ";
-  color: var(--ifm-color-emphasis);
-  font-weight: 700;
-}
+.api-field__type { margin-top: 0.5rem; font-family: var(--ifm-font-family-monospace); font-size: var(--text-sm); color: var(--text-muted); }
+.api-field__type > div { display: inline-flex; align-items: center; gap: 0.5rem; }
+.api-field__type::before { content: "Type: "; color: var(--text-secondary); font-weight: var(--weight-bold); }
 .api-field__type a {
   color: var(--ifm-color-primary);
   text-decoration: none;
@@ -314,8 +374,8 @@
   padding-right: 1.8rem;
   border-radius: 4px;
   background-color: var(--custom-code-background);
-  border: 1px solid rgba(60, 60, 67, 0.16);
-  transition: all 0.2s ease;
+  border: 1px solid var(--border-subtle);
+  transition: all var(--motion-base) var(--ease-out);
   position: relative;
   display: inline-block;
   max-width: 100%;
@@ -323,7 +383,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .api-field__type a::after {
   content: "→";
   position: absolute;
@@ -331,72 +390,45 @@
   top: 50%;
   transform: translateY(-50%);
   font-size: 1.1em;
-  transition: transform 0.2s ease;
+  transition: transform var(--motion-base) var(--ease-out);
 }
-
-.api-field__type a:hover {
-  text-decoration: none;
-  background-color: var(--ifm-color-primary);
-  border-color: var(--ifm-color-primary-dark);
-  color: white;
-}
-
-.api-field__type a:hover::after {
-  transform: translate(2px, -50%);
-}
+.api-field__type a:hover { text-decoration: none; background-color: var(--ifm-color-primary); border-color: var(--ifm-color-primary-dark); color: #fff; }
+.api-field__type a:hover::after { transform: translate(2px, -50%); }
 
 .api-field__badge {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.25rem 0.5rem;
   border-radius: 12px;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   display: inline-flex;
   align-items: center;
   gap: 4px;
   letter-spacing: 0.025em;
   text-transform: uppercase;
 }
-
 .api-field__badge--required {
   color: var(--custom-required-badge-text);
   background: var(--custom-required-badge-bg);
   border: 1px solid var(--custom-required-badge-border);
-  font-weight: 700;
-  box-shadow: 0 0 0 1px var(--custom-required-badge-border);
+  font-weight: var(--weight-bold);
 }
-
-.api-field__badge--optional {
-  color: var(--ifm-color-gray-600);
-  background: var(--ifm-color-gray-100);
-  border: 1px solid var(--ifm-color-gray-200);
-}
+.api-field__badge--optional { color: var(--text-muted); background: var(--surface-sunken); border: 1px solid var(--border-subtle); }
 
 .api-field__default {
   right: 1rem;
   top: 0.5rem;
-  font-size: 0.875rem;
-  color: var(--ifm-color-emphasis);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   background: var(--custom-code-background);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
-  border: 1px solid rgba(60, 60, 67, 0.12);
+  border: 1px solid var(--border-subtle);
   font-family: var(--ifm-font-family-monospace);
   margin-bottom: 0.5rem;
 }
+.api-field__default::before { content: "Default Value: "; color: var(--text-secondary); font-weight: var(--weight-bold); }
 
-.api-field__default::before {
-  content: "Default Value: ";
-  color: var(--ifm-color-emphasis);
-  font-weight: 700;
-}
-
-.api-field__description {
-  line-height: var(--custom-content-line-height);
-  font-size: 0.9rem;
-  width: 100%;
-  overflow-x: hidden;
-}
-
+.api-field__description { line-height: var(--custom-content-line-height); font-size: 0.9rem; width: 100%; overflow-x: hidden; }
 .api-field__description code {
   font-size: 0.8rem;
   padding: 0.2rem 0.4rem;
@@ -405,28 +437,10 @@
   color: var(--ifm-code-color);
   font-family: var(--ifm-font-family-monospace);
 }
-
-.api-field__description pre {
-  margin: 1rem 0;
-  padding: 1rem;
-  background-color: var(--ifm-code-background);
-  border-radius: var(--ifm-code-border-radius);
-  max-width: 100%;
-  overflow-x: auto;
-}
-
-.api-field__description pre code {
-  background: transparent;
-  padding: 0;
-  font-size: var(--ifm-code-font-size);
-  border-radius: 0;
-  display: block;
-  line-height: 1.5;
-  color: inherit;
-}
-
+.api-field__description pre { margin: 1rem 0; padding: 1rem; background-color: var(--ifm-code-background); border-radius: var(--ifm-code-border-radius); max-width: 100%; overflow-x: auto; }
+.api-field__description pre code { background: transparent; padding: 0; font-size: var(--ifm-code-font-size); border-radius: 0; display: block; line-height: 1.5; color: inherit; }
 .api-field__description .prism-code {
-  background-color: rgb(246, 247, 248);
+  background-color: var(--custom-code-background);
   margin: 0;
   padding: 1rem;
   border-radius: var(--ifm-code-border-radius);
@@ -434,67 +448,32 @@
   width: 100%;
   overflow-x: auto;
 }
+.api-field__description .codeBlock { display: block; white-space: pre; overflow-x: auto; padding: 0; margin: 0; color: inherit; width: 100%; }
 
-.api-field__description .codeBlock {
-  display: block;
-  white-space: pre;
-  overflow-x: auto;
-  padding: 0;
-  margin: 0;
-  color: rgb(57, 58, 52);
-  width: 100%;
-}
-
-.api-field__description .language-yaml .codeBlock {
-  color: rgb(57, 58, 52);
-}
-
-.api-field__enum {
-  margin-top: 1rem;
-  font-size: 0.875rem;
-}
-
-.api-field__enum code {
-  margin-right: 0.5rem;
-  padding: 0.2rem 0.4rem;
-  background: var(--ifm-color-gray-100);
-  border-radius: 4px;
-}
+.api-field__enum { margin-top: 1rem; font-size: var(--text-sm); }
+.api-field__enum code { margin-right: 0.5rem; padding: 0.2rem 0.4rem; background: var(--surface-sunken); border-radius: 4px; }
 
 @media screen and (max-width: 768px) {
-  .api-field {
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .api-field__left {
-    flex: 0 0 auto;
-    margin-right: 0;
-    width: 100%;
-  }
-
-  .api-field__right {
-    width: 100%;
-  }
-
-  .api-field__name {
-    margin-bottom: 0.5rem;
-  }
+  .api-field { flex-direction: column; gap: 1rem; }
+  .api-field__left { flex: 0 0 auto; margin-right: 0; width: 100%; }
+  .api-field__right { width: 100%; }
+  .api-field__name { margin-bottom: 0.5rem; }
 }
 
-/* Override default table styles */
-.theme-admonition-api-field td:first-child {
-  width: 200px;
-}
+.theme-admonition-api-field td:first-child { width: 200px; }
+.theme-admonition-api-field td { border: none; }
+.theme-admonition-api-field tr { border-top: none; }
+.theme-admonition-api-field tr:last-child { border-bottom: none; }
 
-.theme-admonition-api-field td {
-  border: none;
-}
-
-.theme-admonition-api-field tr {
-  border-top: none;
-}
-
-.theme-admonition-api-field tr:last-child {
-  border-bottom: none;
+/* Respect reduced-motion globally for our transforms/animations */
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .card-base,
+  .navbar__item.navbar-cta,
+  .navbar__link.navbar-cta {
+    transition: none !important;
+  }
+  .btn:hover,
+  .navbar__item.navbar-cta:hover,
+  .navbar__link.navbar-cta:hover { transform: none !important; }
 }

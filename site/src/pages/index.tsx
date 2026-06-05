@@ -1,49 +1,31 @@
 import React from 'react';
-import clsx from 'clsx';
-import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
-import HomepageFeatures from '@site/src/components/HomepageFeatures';
+import Hero from '@site/src/components/Hero';
+import Reveal from '@site/src/components/Reveal';
+import McpInstall from '@site/src/components/McpInstall';
+import Capabilities from '@site/src/components/Capabilities';
+import QuickStart from '@site/src/components/QuickStart';
 import LLMProviders from '@site/src/components/LLMProviders';
-import Adopters from '@site/src/components/Adopters';
 import LatestBlogs from '@site/src/components/LatestBlogs';
-
-function HomepageHeader() {
-  const {siteConfig} = useDocusaurusContext();
-  return (
-    <header className="heroBanner">
-      <div className="container">
-        <img className="heroImage" src="./img/ai-gw-logo.svg" alt="Envoy AI Gateway"/>
-        <p className="hero__subtitle">{siteConfig.tagline}</p>
-        <div className="buttons">
-          <Link
-            className="button button--secondary button--lg"
-            href="/docs/getting-started/">
-            Get Started
-          </Link>
-          <Link
-            className="button button--secondary button--lg"
-            href="https://github.com/envoyproxy/ai-gateway">
-            View on GitHub
-          </Link>
-        </div>
-      </div>
-    </header>
-  );
-}
+import Adopters from '@site/src/components/Adopters';
+import CommunityCta from '@site/src/components/CommunityCta';
 
 export default function Home(): React.ReactElement {
   const {siteConfig} = useDocusaurusContext();
   return (
-    <Layout
-      title={`${siteConfig.title}`}
-      description={`${siteConfig.tagline}`}>
-      <HomepageHeader />
+    <Layout title={siteConfig.title} description={siteConfig.tagline}>
+      <Hero />
       <main>
-        <HomepageFeatures />
-        <LatestBlogs />
-        <LLMProviders />
-        <Adopters />
+        {/* Each section floats up as it scrolls into view (reduced-motion safe). */}
+        {/* MCP install first — the fastest on-ramp — then lead with value. */}
+        <Reveal><McpInstall /></Reveal>
+        <Reveal><Capabilities /></Reveal>
+        <Reveal><LLMProviders /></Reveal>
+        <Reveal><QuickStart /></Reveal>
+        <Reveal><LatestBlogs /></Reveal>
+        <Reveal><Adopters /></Reveal>
+        <Reveal><CommunityCta /></Reveal>
       </main>
     </Layout>
   );

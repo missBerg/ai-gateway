@@ -1,0 +1,16 @@
+---
+id: supported-providers
+title: Supported AI Providers
+sidebar_position: 8
+---
+
+Envoy AI Gateway provides a unified API for routing and managing LLM/AI traffic, so it
+supports many AI providers out of the box. "Supporting a provider" means two things:
+**API schema support** and **authentication support**. The schema is set on the
+`AIServiceBackend` resource's `schema` field; authentication is set on the
+`BackendSecurityPolicy`.
+
+Use the matrix below to find a provider, copy its schema config, and jump to the matching
+auth reference. Filter by name, or sort by provider or status.
+
+<ProvidersMatrix />

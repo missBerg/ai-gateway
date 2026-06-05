@@ -1,0 +1,193 @@
+.section {
+  padding: var(--space-8) 0;
+  background: var(--surface-band);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ---------- Two-column split: intro left, install panel right ---------- */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: var(--space-8);
+  align-items: center;
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.intro {
+  text-align: left;
+}
+.introTitle {
+  font-size: var(--title-section);
+  font-weight: var(--weight-extra);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-3);
+}
+.introText {
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ---- Compact tabbed install panel ---- */
+.panel {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+}
+.tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+.tab + .tab {
+  border-left: 1px solid var(--border-subtle);
+}
+.tab:hover {
+  color: var(--text-primary);
+  background: var(--surface-card);
+}
+.tab[data-active='true'] {
+  color: var(--text-primary);
+  background: var(--surface-card);
+  border-bottom-color: var(--brand-magenta);
+}
+.tabNum {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+.tab[data-active='true'] .tabNum {
+  background: var(--brand-purple);
+  color: #fff;
+}
+.tabLabel {
+  white-space: nowrap;
+}
+
+.panelBody {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+.panelMeta {
+  margin-bottom: var(--space-3);
+}
+.stepTitle {
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  margin: 0 0 2px;
+}
+.stepDesc {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: var(--leading-snug);
+}
+.code {
+  margin: 0;
+}
+
+.panelFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+}
+.prereqLabel {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-right: var(--space-1);
+}
+.chip {
+  display: inline-block;
+  padding: 3px 10px;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+}
+
+.note {
+  margin: var(--space-4) 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+
+/* Stack the two columns below tablet; intro becomes centered above the panel. */
+@media screen and (max-width: 996px) {
+  .split {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+    max-width: 820px;
+  }
+  .intro {
+    text-align: center;
+  }
+  .introText {
+    max-width: 620px;
+    margin-inline: auto;
+  }
+  .note {
+    text-align: center;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .tabLabel {
+    display: none;
+  }
+  .tab {
+    padding: var(--space-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab {
+    transition: none;
+  }
+}

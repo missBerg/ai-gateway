@@ -64,13 +64,13 @@ export default function LatestBlogs(): React.ReactElement | null {
   return (
     <section className={styles.latestBlogsSection}>
       <div className="container">
-        <div className={styles.sectionHeader}>
-          <Heading as="h2" className={styles.sectionTitle}>
-            Latest from the Blog
+        <div className="sectionHeader">
+          <span className="sectionEyebrow sectionEyebrow--purple">Blog</span>
+          <Heading as="h2" className="sectionTitle">
+            Latest from the blog
           </Heading>
-          <div className={styles.titleUnderline}></div>
-          <p className={styles.sectionDescription}>
-            Stay up to date with the latest news, features, and insights from the Envoy AI Gateway team.
+          <p className="sectionSubtitle">
+            News, features, and insights from the Envoy AI Gateway team.
           </p>
         </div>
         <div className={styles.blogsGrid}>

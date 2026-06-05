@@ -1,6 +1,7 @@
 .adoptersSection {
-  padding: 4rem 0;
-  background-color: #ffffff;
+  padding: var(--space-8) 0;
+  background-color: var(--surface-band);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .sectionHeader {
@@ -72,13 +73,13 @@
 }
 
 .adopterCard {
-  background: white;
+  background: var(--surface-card);
   border-radius: 12px;
   padding: 0 0 1.5rem 0;
   text-align: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-sm);
   transition: all 0.3s ease;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--border-subtle);
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -89,9 +90,9 @@
 }
 
 .adopterCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 25px rgba(108, 24, 153, 0.12);
-  border-color: var(--ifm-color-primary-light);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--card-hover-border);
 }
 
 .logoContainer {
@@ -101,6 +102,13 @@
   align-items: center;
   justify-content: center;
   margin: 1.5rem 0 0.5rem 0;
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+
+/* Dark mode only: borderless white plate so company marks stay legible. */
+:global([data-theme='dark']) .logoContainer {
+  background: #fff;
 }
 
 .adopterLogo {
@@ -119,8 +127,8 @@
   width: 100%;
   padding: 1rem 1.5rem;
   margin: 0;
-  border-bottom: 1px solid #e9ecef;
-  background-color: #fafbfc;
+  border-bottom: 1px solid var(--border-subtle);
+  background-color: var(--surface-raised);
   border-radius: 12px 12px 0 0;
 }
 
@@ -174,7 +182,7 @@
 .ctaSection {
   text-align: center;
   padding-top: 2rem;
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .ctaText {

@@ -1,0 +1,352 @@
+/* =============================================================
+   Envoy AI Gateway — Design Tokens
+   -----------------------------------------------------------------
+   Single source of truth for color, type, spacing, radii, shadow,
+   and motion. Components and custom.css consume these via
+   var(--token). Two rules keep dark mode honest:
+
+     1. Raw hex / rgba / #fff for a SURFACE or TEXT color outside
+        this file is a bug — route it through a semantic token
+        (--surface-*, --text-*, --border-*) so it flips in dark.
+     2. Brand/accent literals live here once; reference them by name.
+
+   Light values live in :root. Dark overrides live in the
+   [data-theme='dark'] block at the bottom — override only the
+   semantic + Infima tokens that must change, never the raw palette.
+   ============================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* ---------- Brand palette (theme-independent) ----------
+     Inspired by the Envoy Gateway purple→blue gradient: a vivid violet primary
+     flowing to a saturated indigo accent, unifying the Envoy project family.
+     The accent #6d5cf5 is tuned to a rare dual-AA sweet spot — BOTH white
+     (4.67:1) and black (4.50:1) text clear WCAG AA on it, so it's safe with
+     either. White is the default on accent fills; black is available for
+     large/bold. Hot pink is the energetic pop. */
+  --brand-purple: #6c1899;          /* deep anchor — solid fills, links on light */
+  --brand-purple-soft: #8a20c4;
+  --brand-purple-bright: #9b3df0;   /* brighter violet — gradient start (EG-inspired) */
+  --brand-magenta: #b734d4;         /* pink-leaning violet — primary CTA top stop (white AA 4.7) */
+  --brand-purple-glow: #c257fc;
+  --brand-navy: #20203a;            /* navbar + always-dark bands — blue-grey, not black */
+  --brand-navy-2: #2a2a48;
+  --brand-navy-deep: #121120;       /* hero background bottom */
+  --brand-accent: #6d5cf5;          /* saturated indigo — MCP / CTAs / eyebrows */
+  --brand-accent-dark: #4a3cd4;     /* deeper — eyebrow text on light, gradient end */
+  --brand-accent-deeper: #3f33c0;   /* deepest — accent button hover (keeps white AA) */
+  --brand-accent-bright: #9d92ff;   /* lighter — accent text/links on dark surfaces */
+  --brand-pink: #ff2d8e;            /* hot pink — hero glow + rare energetic accent */
+
+  /* ---------- Neutral ramp ---------- */
+  --neutral-50: #fafafa;
+  --neutral-100: #f4f4f5;
+  --neutral-200: #e4e4e7;
+  --neutral-300: #d4d4d8;
+  --neutral-400: #a1a1aa;
+  --neutral-500: #71717a;
+  --neutral-600: #52525b;
+  --neutral-700: #3f3f46;
+  --neutral-800: #27272a;
+  --neutral-900: #18181b;
+  --neutral-950: #0b0b0e;
+
+  /* ---------- Semantic surfaces / text / borders ----------
+     These FLIP in dark mode — always prefer them over raw neutrals
+     for backgrounds, body text, and borders. */
+  --surface-page: #ffffff;          /* page background */
+  --surface-card: #ffffff;          /* raised cards */
+  --surface-raised: var(--neutral-50);   /* table head, subtle fills */
+  --surface-sunken: var(--neutral-100);  /* code, inset wells */
+  --surface-band: var(--neutral-50);     /* alternating section band */
+  --text-primary: var(--neutral-900);
+  --text-secondary: var(--neutral-700);
+  --text-muted: var(--neutral-500);
+  --border-subtle: #ededf0;
+  --border-strong: var(--neutral-300);
+  --card-hover-border: var(--tint-purple-border);
+
+  /* ---------- Brand tints / overlays ---------- */
+  --tint-purple-subtle: rgba(108, 24, 153, 0.08);
+  --tint-purple-soft: rgba(108, 24, 153, 0.18);
+  --tint-purple-border: rgba(108, 24, 153, 0.35);
+  --tint-purple-overlay: rgba(108, 24, 153, 0.5);
+  --tint-accent-subtle: rgba(109, 92, 245, 0.1);
+  --tint-accent-soft: rgba(109, 92, 245, 0.18);
+  --tint-accent-border: rgba(109, 92, 245, 0.28);
+  --tint-accent-overlay: rgba(109, 92, 245, 0.14);
+  --tint-pink-subtle: rgba(255, 45, 142, 0.1);
+  --tint-pink-soft: rgba(255, 45, 142, 0.2);
+  --tint-pink-border: rgba(255, 45, 142, 0.35);
+  --tint-white-subtle: rgba(255, 255, 255, 0.06);
+  --tint-white-soft: rgba(255, 255, 255, 0.12);
+  --tint-white-strong: rgba(255, 255, 255, 0.25);
+  --tint-white-strong-2: rgba(255, 255, 255, 0.5);
+  --text-on-navy: rgba(255, 255, 255, 0.92);       /* body text on always-dark bands */
+  --text-on-navy-soft: rgba(255, 255, 255, 0.78);
+  --overlay-navy-90: rgba(10, 6, 19, 0.9);
+
+  /* ---------- Status (badges / matrix) ---------- */
+  --status-new-bg: var(--brand-accent);
+  --status-new-text: #ffffff;       /* white on periwinkle passes AA */
+  --status-new-border: var(--tint-accent-border);
+  --status-coming-soon-bg: #fff7e6;
+  --status-coming-soon-text: #92580a;
+  --status-coming-soon-border: #fde68a;
+  /* Semantic green/amber — translucent so they read on both themes. */
+  --status-ok-bg: rgba(34, 197, 94, 0.12);
+  --status-ok-text: #15803d;
+  --status-warn-bg: rgba(245, 158, 11, 0.14);
+  --status-warn-text: #b45309;
+
+  /* ---------- Typography (Inter — neutral geometric sans) ---------- */
+  --ifm-font-family-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ifm-heading-font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ifm-font-family-monospace: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --ifm-code-font-size: 92%;
+  --ifm-code-font-family: var(--ifm-font-family-monospace);
+  --ifm-heading-font-weight: 700;
+  --ifm-line-height-base: 1.6;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.05rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+  --text-4xl: 2.5rem;
+
+  --ifm-h1-font-size: 3rem;
+  --ifm-h2-font-size: 2.25rem;
+  --ifm-h3-font-size: 1.5rem;
+  --ifm-h4-font-size: 1.25rem;
+  --ifm-h5-font-size: 1.1rem;
+  --ifm-h6-font-size: 1rem;
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.35;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.7;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extra: 800;
+
+  --title-section: clamp(1.75rem, 2.5vw + 0.5rem, 2.5rem);
+  --title-hero: clamp(2.25rem, 4vw + 1rem, 3.5rem);
+
+  /* ---------- Layout ---------- */
+  --ifm-container-width: 1200px;
+  --ifm-container-width-xl: 1360px;
+
+  /* ---------- Infima color feeds (light) ---------- */
+  --ifm-color-primary: var(--brand-purple);
+  --ifm-color-primary-dark: #5c1482;
+  --ifm-color-primary-darker: #50166f;
+  --ifm-color-primary-darkest: #29073b;
+  --ifm-color-primary-light: var(--brand-purple-soft);
+  --ifm-color-primary-lighter: var(--brand-purple-bright);
+  --ifm-color-primary-lightest: var(--brand-purple-glow);
+
+  --ifm-background-color: var(--surface-page);
+  --ifm-background-surface-color: var(--surface-card);
+  --ifm-card-background-color: var(--surface-card);
+  --ifm-navbar-background-color: var(--brand-navy);
+  --ifm-navbar-link-color: rgba(255, 255, 255, 0.82);
+  --ifm-navbar-link-hover-color: #fff;
+  --ifm-footer-background-color: var(--surface-raised);
+  --ifm-footer-color: var(--text-secondary);
+  --ifm-footer-link-color: var(--text-secondary);
+  --ifm-footer-title-color: var(--text-primary);
+  --ifm-toc-border-color: var(--border-subtle);
+
+  /* ---------- Spacing (4px base) ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  /* ---------- Radius ---------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* ---------- Shadow (airy, diffuse) ---------- */
+  --shadow-xs: 0 1px 1px rgba(15, 10, 30, 0.03);
+  --shadow-sm: 0 1px 2px rgba(15, 10, 30, 0.04);
+  --shadow-md: 0 6px 16px rgba(15, 10, 30, 0.05), 0 1px 3px rgba(15, 10, 30, 0.03);
+  --shadow-lg: 0 18px 48px rgba(15, 10, 30, 0.06), 0 3px 8px rgba(15, 10, 30, 0.03);
+  --shadow-xl: 0 28px 64px rgba(15, 10, 30, 0.10), 0 6px 14px rgba(15, 10, 30, 0.04);
+  --shadow-glow-accent: 0 0 0 1px rgba(109, 92, 245, 0.35), 0 8px 24px rgba(109, 92, 245, 0.22);
+  --shadow-accent-hover: 0 8px 20px rgba(109, 92, 245, 0.3);
+  --shadow-tooltip: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+  /* ---------- Focus ring (shared keyboard-focus treatment) ---------- */
+  --focus-ring-color: rgba(109, 92, 245, 0.5);
+  --focus-ring: 0 0 0 3px var(--focus-ring-color);
+
+  /* ---------- Gradients ----------
+     --gradient-brand mirrors the Envoy Gateway hero: a violet → indigo
+     diagonal that unifies the Envoy project family. Tweak here once. */
+  --gradient-brand: linear-gradient(120deg, var(--brand-purple-bright) 0%, var(--brand-accent) 100%);
+  --gradient-accent: linear-gradient(135deg, var(--brand-accent-bright) 0%, var(--brand-accent) 100%);
+  --gradient-hero-text: linear-gradient(180deg, #ffffff 0%, #d7c7ee 100%);
+
+  /* ---------- Feedback family (info / success / warning / danger) ----------
+     bg + text + border each, so callouts, badges, inline alerts, and form
+     validation share one vocabulary. All flip in dark mode. */
+  --feedback-info-bg: var(--tint-purple-subtle);
+  --feedback-info-text: var(--brand-purple);
+  --feedback-info-border: var(--tint-purple-soft);
+  --feedback-success-bg: rgba(34, 197, 94, 0.12);
+  --feedback-success-text: #15803d;
+  --feedback-success-border: rgba(34, 197, 94, 0.3);
+  --feedback-warning-bg: rgba(245, 158, 11, 0.14);
+  --feedback-warning-text: #b45309;
+  --feedback-warning-border: rgba(245, 158, 11, 0.35);
+  --feedback-danger-bg: #fef2f2;
+  --feedback-danger-text: #dc2626;
+  --feedback-danger-border: #fecaca;
+
+  /* ---------- Z-index scale ---------- */
+  --z-base: 1;
+  --z-sticky: 100;
+  --z-dropdown: 200;
+  --z-overlay: 300;
+  --z-tooltip: 400;
+
+  /* ---------- Motion ---------- */
+  --motion-fast: 150ms;
+  --motion-base: 250ms;
+  --motion-slow: 400ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---------- Markdown content (semantic, flips in dark) ---------- */
+  --custom-content-line-height: var(--leading-relaxed);
+  --custom-paragraph-spacing: 1.25rem;
+  --custom-text-color: var(--text-secondary);
+  --custom-heading-color: var(--text-primary);
+  --custom-link-color: var(--brand-purple);
+  --custom-link-hover-color: var(--brand-purple-soft);
+  --custom-code-background: var(--surface-sunken);
+
+  /* ---------- API field required/optional badges ---------- */
+  --custom-required-badge-bg: #fef2f2;
+  --custom-required-badge-border: #fecaca;
+  --custom-required-badge-text: #dc2626;
+
+  --docusaurus-highlighted-code-line-bg: var(--tint-purple-subtle);
+}
+
+/* =============================================================
+   Dark theme — override ONLY semantic + Infima tokens.
+   Always-dark bands (hero, navbar, CommunityCta) use --brand-navy*
+   directly and intentionally stay dark in both themes.
+
+   Selector is html[data-theme='dark'] (not just [data-theme='dark'])
+   so our --ifm-* overrides match Infima's own dark-theme specificity
+   and win by source order — otherwise Infima's defaults (e.g.
+   --ifm-background-surface-color: #242526) would override ours.
+   ============================================================= */
+html[data-theme='dark'] {
+  /* Surfaces */
+  --surface-page: #0c0813;
+  --surface-card: #17101f;
+  --surface-raised: #1e1630;
+  --surface-sunken: #0a0710;
+  --surface-band: #100b1a;
+
+  /* Text */
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.72);
+  --text-muted: rgba(255, 255, 255, 0.55);
+
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --card-hover-border: rgba(163, 57, 220, 0.55);
+
+  /* Brand tints need more presence on dark surfaces */
+  --tint-purple-subtle: rgba(163, 57, 220, 0.14);
+  --tint-purple-soft: rgba(163, 57, 220, 0.3);
+  --tint-purple-border: rgba(163, 57, 220, 0.45);
+  --tint-accent-subtle: rgba(157, 146, 255, 0.16);
+  --tint-accent-soft: rgba(157, 146, 255, 0.26);
+  --tint-accent-border: rgba(157, 146, 255, 0.4);
+  --tint-pink-subtle: rgba(255, 45, 142, 0.16);
+  --tint-pink-soft: rgba(255, 45, 142, 0.28);
+  --tint-pink-border: rgba(255, 45, 142, 0.45);
+
+  /* Status: lighten amber/green text for AA on dark */
+  --status-ok-text: #4ade80;
+  --status-warn-text: #fbbf24;
+  --status-coming-soon-bg: rgba(245, 158, 11, 0.16);
+  --status-coming-soon-text: #fcd34d;
+  --status-coming-soon-border: rgba(245, 158, 11, 0.4);
+
+  /* Lift primary for contrast on dark surfaces */
+  --ifm-color-primary: var(--brand-purple-bright);
+  --ifm-color-primary-dark: #9526d0;
+  --ifm-color-primary-darker: #8a20c4;
+  --ifm-color-primary-darkest: #6c1899;
+  --ifm-color-primary-light: #b04fe0;
+  --ifm-color-primary-lighter: var(--brand-purple-glow);
+  --ifm-color-primary-lightest: #d488ff;
+
+  /* Infima surface feeds */
+  --ifm-background-color: var(--surface-page);
+  --ifm-background-surface-color: var(--surface-card);
+  --ifm-card-background-color: var(--surface-card);
+  --ifm-footer-background-color: var(--surface-sunken);
+  --ifm-toc-border-color: var(--border-subtle);
+  --ifm-color-content: var(--text-primary);
+  --ifm-color-content-secondary: var(--text-secondary);
+  --ifm-heading-color: var(--text-primary);
+
+  /* Markdown — link color lifted to #b06af5 (5.9:1 on dark page, AA for body
+     text; --brand-purple-bright is only ~4.1:1 so it's reserved for large/UI). */
+  --custom-text-color: var(--text-secondary);
+  --custom-heading-color: var(--text-primary);
+  --custom-link-color: #b06af5;
+  --custom-link-hover-color: var(--brand-accent-bright);
+  --custom-code-background: var(--surface-raised);
+
+  /* Required-field badge for dark */
+  --custom-required-badge-bg: rgba(220, 38, 38, 0.16);
+  --custom-required-badge-border: rgba(220, 38, 38, 0.4);
+  --custom-required-badge-text: #fca5a5;
+
+  /* Feedback family — lift text for AA on dark; danger gets a translucent bg */
+  --feedback-info-text: var(--brand-purple-bright);
+  --feedback-success-text: #4ade80;
+  --feedback-warning-text: #fbbf24;
+  --feedback-danger-bg: rgba(220, 38, 38, 0.16);
+  --feedback-danger-text: #fca5a5;
+  --feedback-danger-border: rgba(220, 38, 38, 0.4);
+
+  /* Focus ring uses the brighter accent on dark for visibility */
+  --focus-ring-color: rgba(157, 146, 255, 0.6);
+
+  --docusaurus-highlighted-code-line-bg: rgba(163, 57, 220, 0.2);
+}
+
+/* -----------------------------------------------------------------
+   Breakpoints (documented; @media can't read custom props)
+     Small mobile  max-width: 576px
+     Mobile        max-width: 768px
+     Tablet        max-width: 996px
+     Desktop       max-width: 1200px
+   Mobile-first when adding components.
+   ----------------------------------------------------------------- */

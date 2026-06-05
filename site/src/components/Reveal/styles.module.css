@@ -1,0 +1,40 @@
+/* =============================================================
+   Float-up scroll reveal — IntersectionObserver + CSS transition.
+   Standard, works in every browser.
+
+   States (set by Reveal/index.tsx via data-reveal):
+     (unset) idle  → SSR / no-JS / pre-arm: fully visible (never stuck hidden)
+     armed         → hidden + shifted down, INSTANT (no transition → no flash)
+     in            → transition to visible (the actual float-up)
+   ============================================================= */
+
+.reveal {
+  /* Default visible — safe for SSR, no-JS, and reduced motion. */
+  opacity: 1;
+  transform: none;
+}
+
+/* Arming snaps to hidden with no transition, so there's no fade-out flash. */
+.reveal[data-reveal='armed'] {
+  opacity: 0;
+  transform: translateY(var(--reveal-distance, 24px));
+}
+
+/* The reveal: animate from the armed state to visible, with per-item stagger. */
+.reveal[data-reveal='in'] {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 650ms var(--ease-out) calc(var(--reveal-i, 0) * 90ms),
+    transform 650ms var(--ease-out) calc(var(--reveal-i, 0) * 90ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal[data-reveal='armed'] {
+    opacity: 1;
+    transform: none;
+  }
+  .reveal[data-reveal='in'] {
+    transition: none;
+  }
+}

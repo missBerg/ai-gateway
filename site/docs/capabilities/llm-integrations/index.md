@@ -9,7 +9,7 @@ Envoy AI Gateway provides integration to multiple LLM Providers. This section pr
 
 ## Provider Support
 
-- **[Supported Providers](./supported-providers.md)** - Complete list of supported AI/LLM service providers and their configurations
+- **[Supported Providers](./supported-providers.mdx)** - Complete list of supported AI/LLM service providers and their configurations
 - **[Supported Endpoints](./supported-endpoints.md)** - Available API endpoints and operations across different providers
 
 ## Advanced Features
