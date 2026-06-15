@@ -153,9 +153,43 @@ html {
 }
 
 /* =============================================================
+   Footer — always-dark band, bookending the navbar.
+   Color feeds (bg, link, hover, title) live in tokens.css via
+   --ifm-footer-*; only structure + type polish lives here.
+   footer style stays 'light' in docusaurus.config.ts on purpose:
+   'dark' would inject .footer--dark element-level custom props
+   that beat our :root feeds.
+   ============================================================= */
+.footer {
+  border-top: none;
+  padding: var(--space-8) 0 var(--space-7);
+}
+.footer__title {
+  font-weight: var(--weight-bold);
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.footer__link-item {
+  transition: color var(--motion-fast) var(--ease-out);
+}
+.footer__link-item:hover {
+  text-decoration: none;
+}
+.footer__link-item:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+.footer__copyright {
+  color: var(--text-on-navy-muted);
+  font-size: var(--text-sm);
+}
+
+/* =============================================================
    Section & card primitives (shared across homepage components)
    ============================================================= */
-.sectionWrap { padding: var(--space-9) 0; }
+.sectionWrap { padding: var(--space-8) 0; }
 .sectionWrap--tight { padding: var(--space-7) 0; }
 .sectionWrap--band { background: var(--surface-band); }
 

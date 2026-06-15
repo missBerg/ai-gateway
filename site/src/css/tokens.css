@@ -60,6 +60,7 @@
   --surface-raised: var(--neutral-50);   /* table head, subtle fills */
   --surface-sunken: var(--neutral-100);  /* code, inset wells */
   --surface-band: var(--neutral-50);     /* alternating section band */
+  --surface-inverse: #ffffff;       /* theme-independent white plate — logo wells on dark; no dark override */
   --text-primary: var(--neutral-900);
   --text-secondary: var(--neutral-700);
   --text-muted: var(--neutral-500);
@@ -85,6 +86,7 @@
   --tint-white-strong-2: rgba(255, 255, 255, 0.5);
   --text-on-navy: rgba(255, 255, 255, 0.92);       /* body text on always-dark bands */
   --text-on-navy-soft: rgba(255, 255, 255, 0.78);
+  --text-on-navy-muted: rgba(255, 255, 255, 0.6); /* captions/copyright on navy (~5.5:1) */
   --overlay-navy-90: rgba(10, 6, 19, 0.9);
 
   /* ---------- Status (badges / matrix) ---------- */
@@ -159,10 +161,14 @@
   --ifm-navbar-background-color: var(--brand-navy);
   --ifm-navbar-link-color: rgba(255, 255, 255, 0.82);
   --ifm-navbar-link-hover-color: #fff;
-  --ifm-footer-background-color: var(--surface-raised);
-  --ifm-footer-color: var(--text-secondary);
-  --ifm-footer-link-color: var(--text-secondary);
-  --ifm-footer-title-color: var(--text-primary);
+  /* Footer is an always-dark band (like the navbar) in both themes —
+     hover feed is explicit because Infima defaults it to --ifm-color-primary,
+     which is ~2:1 purple on navy. */
+  --ifm-footer-background-color: var(--brand-navy);
+  --ifm-footer-color: var(--text-on-navy-soft);
+  --ifm-footer-link-color: var(--text-on-navy-soft);
+  --ifm-footer-link-hover-color: #fff;
+  --ifm-footer-title-color: var(--text-on-navy);
   --ifm-toc-border-color: var(--border-subtle);
 
   /* ---------- Spacing (4px base) ---------- */
@@ -201,7 +207,7 @@
      diagonal that unifies the Envoy project family. Tweak here once. */
   --gradient-brand: linear-gradient(120deg, var(--brand-purple-bright) 0%, var(--brand-accent) 100%);
   --gradient-accent: linear-gradient(135deg, var(--brand-accent-bright) 0%, var(--brand-accent) 100%);
-  --gradient-hero-text: linear-gradient(180deg, #ffffff 0%, #d7c7ee 100%);
+  --gradient-hero-text: linear-gradient(120deg, #ffffff 0%, #e6d8fb 45%, var(--brand-accent-bright) 100%);
 
   /* ---------- Feedback family (info / success / warning / danger) ----------
      bg + text + border each, so callouts, badges, inline alerts, and form
@@ -309,7 +315,6 @@ html[data-theme='dark'] {
   --ifm-background-color: var(--surface-page);
   --ifm-background-surface-color: var(--surface-card);
   --ifm-card-background-color: var(--surface-card);
-  --ifm-footer-background-color: var(--surface-sunken);
   --ifm-toc-border-color: var(--border-subtle);
   --ifm-color-content: var(--text-primary);
   --ifm-color-content-secondary: var(--text-secondary);
