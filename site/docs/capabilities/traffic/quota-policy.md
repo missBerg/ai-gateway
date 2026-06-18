@@ -8,8 +8,6 @@ sidebar_position: 6
 
 `QuotaPolicy` enables token-based quota management for AI inference services in Envoy AI Gateway.
 When a backend's quota is exceeded, requests are rejected with a `429 Too Many Requests` status code.
-If the `AIGatewayRoute` rule lists multiple backends, traffic automatically fails over to the next
-backend whose quota has not been exhausted.
 
 :::note QuotaPolicy vs. Rate Limiting
 QuotaPolicy manages **total consumption budgets** (for example, 100,000 tokens per hour). This is
@@ -27,7 +25,6 @@ Key features of QuotaPolicy:
   computing how much a request burns down a quota.
 - **Client-selector bucket rules** — carve out per-tenant or per-header quotas using request attributes.
 - **Shadow mode** — evaluate quota rules without enforcing them, for safe rollout.
-- **Automatic failover** — when a quota is exhausted, route to the next available backend on the rule.
 
 ## How It Works
 
@@ -37,8 +34,6 @@ Key features of QuotaPolicy:
 3. The cost is charged against the matching quota bucket (the per-model default bucket, or a matching
    bucket rule).
 4. When a bucket's quota is exceeded, subsequent matching requests receive `429 Too Many Requests`.
-5. If the `AIGatewayRoute` rule lists multiple `backendRefs`, traffic fails over to the next backend
-   whose quota is still available.
 
 :::tip Prerequisites
 Quota enforcement uses the same infrastructure as usage-based rate limiting:
@@ -263,36 +258,11 @@ be rejected by the CRD schema. Choose the `limit` to express your budget within 
 
 ## Service-Wide Quota
 
-The `serviceQuota` field applies a single budget to **all** models served by the targeted backend,
-without naming individual models. Unlike `perModelQuotas`, it accepts only an optional
-`costExpression` plus a flat `limit` and `duration` — bucket modes, `bucketRules`, and client
-selectors are **not** available at the service-wide level (the underlying type is
-`ServiceQuotaDefinition`, versus `QuotaDefinition` for per-model quotas). For per-tenant rules or
-client selectors, use `perModelQuotas` instead.
-
-```yaml
-apiVersion: aigateway.envoyproxy.io/v1alpha1
-kind: QuotaPolicy
-metadata:
-  name: my-quota-policy
-spec:
-  targetRefs:
-    - group: aigateway.envoyproxy.io
-      kind: AIServiceBackend
-      name: my-backend
-  serviceQuota:
-    # Optional custom cost expression (defaults to total_tokens).
-    costExpression: "input_tokens + output_tokens * 3"
-    quota:
-      limit: 200000
-      duration: "1h"
-```
-
-:::warning Not yet enforced
-In the current release, `serviceQuota` is **not applied by the data plane**. The gateway builds rate
-limit configuration for it, but no request-time enforcement is wired up, so on its own it does not
-reject or count traffic. Use `perModelQuotas` for enforced token quotas until service-wide
-enforcement lands.
+:::warning Not yet available
+The API exposes a backend-wide `serviceQuota` field — intended to apply a single budget across all
+models on a backend — but it is **not yet enforced** (it is currently a known TODO in the API).
+Configuring it has no effect on traffic, so use [Per-Model Quotas](#per-model-quotas) to enforce
+token quotas today. This section will document `serviceQuota` once enforcement lands.
 :::
 
 ## Full Example
