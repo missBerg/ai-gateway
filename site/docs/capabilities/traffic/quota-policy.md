@@ -134,9 +134,9 @@ following variables are available in a `costExpression`:
 perModelQuotas:
   - modelName: gpt-4
     quota:
-      # Cached input tokens cost 10% of regular input tokens;
-      # output tokens cost 6x regular input tokens.
-      costExpression: "input_tokens + cached_input_tokens * 0.1 + output_tokens * 6"
+      # Cached input tokens count as 1/10 of a regular input token;
+      # output tokens count 6x.
+      costExpression: "input_tokens + cached_input_tokens / 10u + output_tokens * 6u"
       defaultBucket:
         limit: 50000
         duration: "1h"
@@ -144,8 +144,12 @@ perModelQuotas:
 
 :::tip
 Use a custom cost expression when token types have significantly different costs with your provider —
-for example, output tokens are typically more expensive than input tokens. The expression must
-evaluate to a non-negative integer.
+for example, output tokens are typically more expensive than input tokens.
+
+The token variables are **unsigned integers**, so numeric literals must carry a `u` suffix (for
+example `output_tokens * 6u`) and the expression must evaluate to a non-negative integer. Integer
+division truncates (`cached_input_tokens / 10u`); for an exact fractional weight, cast through
+floating point — for example `uint(double(cached_input_tokens) * 0.1)`.
 :::
 
 ### Bucket Mode
@@ -215,7 +219,7 @@ bucketRules:
 
 Supported header match types are `Exact`, `Distinct`, and `RegularExpression`.
 
-`clientSelectors` are Envoy Gateway [`RateLimitSelectCondition`](https://gateway.envoyproxy.io/docs/api/extension_types/#ratelimitselectcondition) values. Besides `headers`, a selector can also match on `sourceCIDR` (client IP range), `methods` (HTTP method), `path`, and `queryParams`. Refer to the Envoy Gateway rate limit API reference for the full set of selector options.
+`clientSelectors` reuse the Envoy Gateway [`RateLimitSelectCondition`](https://gateway.envoyproxy.io/docs/api/extension_types/#ratelimitselectcondition) type, but QuotaPolicy currently applies only the `headers` matcher. The other fields on that type (`sourceCIDR`, `methods`, `path`, `queryParams`) are accepted by the schema but **not yet honored** for quota buckets.
 
 ### Shadow Mode
 
@@ -284,7 +288,7 @@ spec:
   perModelQuotas:
     - modelName: gpt-4
       quota:
-        costExpression: "input_tokens + cached_input_tokens * 0.1 + output_tokens * 6"
+        costExpression: "input_tokens + cached_input_tokens / 10u + output_tokens * 6u"
         mode: Shared
         defaultBucket:
           limit: 10000
