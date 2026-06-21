@@ -9,16 +9,11 @@ every effort to acknowledge your contributions.
 **Please do not report security vulnerabilities through public GitHub issues,
 discussions, pull requests, or any other public channel.**
 
-Instead, please report vulnerabilities privately using one of the following
-channels:
-
-1. **Preferred:** Open a
-   [GitHub Security Advisory](https://github.com/envoyproxy/ai-gateway/security/advisories/new).
-   This allows the maintainers to triage the report and collaborate with you
-   privately, directly on GitHub.
-
-2. **Alternative:** Email the Envoy AI Gateway maintainers at
-   [envoy-ai-gateway-security@googlegroups.com](mailto:envoy-ai-gateway-security@googlegroups.com).
+Instead, please report vulnerabilities privately by opening a
+[GitHub Security Advisory](https://github.com/envoyproxy/ai-gateway/security/advisories/new)
+("Report a vulnerability" on the repository's **Security** tab). This allows the
+maintainers to triage the report and collaborate with you privately, directly on
+GitHub.
 
 If the vulnerability relates to Envoy Proxy or Envoy Gateway (the components
 that Envoy AI Gateway is built on top of) rather than Envoy AI Gateway itself,
@@ -99,8 +94,10 @@ To minimize security risks when running Envoy AI Gateway:
 
 ## Contact
 
-If you have any questions about this security policy, please reach out to the
-maintainers listed in [MAINTAINERS.md](./MAINTAINERS.md) or email
-[envoy-ai-gateway-security@googlegroups.com](mailto:envoy-ai-gateway-security@googlegroups.com).
+If you have any general (non-sensitive) questions about this security policy,
+please reach out to the maintainers listed in [MAINTAINERS.md](./MAINTAINERS.md).
+To report a vulnerability, always use the private
+[GitHub Security Advisory](https://github.com/envoyproxy/ai-gateway/security/advisories/new)
+flow described above rather than a public channel.
 
 Thank you for helping to keep Envoy AI Gateway and its users secure.
