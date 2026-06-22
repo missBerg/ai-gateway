@@ -67,14 +67,18 @@ to upgrade.
 ## Supported Versions
 
 Envoy AI Gateway follows the support policy described in
-[RELEASES.md](./RELEASES.md). With the general availability of `v1.0.0`, the
-`v1.x` line is the supported, stable release series, and security fixes target
-the latest `v1.x` patch release.
+[RELEASES.md](./RELEASES.md), aligned with the
+[Envoy Gateway release support policy](https://gateway.envoyproxy.io/). Minor
+releases are cut on a roughly quarterly cadence, and each minor release is
+supported for **6 months** after its release date. In practice this means the
+**two most recent minor releases** (the current and the previous `v1.x` line)
+are supported at any given time.
 
-Security fixes are applied to the `main` branch and backported to the latest
-supported release line. We strongly recommend that all users run a supported,
-up-to-date `v1.x` version. Reports against unsupported or end-of-life versions
-may be addressed by asking you to reproduce the issue on a supported version.
+Security fixes are developed on the `main` branch and backported as patch
+releases to every minor release that is still within its support window. We
+strongly recommend that all users run a supported, up-to-date `v1.x` version.
+Reports against unsupported or end-of-life versions may be addressed by asking
+you to reproduce the issue on a supported version.
 
 ## Security Updates
 
