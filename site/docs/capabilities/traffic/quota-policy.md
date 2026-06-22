@@ -33,7 +33,7 @@ Key features of QuotaPolicy:
    (defaults to `total_tokens`).
 3. The cost is charged against the matching quota bucket (the per-model default bucket, or a matching
    bucket rule).
-4. When a bucket's quota is exceeded, subsequent matching requests receive `429 Too Many Requests`.
+4. When all related quota buckets for that model are exceeded, subsequent matching requests receive `429 Too Many Requests`.
 
 :::tip Prerequisites
 Quota enforcement uses the same infrastructure as usage-based rate limiting:
