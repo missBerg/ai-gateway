@@ -9,11 +9,16 @@ every effort to acknowledge your contributions.
 **Please do not report security vulnerabilities through public GitHub issues,
 discussions, pull requests, or any other public channel.**
 
-Instead, please report vulnerabilities privately by opening a
-[GitHub Security Advisory](https://github.com/envoyproxy/ai-gateway/security/advisories/new)
-("Report a vulnerability" on the repository's **Security** tab). This allows the
-maintainers to triage the report and collaborate with you privately, directly on
-GitHub.
+Instead, please report vulnerabilities privately using one of the following
+channels:
+
+1. **Preferred:** Open a
+   [GitHub Security Advisory](https://github.com/envoyproxy/ai-gateway/security/advisories/new)
+   ("Report a vulnerability" on the repository's **Security** tab). This allows
+   the maintainers to triage the report and collaborate with you privately,
+   directly on GitHub.
+2. **Alternative:** Email the Envoy AI Gateway security team at
+   [envoy-ai-gateway-security@googlegroups.com](mailto:envoy-ai-gateway-security@googlegroups.com).
 
 If the vulnerability relates to Envoy Proxy or Envoy Gateway (the components
 that Envoy AI Gateway is built on top of) rather than Envoy AI Gateway itself,
@@ -97,8 +102,10 @@ To minimize security risks when running Envoy AI Gateway:
 
 If you have any general (non-sensitive) questions about this security policy,
 please reach out to the maintainers listed in [MAINTAINERS.md](./MAINTAINERS.md).
-To report a vulnerability, always use the private
-[GitHub Security Advisory](https://github.com/envoyproxy/ai-gateway/security/advisories/new)
-flow described above rather than a public channel.
+To report a vulnerability, always use one of the private channels described
+above — the [GitHub Security Advisory](https://github.com/envoyproxy/ai-gateway/security/advisories/new)
+flow or the security team at
+[envoy-ai-gateway-security@googlegroups.com](mailto:envoy-ai-gateway-security@googlegroups.com)
+— rather than a public channel.
 
 Thank you for helping to keep Envoy AI Gateway and its users secure.
