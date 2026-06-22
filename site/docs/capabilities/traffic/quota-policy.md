@@ -160,7 +160,7 @@ interact when a request matches one or more rules.
 Currently only **`Shared`** mode is supported (it is also the default, so the field can be omitted):
 
 - The request is charged to **all** matching `bucketRules` **and** the `defaultBucket`.
-- The request is allowed only if quota is available in **every** matching bucket.
+- The request is allowed only if quota is available in **at least one** matching bucket.
 
 ```yaml
 perModelQuotas:
