@@ -60,15 +60,15 @@ to upgrade.
 
 ## Supported Versions
 
-Envoy AI Gateway is pre-`v1.0.0` and follows the support policy described in
-[RELEASES.md](./RELEASES.md). In short, the end of life for a given release is
-**two releases after** it was published (for example, `v0.1.0` reaches end of
-life when `v0.3.0` is released).
+Envoy AI Gateway follows the support policy described in
+[RELEASES.md](./RELEASES.md). With the general availability of `v1.0.0`, the
+`v1.x` line is the supported, stable release series, and security fixes target
+the latest `v1.x` patch release.
 
 Security fixes are applied to the `main` branch and backported to the latest
 supported release line. We strongly recommend that all users run a supported,
-up-to-date version. Reports against unsupported versions may be addressed by
-asking you to reproduce the issue on a supported version.
+up-to-date `v1.x` version. Reports against unsupported or end-of-life versions
+may be addressed by asking you to reproduce the issue on a supported version.
 
 ## Security Updates
 
