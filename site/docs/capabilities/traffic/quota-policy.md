@@ -7,7 +7,7 @@ sidebar_position: 6
 # Quota Policy
 
 `QuotaPolicy` enables token-based quota management for AI inference services in Envoy AI Gateway.
-When all related backend's quota is exceeded, requests are rejected with a `429 Too Many Requests` status code.
+When all related backend's quota are exceeded, requests are rejected with a `429 Too Many Requests` status code.
 
 :::note QuotaPolicy vs. Rate Limiting
 QuotaPolicy manages **total consumption budgets** (for example, 100,000 tokens per hour). This is
