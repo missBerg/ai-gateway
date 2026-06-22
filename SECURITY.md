@@ -20,7 +20,8 @@ that Envoy AI Gateway is built on top of) rather than Envoy AI Gateway itself,
 please report it to the relevant upstream project:
 
 - Envoy Proxy: https://github.com/envoyproxy/envoy/security/advisories/new
-- Envoy Gateway: https://github.com/envoyproxy/gateway/security/advisories/new
+- Envoy Gateway: email envoy-gateway-security@googlegroups.com (see the
+  [Envoy Gateway security policy](https://github.com/envoyproxy/gateway/blob/main/SECURITY.md))
 
 ### What to Include
 
