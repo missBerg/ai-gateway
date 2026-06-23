@@ -9,7 +9,7 @@
   "releases": [
     {
       "version": "v1.0.0",
-      "date": "June 18, 2026",
+      "date": "June 23, 2026",
       "type": "major",
       "tags": [
         { "text": "General Availability", "type": "major" },
