@@ -104,7 +104,7 @@
   height: auto;
   justify-self: center;
   /* Lift the white mark off the navy with a soft brand glow. */
-  filter: drop-shadow(0 8px 40px rgba(200, 0, 255, 0.35));
+  filter: drop-shadow(0 8px 40px var(--glow-fuchsia));
 }
 
 /* ---------- Headline ---------- */
@@ -148,12 +148,12 @@
 .ctas :global(.btn--accent) {
   position: relative;
   background: linear-gradient(135deg, rgba(109, 92, 245, 0.34) 0%, rgba(109, 92, 245, 0.18) 100%);
-  color: #f3f1ff;
+  color: var(--text-on-navy);
   border-color: transparent;
   backdrop-filter: blur(14px) saturate(150%);
   -webkit-backdrop-filter: blur(14px) saturate(150%);
   isolation: isolate;
-  box-shadow: 0 0 24px rgba(109, 92, 245, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  box-shadow: var(--shadow-glow-accent-strong);
 }
 .ctas :global(.btn--accent)::before {
   content: "";
@@ -161,7 +161,8 @@
   inset: -1px;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(157, 146, 255, 1) 0%, rgba(109, 92, 245, 0.85) 45%, rgba(195, 107, 255, 0.85) 70%, rgba(255, 45, 142, 0.9) 100%);
+  /* Signature border — echoes the HowItWorks gateway panel */
+  background: var(--gradient-signature);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
@@ -173,7 +174,7 @@
   background: linear-gradient(135deg, rgba(109, 92, 245, 0.46) 0%, rgba(109, 92, 245, 0.26) 100%);
   color: #fff;
   transform: translateY(-1px);
-  box-shadow: 0 0 32px rgba(109, 92, 245, 0.55), 0 10px 28px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: var(--shadow-glow-accent-strong-hover);
 }
 
 /* Primary "Get started" — brighter, pinker magenta→purple gradient + glow */
@@ -181,14 +182,14 @@
   background: linear-gradient(135deg, var(--brand-magenta) 0%, var(--brand-purple) 100%);
   color: #fff;
   border-color: rgba(255, 255, 255, 0.18);
-  box-shadow: 0 0 0 1px rgba(183, 52, 212, 0.35), 0 6px 18px rgba(138, 32, 196, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  box-shadow: var(--shadow-glow-primary);
 }
 .ctas :global(.btn--primary):hover {
-  background: linear-gradient(135deg, #c247dd 0%, #8a20c4 100%);
+  background: linear-gradient(135deg, var(--brand-magenta-bright) 0%, var(--brand-purple-soft) 100%);
   color: #fff;
   border-color: rgba(255, 255, 255, 0.28);
   transform: translateY(-1px);
-  box-shadow: 0 0 0 1px rgba(195, 107, 255, 0.5), 0 8px 24px rgba(159, 37, 201, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  box-shadow: var(--shadow-glow-primary-hover);
 }
 
 /* GitHub CTA with a live star count chip on the right */

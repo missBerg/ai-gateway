@@ -38,7 +38,7 @@
   border-color: var(--tint-purple-soft);
 }
 .badge[data-variant='accent'] {
-  color: var(--brand-accent-dark);
+  color: var(--text-accent);
   background: var(--tint-accent-subtle);
   border-color: var(--tint-accent-border);
 }

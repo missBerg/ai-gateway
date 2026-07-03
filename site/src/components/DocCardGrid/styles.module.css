@@ -34,7 +34,7 @@
 .card:hover {
   box-shadow: var(--shadow-md);
   border-color: var(--card-hover-border);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   text-decoration: none;
   color: inherit;
 }

@@ -224,7 +224,7 @@
   flex-shrink: 0;
   font-size: 0.82rem;
   font-weight: var(--weight-semibold);
-  color: var(--brand-accent-dark);
+  color: var(--text-accent);
   background: var(--tint-accent-subtle);
   border: 1px solid var(--tint-accent-border);
   padding: 6px 12px;

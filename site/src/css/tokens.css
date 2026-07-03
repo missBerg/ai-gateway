@@ -25,19 +25,24 @@
      (4.67:1) and black (4.50:1) text clear WCAG AA on it, so it's safe with
      either. White is the default on accent fills; black is available for
      large/bold. Hot pink is the energetic pop. */
+  /* Color roles at a glance:
+       purple family  = anchor — solid fills, links on light
+       magenta        = primary-CTA gradient stop ONLY
+       accent family  = indigo — actions, eyebrows, focus
+       fuchsia + cyan = signature — decorative, dark-surface only
+     (hot pink #ff2d8e retired 2026-07 — role absorbed by fuchsia) */
   --brand-purple: #6c1899;          /* deep anchor — solid fills, links on light */
   --brand-purple-soft: #8a20c4;
   --brand-purple-bright: #9b3df0;   /* brighter violet — gradient start (EG-inspired) */
   --brand-magenta: #b734d4;         /* pink-leaning violet — primary CTA top stop (white AA 4.7) */
-  --brand-purple-glow: #c257fc;
+  --brand-magenta-bright: #c247dd;  /* lifted magenta — primary CTA hover stop */
+  --brand-purple-glow: #c257fc;     /* feeds --ifm-color-primary-lightest/-lighter */
   --brand-navy: #20203a;            /* navbar + always-dark bands — blue-grey, not black */
-  --brand-navy-2: #2a2a48;
   --brand-navy-deep: #121120;       /* hero background bottom */
   --brand-accent: #6d5cf5;          /* saturated indigo — MCP / CTAs / eyebrows */
-  --brand-accent-dark: #4a3cd4;     /* deeper — eyebrow text on light, gradient end */
+  --brand-accent-dark: #4a3cd4;     /* deeper — accent gradients' dark stop */
   --brand-accent-deeper: #3f33c0;   /* deepest — accent button hover (keeps white AA) */
   --brand-accent-bright: #9d92ff;   /* lighter — accent text/links on dark surfaces */
-  --brand-pink: #ff2d8e;            /* hot pink — hero glow + rare energetic accent */
   /* Electric signature pair — the magenta→cyan "AI" gradient. DECORATIVE /
      gradient / dark-surface ONLY: cyan is ~1.2:1 on white and fails AA as text
      or a line on light, so never route body text/links/borders-on-light through
@@ -83,9 +88,6 @@
   --tint-accent-soft: rgba(109, 92, 245, 0.18);
   --tint-accent-border: rgba(109, 92, 245, 0.28);
   --tint-accent-overlay: rgba(109, 92, 245, 0.14);
-  --tint-pink-subtle: rgba(255, 45, 142, 0.1);
-  --tint-pink-soft: rgba(255, 45, 142, 0.2);
-  --tint-pink-border: rgba(255, 45, 142, 0.35);
   --tint-white-subtle: rgba(255, 255, 255, 0.06);
   --tint-white-soft: rgba(255, 255, 255, 0.12);
   --tint-white-strong: rgba(255, 255, 255, 0.25);
@@ -93,7 +95,9 @@
   --text-on-navy: rgba(255, 255, 255, 0.92);       /* body text on always-dark bands */
   --text-on-navy-soft: rgba(255, 255, 255, 0.78);
   --text-on-navy-muted: rgba(255, 255, 255, 0.6); /* captions/copyright on navy (~5.5:1) */
-  --overlay-navy-90: rgba(10, 6, 19, 0.9);
+  /* Accent-tinted labels (eyebrows, endpoint captions, accent badges) — dark
+     mode lifts this to --brand-accent-bright; accent-dark is ~2.2:1 there. */
+  --text-accent: var(--brand-accent-dark);
 
   /* ---------- Status (badges / matrix) ---------- */
   --status-new-bg: var(--brand-accent);
@@ -165,7 +169,7 @@
   --ifm-background-surface-color: var(--surface-card);
   --ifm-card-background-color: var(--surface-card);
   --ifm-navbar-background-color: var(--brand-navy);
-  --ifm-navbar-link-color: rgba(255, 255, 255, 0.82);
+  --ifm-navbar-link-color: var(--text-on-navy-soft);
   --ifm-navbar-link-hover-color: #fff;
   /* Footer is an always-dark band (like the navbar) in both themes —
      hover feed is explicit because Infima defaults it to --ifm-color-primary,
@@ -189,6 +193,7 @@
   --space-9: 96px;
 
   /* ---------- Radius ---------- */
+  --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
@@ -203,6 +208,13 @@
   --shadow-glow-accent: 0 0 0 1px rgba(109, 92, 245, 0.35), 0 8px 24px rgba(109, 92, 245, 0.22);
   --shadow-accent-hover: 0 8px 20px rgba(109, 92, 245, 0.3);
   --shadow-tooltip: 0 4px 12px rgba(0, 0, 0, 0.3);
+  /* Hero-tier CTA glows (stronger than --shadow-glow-accent; navy surfaces) */
+  --shadow-glow-accent-strong: 0 0 24px rgba(109, 92, 245, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  --shadow-glow-accent-strong-hover: 0 0 32px rgba(109, 92, 245, 0.55), 0 10px 28px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  --shadow-glow-primary: 0 0 0 1px rgba(183, 52, 212, 0.35), 0 6px 18px rgba(138, 32, 196, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  --shadow-glow-primary-hover: 0 0 0 1px rgba(195, 107, 255, 0.5), 0 8px 24px rgba(159, 37, 201, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  /* Signature glow color — for filter: drop-shadow(), which can't take a box-shadow token */
+  --glow-fuchsia: rgba(200, 0, 255, 0.35);
 
   /* ---------- Focus ring (shared keyboard-focus treatment) ---------- */
   --focus-ring-color: rgba(109, 92, 245, 0.5);
@@ -212,8 +224,6 @@
      --gradient-brand mirrors the Envoy Gateway hero: a violet → indigo
      diagonal that unifies the Envoy project family. Tweak here once. */
   --gradient-brand: linear-gradient(120deg, var(--brand-purple-bright) 0%, var(--brand-accent) 100%);
-  --gradient-accent: linear-gradient(135deg, var(--brand-accent-bright) 0%, var(--brand-accent) 100%);
-  --gradient-hero-text: linear-gradient(120deg, #ffffff 0%, #e6d8fb 45%, var(--brand-accent-bright) 100%);
   /* Signature: electric magenta → cyan (naturally blends through periwinkle).
      For dark-surface fills, glows, and strokes. */
   --gradient-signature: linear-gradient(120deg, var(--brand-fuchsia) 0%, var(--brand-cyan) 100%);
@@ -303,9 +313,9 @@ html[data-theme='dark'] {
   --tint-accent-subtle: rgba(157, 146, 255, 0.16);
   --tint-accent-soft: rgba(157, 146, 255, 0.26);
   --tint-accent-border: rgba(157, 146, 255, 0.4);
-  --tint-pink-subtle: rgba(255, 45, 142, 0.16);
-  --tint-pink-soft: rgba(255, 45, 142, 0.28);
-  --tint-pink-border: rgba(255, 45, 142, 0.45);
+
+  /* Accent-tinted labels need the bright variant on dark surfaces */
+  --text-accent: var(--brand-accent-bright);
 
   /* Status: lighten amber/green text for AA on dark */
   --status-ok-text: #4ade80;
