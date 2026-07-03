@@ -75,7 +75,7 @@
   font-weight: 500;
   background: var(--ifm-color-emphasis-200);
   color: var(--ifm-color-emphasis-800);
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--border-subtle);
 }
 
 .seriesBadge.series {
@@ -108,8 +108,8 @@
 
 /* Release Header */
 .releaseHeader {
-  background: white;
-  border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   padding: 1.5rem;
   margin: 1.5rem 0;
@@ -163,7 +163,7 @@
 .releaseHeaderContent {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--ifm-color-emphasis-300);
+  border-top: 1px solid var(--border-subtle);
 }
 
 /* Tags */
@@ -174,7 +174,7 @@
   border-radius: 4px;
   font-size: 0.8rem;
   font-weight: 500;
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--border-subtle);
 }
 
 .tag.milestone {
@@ -193,7 +193,7 @@
 .tag.patch {
   background: var(--ifm-color-emphasis-100);
   color: var(--ifm-color-emphasis-700);
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--border-subtle);
 }
 
 /* Feature Grid */
@@ -223,8 +223,8 @@
   align-items: flex-start;
   gap: 1rem;
   padding: 1rem;
-  background: white;
-  border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -257,8 +257,8 @@
   border-radius: 8px;
   padding: 1.5rem;
   margin: 1.5rem 0;
-  background: white;
-  border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
 }
 
 .infoBox.info {
@@ -266,15 +266,15 @@
 }
 
 .infoBox.warning {
-  border-left: 3px solid #f5a623;
+  border-left: 3px solid var(--feedback-warning-text);
 }
 
 .infoBox.danger {
-  border-left: 3px solid #e74c3c;
+  border-left: 3px solid var(--feedback-danger-text);
 }
 
 .infoBox.success {
-  border-left: 3px solid #27ae60;
+  border-left: 3px solid var(--feedback-success-text);
 }
 
 .infoBoxHeader {
@@ -305,8 +305,8 @@
 
 /* Release Cards */
 .releaseCard {
-  background: white;
-  border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   padding: 2rem;
   padding-bottom: 4rem;
@@ -401,7 +401,7 @@
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 500;
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--border-subtle);
 }
 
 .highlightTag.patch {
@@ -421,7 +421,7 @@
   border-radius: 6px;
   font-size: 0.9rem;
   color: var(--ifm-color-emphasis-700);
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--border-subtle);
 }
 
 .releaseLink {
@@ -447,7 +447,7 @@
   align-items: center;
   margin-top: 3rem;
   padding-top: 2rem;
-  border-top: 1px solid var(--ifm-color-emphasis-300);
+  border-top: 1px solid var(--border-subtle);
   flex-wrap: wrap;
   gap: 1rem;
 }
@@ -458,7 +458,7 @@
   font-weight: 500;
   padding: 0.5rem 1rem;
   border-radius: 6px;
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--border-subtle);
   transition: border-color 0.2s ease, color 0.2s ease;
 }
 
@@ -599,8 +599,8 @@
 
 .timelineContent {
   flex: 1;
-  background: white;
-  border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   padding: 1rem;
   margin-top: 0.25rem;
@@ -659,7 +659,7 @@
 
 .dependencyItem {
   background: var(--ifm-card-background-color);
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   padding: 1rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -682,7 +682,7 @@
 /* Feature Section Cards */
 .featureSectionCard {
   background: var(--ifm-card-background-color) opacity(0.5);
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
@@ -727,7 +727,7 @@
   font-family: monospace;
   color: var(--ifm-color-emphasis-900);
   display: inline;
-  background: #fff;
+  background: var(--surface-sunken);
   padding: 0.01rem 0.5rem;
   word-break: break-word;
   white-space: normal;
@@ -736,7 +736,7 @@
 /* Patch Release Component */
 .patchRelease {
   background: var(--ifm-card-background-color);
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
   padding: 1.5rem;
   margin: 2rem 0;
@@ -759,7 +759,7 @@
 
 .patchRelease .releaseHeader.patch {
   border-left: none;
-  border-bottom: 2px solid var(--ifm-color-emphasis-300);
+  border-bottom: 2px solid var(--border-subtle);
   padding-bottom: 1rem;
 }
 
