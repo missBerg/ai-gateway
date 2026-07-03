@@ -5,6 +5,7 @@ import Hero from '@site/src/components/Hero';
 import Reveal from '@site/src/components/Reveal';
 import McpInstall from '@site/src/components/McpInstall';
 import Capabilities from '@site/src/components/Capabilities';
+import HowItWorks from '@site/src/components/HowItWorks';
 import QuickStart from '@site/src/components/QuickStart';
 import LLMProviders from '@site/src/components/LLMProviders';
 import LatestBlogs from '@site/src/components/LatestBlogs';
@@ -21,6 +22,7 @@ export default function Home(): React.ReactElement {
         {/* MCP install first — the fastest on-ramp — then lead with value. */}
         <Reveal><McpInstall /></Reveal>
         <Reveal><Capabilities /></Reveal>
+        <Reveal><HowItWorks /></Reveal>
         <Reveal><LLMProviders /></Reveal>
         <Reveal><QuickStart /></Reveal>
         <Reveal><LatestBlogs /></Reveal>

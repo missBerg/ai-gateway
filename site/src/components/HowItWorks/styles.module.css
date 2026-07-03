@@ -1,0 +1,226 @@
+/* =============================================================
+   HowItWorks — signature flow diagram.
+   Desktop: one responsive SVG (connectors always align to nodes).
+   Mobile (<768px): stacked HTML layout, no fragile connectors.
+   The gateway panel is an always-dark centerpiece in both themes
+   (like the hero); source + provider chips flow with the theme.
+   ============================================================= */
+
+.section {
+  padding: var(--space-8) 0;
+  background: var(--surface-page);
+  border-top: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+/* ---------- Desktop SVG ---------- */
+.diagram {
+  display: block;
+  width: 100%;
+  max-width: 1040px;
+  height: auto;
+  margin: 0 auto;
+  font-family: var(--ifm-font-family-base);
+}
+@media screen and (max-width: 768px) {
+  .diagram { display: none; }
+}
+
+/* gradient stops (set via CSS so they flip / stay token-driven) */
+/* Flow lines cross the light section, so they end on the accessible indigo
+   accent (cyan would vanish on white); the gateway border carries the full
+   magenta→cyan since it sits on the always-dark panel. */
+.flowStop0 { stop-color: var(--brand-fuchsia); }
+.flowStop1 { stop-color: var(--brand-accent); }
+.panelStop0 { stop-color: var(--brand-navy-deep); }
+.panelStop1 { stop-color: var(--brand-navy); }
+.borderStop0 { stop-color: var(--brand-fuchsia); }
+.borderStop1 { stop-color: var(--brand-accent); }
+.borderStop2 { stop-color: var(--brand-cyan); }
+.glowStop0 { stop-color: var(--brand-fuchsia); stop-opacity: 0.18; }
+.glowStop1 { stop-color: var(--brand-cyan); stop-opacity: 0; }
+
+/* connectors — animated flowing dashes */
+.flow {
+  fill: none;
+  stroke: url(#hiwFlow);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 5 9;
+  animation: hiwFlow 1.4s linear infinite;
+}
+@keyframes hiwFlow {
+  to { stroke-dashoffset: -28; }
+}
+
+/* client chips (fan in) */
+.clientChip {
+  fill: var(--surface-card);
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+.clientIcon { stroke: var(--brand-accent); }
+.clientText {
+  fill: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* gateway centerpiece */
+.gwTitle {
+  fill: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.pill {
+  fill: rgba(255, 255, 255, 0.07);
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 1;
+}
+.pillIcon { stroke: var(--brand-accent-bright); }
+.pillText {
+  fill: rgba(255, 255, 255, 0.94);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* provider chips — white wells so colored/dark logos stay legible in both themes */
+.chip {
+  fill: var(--surface-inverse);
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+.chipText {
+  fill: var(--brand-navy);
+  font-size: 14px;
+  font-weight: 600;
+}
+.moreChip {
+  fill: var(--tint-accent-subtle);
+  stroke: var(--tint-accent-border);
+  stroke-width: 1;
+}
+.moreText {
+  fill: var(--brand-accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow { animation: none; stroke-dasharray: none; stroke-opacity: 0.7; }
+}
+
+/* ---------- Mobile stacked layout ---------- */
+.mobile {
+  display: none;
+}
+@media screen and (max-width: 768px) {
+  .mobile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+  }
+}
+
+.mClients {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  max-width: 360px;
+}
+.mClientChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  box-shadow: var(--shadow-xs);
+}
+
+.mGateway {
+  width: 100%;
+  max-width: 340px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  background: linear-gradient(135deg, var(--brand-navy-deep) 0%, var(--brand-navy) 100%);
+  border: 1px solid var(--tint-accent-border);
+  box-shadow: var(--shadow-glow-accent);
+}
+.mGateway strong {
+  color: #fff;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-extra);
+}
+.mGateway ul {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+.mGateway li {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-pill);
+  padding: 4px 10px;
+}
+
+.mArrow {
+  width: 2px;
+  height: var(--space-5);
+  background: linear-gradient(to bottom, var(--brand-purple-bright), var(--brand-accent));
+  position: relative;
+}
+.mArrow::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--brand-accent);
+}
+
+.mProviders {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  max-width: 360px;
+}
+.mChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--brand-navy);
+  background: var(--surface-inverse);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+}
+.mChipMore {
+  color: var(--brand-accent);
+  background: var(--tint-accent-subtle);
+  border-color: var(--tint-accent-border);
+}
