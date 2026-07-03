@@ -38,6 +38,12 @@
   --brand-accent-deeper: #3f33c0;   /* deepest — accent button hover (keeps white AA) */
   --brand-accent-bright: #9d92ff;   /* lighter — accent text/links on dark surfaces */
   --brand-pink: #ff2d8e;            /* hot pink — hero glow + rare energetic accent */
+  /* Electric signature pair — the magenta→cyan "AI" gradient. DECORATIVE /
+     gradient / dark-surface ONLY: cyan is ~1.2:1 on white and fails AA as text
+     or a line on light, so never route body text/links/borders-on-light through
+     these — keep those on the purples above. They sing on the always-dark bands. */
+  --brand-fuchsia: #c800ff;         /* electric magenta — signature gradient start */
+  --brand-cyan: #00ecff;            /* electric cyan — signature gradient end */
 
   /* ---------- Neutral ramp ---------- */
   --neutral-50: #fafafa;
@@ -208,6 +214,12 @@
   --gradient-brand: linear-gradient(120deg, var(--brand-purple-bright) 0%, var(--brand-accent) 100%);
   --gradient-accent: linear-gradient(135deg, var(--brand-accent-bright) 0%, var(--brand-accent) 100%);
   --gradient-hero-text: linear-gradient(120deg, #ffffff 0%, #e6d8fb 45%, var(--brand-accent-bright) 100%);
+  /* Signature: electric magenta → cyan (naturally blends through periwinkle).
+     For dark-surface fills, glows, and strokes. */
+  --gradient-signature: linear-gradient(120deg, var(--brand-fuchsia) 0%, var(--brand-cyan) 100%);
+  /* Text-safe variant for gradient TEXT on the always-dark bands — magenta lifted
+     for legibility; both stops stay bright enough on navy. */
+  --gradient-signature-text: linear-gradient(110deg, #e85bff 0%, #00ecff 100%);
 
   /* ---------- Feedback family (info / success / warning / danger) ----------
      bg + text + border each, so callouts, badges, inline alerts, and form

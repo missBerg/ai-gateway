@@ -41,9 +41,9 @@
   aspect-ratio: 1 / 1;
   transform: translateY(-50%);
   background:
-    radial-gradient(circle at 56% 44%, var(--brand-pink) 0%, transparent 55%),
-    radial-gradient(circle at 44% 60%, var(--brand-purple-glow) 0%, transparent 60%);
-  opacity: 0.22;
+    radial-gradient(circle at 56% 44%, var(--brand-fuchsia) 0%, transparent 55%),
+    radial-gradient(circle at 44% 60%, var(--brand-cyan) 0%, transparent 60%);
+  opacity: 0.24;
   filter: blur(64px);
 }
 
@@ -71,8 +71,8 @@
   aspect-ratio: 2 / 1;
   transform: translateX(-50%);
   background:
-    radial-gradient(ellipse at center, var(--brand-magenta) 0%, transparent 62%),
-    radial-gradient(ellipse 70% 80% at 30% 60%, var(--brand-accent) 0%, transparent 60%);
+    radial-gradient(ellipse at center, var(--brand-fuchsia) 0%, transparent 62%),
+    radial-gradient(ellipse 70% 80% at 30% 60%, var(--brand-cyan) 0%, transparent 60%);
   opacity: 0.34;
   filter: blur(72px);
 }
@@ -104,7 +104,7 @@
   height: auto;
   justify-self: center;
   /* Lift the white mark off the navy with a soft brand glow. */
-  filter: drop-shadow(0 8px 40px rgba(183, 52, 212, 0.35));
+  filter: drop-shadow(0 8px 40px rgba(200, 0, 255, 0.35));
 }
 
 /* ---------- Headline ---------- */
@@ -118,7 +118,7 @@
   color: #fff;
 }
 .titleAccent {
-  background: var(--gradient-hero-text);
+  background: var(--gradient-signature-text);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
