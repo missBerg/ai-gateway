@@ -60,7 +60,7 @@ export default function Adopters(): React.ReactElement {
     <section id="adopters" className={styles.adoptersSection}>
       <div className="container">
         <div className="sectionHeader">
-          <span className="sectionEyebrow sectionEyebrow--purple">Adopters</span>
+          <span className="sectionEyebrow">Adopters</span>
           <Heading as="h2" className="sectionTitle">
             Adopted by
           </Heading>

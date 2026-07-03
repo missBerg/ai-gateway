@@ -39,7 +39,7 @@ export default function LLMProviders(): React.ReactElement {
       aria-labelledby="providers-heading">
       <div className="container">
         <div className="sectionHeader">
-          <span className="sectionEyebrow sectionEyebrow--purple">Providers</span>
+          <span className="sectionEyebrow">Providers</span>
           <Heading as="h2" id="providers-heading" className="sectionTitle">
             One API, every major LLM provider
           </Heading>

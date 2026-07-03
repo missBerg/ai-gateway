@@ -21,8 +21,8 @@ export default function Home(): React.ReactElement {
         {/* Each section floats up as it scrolls into view (reduced-motion safe). */}
         {/* MCP install first — the fastest on-ramp — then lead with value. */}
         <Reveal><McpInstall /></Reveal>
-        <Reveal><Capabilities /></Reveal>
         <Reveal><HowItWorks /></Reveal>
+        <Reveal><Capabilities /></Reveal>
         <Reveal><LLMProviders /></Reveal>
         <Reveal><QuickStart /></Reveal>
         <Reveal><LatestBlogs /></Reveal>

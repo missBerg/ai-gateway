@@ -65,7 +65,7 @@ export default function LatestBlogs(): React.ReactElement | null {
     <section className={styles.latestBlogsSection}>
       <div className="container">
         <div className="sectionHeader">
-          <span className="sectionEyebrow sectionEyebrow--purple">Blog</span>
+          <span className="sectionEyebrow">Blog</span>
           <Heading as="h2" className="sectionTitle">
             Latest from the blog
           </Heading>

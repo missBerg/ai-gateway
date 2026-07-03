@@ -65,7 +65,7 @@ export default function QuickStart(): React.ReactElement {
         <div className={styles.split}>
           {/* Left column: heading + blurb */}
           <div className={styles.intro}>
-            <span className="sectionEyebrow sectionEyebrow--purple">Quick start</span>
+            <span className="sectionEyebrow">Quick start</span>
             <Heading as="h2" id="quickstart-heading" className={styles.introTitle}>
               Up and running in three steps
             </Heading>

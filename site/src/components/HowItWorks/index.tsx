@@ -58,7 +58,7 @@ export default function HowItWorks(): React.ReactElement {
     <section className={styles.section} aria-labelledby="how-it-works-heading">
       <div className="container">
         <div className="sectionHeader">
-          <span className="sectionEyebrow sectionEyebrow--accent">How it works</span>
+          <span className="sectionEyebrow">How it works</span>
           <Heading as="h2" id="how-it-works-heading" className="sectionTitle">
             One API in. Every provider out.
           </Heading>

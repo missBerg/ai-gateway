@@ -34,8 +34,9 @@
   --brand-purple: #6c1899;          /* deep anchor — solid fills, links on light */
   --brand-purple-soft: #8a20c4;
   --brand-purple-bright: #9b3df0;   /* brighter violet — gradient start (EG-inspired) */
-  --brand-magenta: #b734d4;         /* pink-leaning violet — primary CTA top stop (white AA 4.7) */
-  --brand-magenta-bright: #c247dd;  /* lifted magenta — primary CTA hover stop */
+  --brand-magenta: #c026d3;         /* electric magenta — primary CTA top stop (white AA 4.7);
+                                       tuned to sit in the fuchsia/cyan signature world, not the muted purples */
+  --brand-magenta-deep: #a21caf;    /* darker — primary CTA hover stop (white AA 6.2) */
   --brand-purple-glow: #c257fc;     /* feeds --ifm-color-primary-lightest/-lighter */
   --brand-navy: #20203a;            /* navbar + always-dark bands — blue-grey, not black */
   --brand-navy-deep: #121120;       /* hero background bottom */
@@ -211,8 +212,8 @@
   /* Hero-tier CTA glows (stronger than --shadow-glow-accent; navy surfaces) */
   --shadow-glow-accent-strong: 0 0 24px rgba(109, 92, 245, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
   --shadow-glow-accent-strong-hover: 0 0 32px rgba(109, 92, 245, 0.55), 0 10px 28px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  --shadow-glow-primary: 0 0 0 1px rgba(183, 52, 212, 0.35), 0 6px 18px rgba(138, 32, 196, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.22);
-  --shadow-glow-primary-hover: 0 0 0 1px rgba(195, 107, 255, 0.5), 0 8px 24px rgba(159, 37, 201, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  --shadow-glow-primary: 0 0 0 1px rgba(192, 38, 211, 0.35), 0 6px 18px rgba(162, 28, 175, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  --shadow-glow-primary-hover: 0 0 0 1px rgba(192, 38, 211, 0.5), 0 8px 24px rgba(162, 28, 175, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.3);
   /* Signature glow color — for filter: drop-shadow(), which can't take a box-shadow token */
   --glow-fuchsia: rgba(200, 0, 255, 0.35);
 

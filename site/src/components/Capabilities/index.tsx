@@ -57,7 +57,7 @@ export default function Capabilities(): React.ReactElement {
     <section className={styles.section} aria-labelledby="capabilities-heading">
       <div className="container">
         <div className="sectionHeader">
-          <span className="sectionEyebrow sectionEyebrow--purple">Capabilities</span>
+          <span className="sectionEyebrow">Capabilities</span>
           <Heading as="h2" id="capabilities-heading" className="sectionTitle">
             Built for production AI traffic
           </Heading>

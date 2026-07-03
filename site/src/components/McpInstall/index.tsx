@@ -78,7 +78,7 @@ export default function McpInstall(): React.ReactElement {
         <div className={styles.split}>
           {/* Left column: heading + blurb */}
           <div className={styles.intro}>
-            <span className="sectionEyebrow sectionEyebrow--accent">AI-native docs</span>
+            <span className="sectionEyebrow">AI-native docs</span>
             <Heading as="h2" id="mcp-install-heading" className={styles.introTitle}>
               Bring the docs into your coding agent
             </Heading>

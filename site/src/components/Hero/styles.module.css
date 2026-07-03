@@ -78,33 +78,18 @@
 }
 
 /* ---------- Layout ----------
-   Desktop: two columns — logo left, content right.
-   Small screens: stack and center (see the responsive block at the bottom). */
+   Single centered column — headline is the hero, nothing competes. */
 .inner {
   position: relative;
-  max-width: 1080px;
+  max-width: 880px;
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
-  gap: var(--space-8);
-  align-items: center;
 }
 .content {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
+  align-items: center;
+  text-align: center;
   min-width: 0;
-}
-
-/* ---------- Large brand lockup ---------- */
-.logo {
-  width: 100%;
-  max-width: 480px;
-  height: auto;
-  justify-self: center;
-  /* Lift the white mark off the navy with a soft brand glow. */
-  filter: drop-shadow(0 8px 40px var(--glow-fuchsia));
 }
 
 /* ---------- Headline ---------- */
@@ -114,7 +99,7 @@
   line-height: 1.05;
   letter-spacing: -0.035em;
   margin: 0 0 var(--space-4);
-  max-width: 16ch;
+  max-width: 18ch;
   color: #fff;
 }
 .titleAccent {
@@ -125,7 +110,7 @@
 }
 
 .subtitle {
-  max-width: 60ch;
+  max-width: 54ch;
   margin: 0 0 var(--space-6);
   font-size: var(--text-lg);
   line-height: var(--leading-normal);
@@ -136,48 +121,16 @@
 /* ---------- CTAs ---------- */
 .ctas {
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
   margin-bottom: var(--space-7);
 }
 
-/* Hero CTA tiers — richer treatment than the base .btn on dark surfaces.
-   Scoped to the hero via :global() so they don't leak to other .btn usages. */
-.ctas :global(.btn--accent) {
-  position: relative;
-  background: linear-gradient(135deg, rgba(109, 92, 245, 0.34) 0%, rgba(109, 92, 245, 0.18) 100%);
-  color: var(--text-on-navy);
-  border-color: transparent;
-  backdrop-filter: blur(14px) saturate(150%);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  isolation: isolate;
-  box-shadow: var(--shadow-glow-accent-strong);
-}
-.ctas :global(.btn--accent)::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1px;
-  /* Signature border — echoes the HowItWorks gateway panel */
-  background: var(--gradient-signature);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  pointer-events: none;
-  z-index: 1;
-  transition: opacity var(--motion-base) var(--ease-out);
-}
-.ctas :global(.btn--accent):hover {
-  background: linear-gradient(135deg, rgba(109, 92, 245, 0.46) 0%, rgba(109, 92, 245, 0.26) 100%);
-  color: #fff;
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-glow-accent-strong-hover);
-}
-
-/* Primary "Get started" — brighter, pinker magenta→purple gradient + glow */
+/* Hero CTA tier — richer treatment than the base .btn on dark surfaces.
+   Scoped to the hero via :global() so it doesn't leak to other .btn usages. */
+/* Primary "Get started" — electric magenta→purple gradient + glow */
 .ctas :global(.btn--primary) {
   background: linear-gradient(135deg, var(--brand-magenta) 0%, var(--brand-purple) 100%);
   color: #fff;
@@ -185,7 +138,7 @@
   box-shadow: var(--shadow-glow-primary);
 }
 .ctas :global(.btn--primary):hover {
-  background: linear-gradient(135deg, var(--brand-magenta-bright) 0%, var(--brand-purple-soft) 100%);
+  background: linear-gradient(135deg, var(--brand-magenta-deep) 0%, var(--brand-purple) 100%);
   color: #fff;
   border-color: rgba(255, 255, 255, 0.28);
   transform: translateY(-1px);
@@ -228,7 +181,7 @@
 .stats {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   flex-wrap: wrap;
   gap: var(--space-4);
   margin: 0;
@@ -281,33 +234,6 @@
 }
 
 /* ---------- Responsive ---------- */
-/* Stack the two columns: logo on top, content below, all centered. */
-@media screen and (max-width: 900px) {
-  .inner {
-    grid-template-columns: 1fr;
-    gap: var(--space-6);
-    max-width: 720px;
-    justify-items: center;
-  }
-  .logo {
-    max-width: 360px;
-  }
-  .content {
-    align-items: center;
-    text-align: center;
-  }
-  .ctas {
-    justify-content: center;
-  }
-  .stats {
-    justify-content: center;
-  }
-  .title,
-  .subtitle {
-    margin-inline: auto;
-  }
-}
-
 @media screen and (max-width: 768px) {
   .hero {
     padding: var(--space-8) var(--space-4) var(--space-7);

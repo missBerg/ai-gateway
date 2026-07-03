@@ -7,15 +7,6 @@ import styles from './styles.module.css';
 
 const LATEST_VERSION = versions[0];
 
-function TerminalIcon(): React.ReactElement {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="4 17 10 11 4 5" />
-      <line x1="12" y1="19" x2="20" y2="19" />
-    </svg>
-  );
-}
-
 function ArrowRightIcon(): React.ReactElement {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -73,17 +64,9 @@ export default function Hero(): React.ReactElement {
       </div>
 
       <div className={styles.inner}>
-        {/* Left: large brand lockup — hexagon + "envoy AI gateway" wordmark */}
-        <img
-          className={styles.logo}
-          src="/img/ai-gw-logo.svg"
-          alt="Envoy AI Gateway"
-          width={900}
-          height={506}
-          loading="eager"
-        />
-
-        {/* Right: headline, subhead, CTAs, factual stats */}
+        {/* Single centered column: headline, subhead, CTAs, factual stats.
+            No brand lockup — the navbar already carries the mark; the hexagon
+            watermark in the background keeps the brand present. */}
         <div className={styles.content}>
         <Heading as="h1" className={styles.title}>
           One gateway for <span className={styles.titleAccent}>all your LLM traffic</span>
@@ -92,10 +75,6 @@ export default function Hero(): React.ReactElement {
         <p className={styles.subtitle}>{siteConfig.tagline}</p>
 
         <div className={styles.ctas}>
-          <Link className="btn btn--accent btn--lg" to="#mcp-install">
-            <TerminalIcon />
-            Install Docs MCP
-          </Link>
           <Link className="btn btn--primary btn--lg" to="/docs/getting-started/">
             Get started
             <ArrowRightIcon />
