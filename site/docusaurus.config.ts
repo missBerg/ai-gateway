@@ -190,7 +190,7 @@ const config: Config = {
            items: [
              {
               label: 'Join us on Slack',
-              href: 'https://envoyproxy.slack.com/archives/C07Q4N24VAA',
+              href: 'https://communityinviter.com/apps/envoyproxy/envoy',
             },
              {
               label: 'Weekly Meeting Notes (Mondays)',
