@@ -32,7 +32,8 @@
   -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 35%, #000 0%, transparent 78%);
   mask-image: radial-gradient(ellipse 80% 70% at 50% 35%, #000 0%, transparent 78%);
 }
-/* Pink-purple haze behind the hexagon watermark, so the mark reads as glowing. */
+/* Violet haze behind the hexagon watermark, so the mark reads as glowing.
+   Glows stay in the violet→indigo family — one color story per band. */
 .hexagonGlow {
   position: absolute;
   top: 50%;
@@ -41,8 +42,8 @@
   aspect-ratio: 1 / 1;
   transform: translateY(-50%);
   background:
-    radial-gradient(circle at 56% 44%, var(--brand-fuchsia) 0%, transparent 55%),
-    radial-gradient(circle at 44% 60%, var(--brand-cyan) 0%, transparent 60%);
+    radial-gradient(circle at 56% 44%, var(--brand-purple-bright) 0%, transparent 55%),
+    radial-gradient(circle at 44% 60%, var(--brand-accent) 0%, transparent 60%);
   opacity: 0.24;
   filter: blur(64px);
 }
@@ -71,9 +72,9 @@
   aspect-ratio: 2 / 1;
   transform: translateX(-50%);
   background:
-    radial-gradient(ellipse at center, var(--brand-fuchsia) 0%, transparent 62%),
-    radial-gradient(ellipse 70% 80% at 30% 60%, var(--brand-cyan) 0%, transparent 60%);
-  opacity: 0.34;
+    radial-gradient(ellipse at center, var(--brand-purple-bright) 0%, transparent 62%),
+    radial-gradient(ellipse 70% 80% at 30% 60%, var(--brand-accent) 0%, transparent 60%);
+  opacity: 0.3;
   filter: blur(72px);
 }
 
@@ -95,12 +96,16 @@
 /* ---------- Headline ---------- */
 .title {
   font-size: var(--title-hero);
-  font-weight: var(--weight-extra);
-  line-height: 1.05;
-  letter-spacing: -0.035em;
+  /* Bigger-and-bold reads more crafted than smaller-and-extra-bold:
+     700 at this scale keeps the strokes crisp where 800 clogs Inter's
+     counters, and the relaxed tracking stops the "clenched" look. */
+  font-weight: var(--weight-bold);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
   margin: 0 0 var(--space-4);
   max-width: 18ch;
   color: #fff;
+  text-wrap: balance; /* avoids a lone word on the second line */
 }
 .titleAccent {
   background: var(--gradient-signature-text);
@@ -116,6 +121,7 @@
   line-height: var(--leading-normal);
   color: var(--text-on-navy-soft);
   font-weight: var(--weight-regular);
+  text-wrap: pretty; /* no orphaned last word */
 }
 
 /* ---------- CTAs ---------- */

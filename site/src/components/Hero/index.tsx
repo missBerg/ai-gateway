@@ -1,8 +1,8 @@
 import React, {useEffect, useState} from 'react';
 import Link from '@docusaurus/Link';
 import Heading from '@theme/Heading';
-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import versions from '@site/versions.json';
+import {PROVIDERS} from '@site/src/data/providers';
 import styles from './styles.module.css';
 
 const LATEST_VERSION = versions[0];
@@ -51,7 +51,6 @@ function useGitHubStars(): string | null {
 }
 
 export default function Hero(): React.ReactElement {
-  const {siteConfig} = useDocusaurusContext();
   const stars = useGitHubStars();
 
   return (
@@ -69,10 +68,13 @@ export default function Hero(): React.ReactElement {
             watermark in the background keeps the brand present. */}
         <div className={styles.content}>
         <Heading as="h1" className={styles.title}>
-          One gateway for <span className={styles.titleAccent}>all your LLM traffic</span>
+          The gateway for <span className={styles.titleAccent}>all your AI traffic</span>
         </Heading>
 
-        <p className={styles.subtitle}>{siteConfig.tagline}</p>
+        <p className={styles.subtitle}>
+          An open source AI gateway built on Envoy to manage, secure, and observe AI
+          traffic. Join our community building AI traffic handling in the open.
+        </p>
 
         <div className={styles.ctas}>
           <Link className="btn btn--accent btn--lg" to="/docs/getting-started/">
@@ -91,7 +93,8 @@ export default function Hero(): React.ReactElement {
         {/* Concrete, factual stats — numbers beat adjectives for credibility */}
         <ul className={styles.stats}>
           <li className={styles.stat}>
-            <span className={styles.statValue}>20+</span>
+            {/* Derived from the providers data so the number can't go stale. */}
+            <span className={styles.statValue}>{PROVIDERS.length}</span>
             <span className={styles.statLabel}>LLM providers</span>
           </li>
           <li className={styles.statSep} aria-hidden="true" />

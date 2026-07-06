@@ -152,7 +152,7 @@
   --weight-extra: 800;
 
   --title-section: clamp(1.75rem, 2.5vw + 0.5rem, 2.5rem);
-  --title-hero: clamp(2.25rem, 4vw + 1rem, 3.5rem);
+  --title-hero: clamp(2.5rem, 4.5vw + 1rem, 4.25rem);
 
   /* ---------- Layout ---------- */
   --ifm-container-width: 1200px;
@@ -218,10 +218,12 @@
      --gradient-brand mirrors the Envoy Gateway hero: a violet → indigo
      diagonal that unifies the Envoy project family. Tweak here once. */
   --gradient-brand: linear-gradient(120deg, var(--brand-purple-bright) 0%, var(--brand-accent) 100%);
-  /* Signature gradient TEXT on the always-dark bands — magenta lifted for
-     legibility; both stops stay bright enough on navy. The site's ONE
-     decorative gradient moment (hero headline span). */
-  --gradient-signature-text: linear-gradient(110deg, #e85bff 0%, #00ecff 100%);
+  /* Signature gradient TEXT on the always-dark bands — the site's ONE
+     decorative gradient moment (hero headline span). Adjacent hues only
+     (violet → periwinkle): wide-hue blends (the old magenta→cyan) read
+     rainbow-cheap; a one-family shift reads premium. Both stops clear
+     large-text AA on navy. */
+  --gradient-signature-text: linear-gradient(105deg, #c98cff 0%, #9d92ff 100%);
 
   /* ---------- Feedback family (info / success / warning / danger) ----------
      bg + text + border each, so callouts, badges, inline alerts, and form

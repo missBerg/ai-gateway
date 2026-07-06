@@ -1,5 +1,6 @@
 import React from 'react';
 import Heading from '@theme/Heading';
+import {PROVIDERS as ALL_PROVIDERS} from '@site/src/data/providers';
 import styles from './styles.module.css';
 
 /* The signature visual: many clients consolidate onto one OpenAI-compatible
@@ -25,6 +26,9 @@ const PROVIDERS: Node[] = [
   {key: 'gemini', name: 'Google Gemini', logo: '/img/providers/google-gemini.svg'},
   {key: 'mistral', name: 'Mistral', logo: '/img/providers/mistral.svg'},
 ];
+
+// Derived from the providers data so the "+ N more" claim can't go stale.
+const MORE_COUNT = ALL_PROVIDERS.length - PROVIDERS.length;
 
 // Gateway capability pills — 24x24 icon paths drawn inline.
 const CAPS = [
@@ -167,7 +171,7 @@ export default function HowItWorks(): React.ReactElement {
           <g>
             <rect className={styles.moreChip} x={CHIP_X} y={chipTop(5)} width={CHIP_W} height={CHIP_H} rx="12" />
             <text className={styles.moreText} x={CHIP_X + CHIP_W / 2} y={chipTop(5) + 29} textAnchor="middle">
-              + 15 more providers
+              + {MORE_COUNT} more providers
             </text>
           </g>
         </svg>
@@ -202,7 +206,7 @@ export default function HowItWorks(): React.ReactElement {
                 {p.name}
               </span>
             ))}
-            <span className={`${styles.mChip} ${styles.mChipMore}`}>+ 15 more</span>
+            <span className={`${styles.mChip} ${styles.mChipMore}`}>+ {MORE_COUNT} more</span>
           </div>
         </div>
       </div>
