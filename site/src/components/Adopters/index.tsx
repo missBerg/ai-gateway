@@ -11,7 +11,6 @@ function AdopterLogo({ name, logoUrl, url, description }: Adopter) {
       className={styles.adopterCard}
       aria-label={description ? `${name}: ${description}` : name}
     >
-      <div className={styles.adopterName}>{name}</div>
       <div className={styles.logoContainer}>
         <img
           src={logoUrl}
@@ -24,6 +23,7 @@ function AdopterLogo({ name, logoUrl, url, description }: Adopter) {
           }}
         />
       </div>
+      <div className={styles.adopterName}>{name}</div>
       {description && (
         <div className={styles.adopterTooltip}>
           {description}
@@ -76,7 +76,7 @@ export default function Adopters(): React.ReactElement {
             Using Envoy AI Gateway? We'd love to feature your logo!
           </p>
           <Link
-            className="button button--primary button--lg"
+            className="btn btn--accent btn--lg"
             href="https://github.com/envoyproxy/ai-gateway/edit/main/site/src/data/adopters/adopters.json"
             target="_blank"
             rel="noopener noreferrer">

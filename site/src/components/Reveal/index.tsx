@@ -5,7 +5,7 @@ type Props = {
   children: React.ReactNode;
   /** Stagger index for sequenced group reveals (0, 1, 2…). */
   index?: number;
-  /** Travel distance in px (default 24). */
+  /** Travel distance in px (default 12). */
   distance?: number;
   /** Render as a different element (default div). */
   as?: keyof React.JSX.IntrinsicElements;
@@ -25,7 +25,7 @@ type Props = {
 export default function Reveal({
   children,
   index = 0,
-  distance = 24,
+  distance = 12,
   as = 'div',
   className,
 }: Props): React.ReactElement {
@@ -52,7 +52,10 @@ export default function Reveal({
           }
         }
       },
-      {threshold: 0.15, rootMargin: '0px 0px -8% 0px'},
+      // Trigger as soon as any sliver enters the viewport — whole sections
+      // wrap in Reveal, so a late threshold leaves visible-viewport blanks
+      // while scrolling.
+      {threshold: 0.05, rootMargin: '0px'},
     );
     io.observe(el);
     return () => io.disconnect();

@@ -75,7 +75,7 @@ export default function Hero(): React.ReactElement {
         <p className={styles.subtitle}>{siteConfig.tagline}</p>
 
         <div className={styles.ctas}>
-          <Link className="btn btn--primary btn--lg" to="/docs/getting-started/">
+          <Link className="btn btn--accent btn--lg" to="/docs/getting-started/">
             Get started
             <ArrowRightIcon />
           </Link>

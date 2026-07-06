@@ -15,7 +15,7 @@
   align-items: center;
   overflow: hidden;
   border: 1px solid var(--tint-white-subtle);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .copy {
@@ -68,15 +68,15 @@
 }
 
 .slackBtn {
-  background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-accent-dark) 100%);
+  background: var(--brand-accent);
   color: var(--text-on-navy);
-  border-color: var(--tint-accent-border);
+  border-color: var(--brand-accent-dark);
 }
 .slackBtn:hover {
-  background: linear-gradient(135deg, var(--brand-accent-bright) 0%, var(--brand-accent) 100%);
+  background: var(--brand-accent-dark);
   color: var(--text-on-navy);
   transform: translateY(-1px);
-  box-shadow: var(--shadow-accent-hover);
+  box-shadow: var(--shadow-sm);
 }
 
 .githubBtn {

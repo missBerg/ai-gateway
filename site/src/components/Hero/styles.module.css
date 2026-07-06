@@ -128,22 +128,8 @@
   margin-bottom: var(--space-7);
 }
 
-/* Hero CTA tier — richer treatment than the base .btn on dark surfaces.
-   Scoped to the hero via :global() so it doesn't leak to other .btn usages. */
-/* Primary "Get started" — electric magenta→purple gradient + glow */
-.ctas :global(.btn--primary) {
-  background: linear-gradient(135deg, var(--brand-magenta) 0%, var(--brand-purple) 100%);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.18);
-  box-shadow: var(--shadow-glow-primary);
-}
-.ctas :global(.btn--primary):hover {
-  background: linear-gradient(135deg, var(--brand-magenta-deep) 0%, var(--brand-purple) 100%);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.28);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-glow-primary-hover);
-}
+/* Primary "Get started" uses the shared flat .btn--accent from custom.css —
+   one accent family site-wide; no hero-specific gradient/glow tier. */
 
 /* GitHub CTA with a live star count chip on the right */
 .githubCta {

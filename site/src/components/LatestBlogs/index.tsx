@@ -80,7 +80,7 @@ export default function LatestBlogs(): React.ReactElement | null {
         </div>
         <div className={styles.ctaSection}>
           <Link
-            className="button button--primary button--lg"
+            className="btn btn--accent btn--lg"
             to="/blog">
             View All Posts
           </Link>

@@ -44,7 +44,7 @@
 .flow {
   fill: none;
   stroke: url(#hiwFlow);
-  stroke-width: 2.5;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-dasharray: 5 9;
   animation: hiwFlow 1.4s linear infinite;
@@ -157,7 +157,7 @@
   gap: var(--space-2);
   background: linear-gradient(135deg, var(--brand-navy-deep) 0%, var(--brand-navy) 100%);
   border: 1px solid var(--tint-accent-border);
-  box-shadow: var(--shadow-glow-accent);
+  box-shadow: var(--shadow-sm);
 }
 .mGateway strong {
   color: #fff;

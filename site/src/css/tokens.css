@@ -27,16 +27,13 @@
      large/bold. Hot pink is the energetic pop. */
   /* Color roles at a glance:
        purple family  = anchor — solid fills, links on light
-       magenta        = primary-CTA gradient stop ONLY
-       accent family  = indigo — actions, eyebrows, focus
-       fuchsia + cyan = signature — decorative, dark-surface only
-     (hot pink #ff2d8e retired 2026-07 — role absorbed by fuchsia) */
+       accent family  = indigo — the ONE interactive accent (CTAs, eyebrows, focus)
+       fuchsia + cyan = signature — decorative, dark-surface only, used sparingly
+     (hot pink #ff2d8e retired 2026-07 — role absorbed by fuchsia;
+      magenta CTA gradient retired 2026-07 — CTAs consolidated on indigo) */
   --brand-purple: #6c1899;          /* deep anchor — solid fills, links on light */
   --brand-purple-soft: #8a20c4;
   --brand-purple-bright: #9b3df0;   /* brighter violet — gradient start (EG-inspired) */
-  --brand-magenta: #c026d3;         /* electric magenta — primary CTA top stop (white AA 4.7);
-                                       tuned to sit in the fuchsia/cyan signature world, not the muted purples */
-  --brand-magenta-deep: #a21caf;    /* darker — primary CTA hover stop (white AA 6.2) */
   --brand-purple-glow: #c257fc;     /* feeds --ifm-color-primary-lightest/-lighter */
   --brand-navy: #20203a;            /* navbar + always-dark bands — blue-grey, not black */
   --brand-navy-deep: #121120;       /* hero background bottom */
@@ -67,11 +64,15 @@
   /* ---------- Semantic surfaces / text / borders ----------
      These FLIP in dark mode — always prefer them over raw neutrals
      for backgrounds, body text, and borders. */
-  --surface-page: #ffffff;          /* page background */
-  --surface-card: #ffffff;          /* raised cards */
+  /* Never pure white, never pure black — page carries a faint cool violet
+     cast; cards sit a step brighter so they still read raised. */
+  --surface-page: #faf9fb;          /* page background — off-white */
+  --surface-card: #fdfdfe;          /* raised cards — near-white, not #fff */
   --surface-raised: var(--neutral-50);   /* table head, subtle fills */
   --surface-sunken: var(--neutral-100);  /* code, inset wells */
-  --surface-band: var(--neutral-50);     /* alternating section band */
+  --surface-band: var(--surface-page);   /* banding retired 2026-07 — hairline
+                                            separators + consistent padding
+                                            carry the section rhythm */
   --surface-inverse: #ffffff;       /* theme-independent white plate — logo wells on dark; no dark override */
   --text-primary: var(--neutral-900);
   --text-secondary: var(--neutral-700);
@@ -205,17 +206,9 @@
   --shadow-sm: 0 1px 2px rgba(15, 10, 30, 0.04);
   --shadow-md: 0 6px 16px rgba(15, 10, 30, 0.05), 0 1px 3px rgba(15, 10, 30, 0.03);
   --shadow-lg: 0 18px 48px rgba(15, 10, 30, 0.06), 0 3px 8px rgba(15, 10, 30, 0.03);
-  --shadow-xl: 0 28px 64px rgba(15, 10, 30, 0.10), 0 6px 14px rgba(15, 10, 30, 0.04);
-  --shadow-glow-accent: 0 0 0 1px rgba(109, 92, 245, 0.35), 0 8px 24px rgba(109, 92, 245, 0.22);
-  --shadow-accent-hover: 0 8px 20px rgba(109, 92, 245, 0.3);
   --shadow-tooltip: 0 4px 12px rgba(0, 0, 0, 0.3);
-  /* Hero-tier CTA glows (stronger than --shadow-glow-accent; navy surfaces) */
-  --shadow-glow-accent-strong: 0 0 24px rgba(109, 92, 245, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  --shadow-glow-accent-strong-hover: 0 0 32px rgba(109, 92, 245, 0.55), 0 10px 28px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  --shadow-glow-primary: 0 0 0 1px rgba(192, 38, 211, 0.35), 0 6px 18px rgba(162, 28, 175, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.22);
-  --shadow-glow-primary-hover: 0 0 0 1px rgba(192, 38, 211, 0.5), 0 8px 24px rgba(162, 28, 175, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  /* Signature glow color — for filter: drop-shadow(), which can't take a box-shadow token */
-  --glow-fuchsia: rgba(200, 0, 255, 0.35);
+  /* (glow-tier shadows retired 2026-07 — flat fills + 1px borders + xs/sm
+     shadows are the sharp look; card hovers cap at --shadow-md) */
 
   /* ---------- Focus ring (shared keyboard-focus treatment) ---------- */
   --focus-ring-color: rgba(109, 92, 245, 0.5);
@@ -225,11 +218,9 @@
      --gradient-brand mirrors the Envoy Gateway hero: a violet → indigo
      diagonal that unifies the Envoy project family. Tweak here once. */
   --gradient-brand: linear-gradient(120deg, var(--brand-purple-bright) 0%, var(--brand-accent) 100%);
-  /* Signature: electric magenta → cyan (naturally blends through periwinkle).
-     For dark-surface fills, glows, and strokes. */
-  --gradient-signature: linear-gradient(120deg, var(--brand-fuchsia) 0%, var(--brand-cyan) 100%);
-  /* Text-safe variant for gradient TEXT on the always-dark bands — magenta lifted
-     for legibility; both stops stay bright enough on navy. */
+  /* Signature gradient TEXT on the always-dark bands — magenta lifted for
+     legibility; both stops stay bright enough on navy. The site's ONE
+     decorative gradient moment (hero headline span). */
   --gradient-signature-text: linear-gradient(110deg, #e85bff 0%, #00ecff 100%);
 
   /* ---------- Feedback family (info / success / warning / danger) ----------
@@ -295,7 +286,7 @@ html[data-theme='dark'] {
   --surface-card: #17101f;
   --surface-raised: #1e1630;
   --surface-sunken: #0a0710;
-  --surface-band: #100b1a;
+  --surface-band: var(--surface-page); /* banding retired — see light block */
 
   /* Text */
   --text-primary: rgba(255, 255, 255, 0.92);

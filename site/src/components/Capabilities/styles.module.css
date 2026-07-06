@@ -21,7 +21,7 @@
     border-color var(--motion-base) var(--ease-out);
 }
 .card:hover {
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
   border-color: var(--card-hover-border);
 }
 

@@ -59,19 +59,19 @@ html {
 .btn--primary:hover { background: var(--brand-purple-soft); border-color: var(--brand-purple-soft); color: #fff; box-shadow: var(--shadow-md); }
 
 .btn--accent {
-  background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-accent-dark) 100%);
+  background: var(--brand-accent);
   color: #fff;
-  border-color: var(--tint-accent-border);
-  box-shadow: var(--shadow-glow-accent);
+  border-color: var(--brand-accent-dark);
+  box-shadow: var(--shadow-sm);
 }
 /* Darken on hover (not brighten) so white text keeps AA contrast — brightening
-   to --brand-accent-bright drops white to ~2.6:1. Deeper fill + glow signals
-   the hover instead. */
+   to --brand-accent-bright drops white to ~2.6:1. */
 .btn--accent:hover {
-  background: linear-gradient(135deg, var(--brand-accent-dark) 0%, var(--brand-accent-deeper) 100%);
+  background: var(--brand-accent-dark);
   color: #fff;
+  border-color: var(--brand-accent-deeper);
   transform: translateY(-1px);
-  box-shadow: var(--shadow-accent-hover);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn--outline { background: transparent; color: var(--text-primary); border-color: var(--border-strong); }
@@ -141,7 +141,7 @@ html {
   padding: 0.4rem 0.85rem;
   margin-left: 0.25rem;
   color: #fff !important;
-  background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-accent-dark) 100%);
+  background: var(--brand-accent);
   border-radius: var(--radius-md);
   font-weight: var(--weight-semibold);
   font-size: 0.85rem;
@@ -155,9 +155,9 @@ html {
 }
 .navbar__item.navbar-cta:hover,
 .navbar__link.navbar-cta:hover {
-  background: linear-gradient(135deg, var(--brand-accent-bright) 0%, var(--brand-accent) 100%);
+  background: var(--brand-accent-dark);
   transform: translateY(-1px);
-  box-shadow: var(--shadow-accent-hover);
+  box-shadow: var(--shadow-sm);
 }
 
 /* =============================================================
@@ -243,7 +243,7 @@ html {
   box-shadow: var(--shadow-sm);
   transition: box-shadow var(--motion-base) var(--ease-out), border-color var(--motion-base) var(--ease-out);
 }
-.card-base:hover { box-shadow: var(--shadow-lg); border-color: var(--card-hover-border); }
+.card-base:hover { box-shadow: var(--shadow-md); border-color: var(--card-hover-border); }
 
 .sectionOverlay--brand {
   background-image:
