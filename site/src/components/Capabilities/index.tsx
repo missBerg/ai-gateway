@@ -8,6 +8,9 @@ type Capability = {
   icon: React.ReactElement;
 };
 
+/* Lucide icons (route, gauge, activity) — inlined so each renders twice per
+   card: small beside the title, and oversized bleeding out of the top-right
+   corner as a thin-line background texture. */
 const CAPABILITIES: Capability[] = [
   {
     title: 'Any LLM, one API',
@@ -15,15 +18,9 @@ const CAPABILITIES: Capability[] = [
       'Route to OpenAI, Anthropic, AWS Bedrock, Azure OpenAI, Google Gemini, Mistral, Cohere, and more — all behind a single OpenAI-compatible interface.',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="3" />
-        <path d="M12 2v4" />
-        <path d="M12 18v4" />
-        <path d="M4.93 4.93l2.83 2.83" />
-        <path d="M16.24 16.24l2.83 2.83" />
-        <path d="M2 12h4" />
-        <path d="M18 12h4" />
-        <path d="M4.93 19.07l2.83-2.83" />
-        <path d="M16.24 7.76l2.83-2.83" />
+        <circle cx="6" cy="19" r="3" />
+        <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+        <circle cx="18" cy="5" r="3" />
       </svg>
     ),
   },
@@ -33,9 +30,8 @@ const CAPABILITIES: Capability[] = [
       'Enforce token-based rate limits, per-team quotas, and cost controls. Keep spend predictable across providers and stop noisy tenants from starving production traffic.',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 2a10 10 0 0 1 10 10h-10z" />
-        <path d="M12 2v10l-7.07 7.07A10 10 0 0 1 12 2z" />
-        <path d="M22 12a10 10 0 0 1-17.07 7.07" />
+        <path d="m12 14 4-4" />
+        <path d="M3.34 19a10 10 0 1 1 17.32 0" />
       </svg>
     ),
   },
@@ -45,8 +41,7 @@ const CAPABILITIES: Capability[] = [
       'OpenTelemetry metrics, access logs, and distributed traces for every LLM call — out of the box. Debug request flows and attribute cost without bolting on extra tooling.',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M3 3v18h18" />
-        <path d="M7 14l4-4 4 4 5-6" />
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
       </svg>
     ),
   },
@@ -70,8 +65,11 @@ export default function Capabilities(): React.ReactElement {
         <div className={styles.grid}>
           {CAPABILITIES.map((cap) => (
             <div key={cap.title} className={styles.card}>
-              <div className={styles.iconWrap}>{cap.icon}</div>
+              <div className={styles.bgIcon} aria-hidden="true">
+                {cap.icon}
+              </div>
               <Heading as="h3" className={styles.cardTitle}>
+                <span className={styles.titleIcon}>{cap.icon}</span>
                 {cap.title}
               </Heading>
               <p className={styles.cardDescription}>{cap.description}</p>

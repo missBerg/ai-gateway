@@ -11,6 +11,8 @@
 }
 
 .card {
+  position: relative;
+  overflow: hidden; /* the oversized corner icon bleeds past the edge */
   padding: var(--space-6);
   background: var(--surface-card);
   border: 1px solid var(--border-subtle);
@@ -25,28 +27,54 @@
   border-color: var(--card-hover-border);
 }
 
-.iconWrap {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  margin-bottom: var(--space-4);
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--tint-purple-subtle) 0%, var(--tint-accent-overlay) 100%);
-  color: var(--ifm-color-primary);
+/* Oversized thin-line icon anchored past the top-right corner, fading
+   diagonally into the card — texture, not illustration. */
+.bgIcon {
+  position: absolute;
+  top: -38px;
+  right: -34px;
+  width: 180px;
+  height: 180px;
+  color: var(--brand-accent);
+  opacity: 0.14;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(225deg, #000 8%, transparent 72%);
+  mask-image: linear-gradient(225deg, #000 8%, transparent 72%);
+  transition: opacity var(--motion-base) var(--ease-out);
 }
-.iconWrap svg {
-  width: 22px;
-  height: 22px;
+.bgIcon svg {
+  width: 100%;
+  height: 100%;
+}
+.card:hover .bgIcon {
+  opacity: 0.24;
+}
+:global([data-theme='dark']) .bgIcon {
+  color: var(--brand-accent-bright);
 }
 
 .cardTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: var(--text-xl);
   font-weight: var(--weight-bold);
   letter-spacing: -0.02em;
   color: var(--text-primary);
   margin: 0 0 var(--space-2);
+}
+
+/* Same icon, echoed small on the title line. */
+.titleIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--text-accent);
+}
+.titleIcon svg {
+  width: 100%;
+  height: 100%;
 }
 
 .cardDescription {
@@ -57,7 +85,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card {
+  .card,
+  .bgIcon {
     transition: none;
   }
 }
