@@ -297,6 +297,9 @@ const config: Config = {
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
+      // prism-react-renderer bundles only a small default set — bash is not
+      // in it, so shell blocks rendered as plain text without this.
+      additionalLanguages: ['bash'],
     },
   } satisfies Preset.ThemeConfig,
 };
