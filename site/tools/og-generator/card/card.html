@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>OG card</title>
+<link rel="stylesheet" href="/card/card.css" />
+</head>
+<body>
+<div id="card" class="card">
+  <div class="accentBar" id="accentBar"></div>
+
+  <!-- Right-side visual — exactly one of these is shown, per ?visual= -->
+  <div class="bgIcon" id="bgIcon" hidden></div>
+  <div class="fadeImage" id="fadeImage" hidden><img id="fadeImg" alt="" /></div>
+  <div class="frameImage" id="frameImage" hidden>
+    <div class="frameChrome"><span></span><span></span><span></span></div>
+    <img id="frameImg" alt="" />
+  </div>
+
+  <header class="brand">
+    <img class="brandMark" src="/site-img/logo-white.svg" alt="" />
+    <span class="brandName">Envoy AI Gateway</span>
+  </header>
+
+  <main class="content" id="content">
+    <div class="eyebrow" id="eyebrow"></div>
+    <h1 class="title" id="title"></h1>
+    <p class="subtitle" id="subtitle" hidden></p>
+  </main>
+
+  <footer class="footer">
+    <span class="footerUrl" id="footer">aigateway.envoyproxy.io</span>
+  </footer>
+</div>
+<script src="/card/card.js"></script>
+</body>
+</html>

@@ -3,7 +3,7 @@ slug: endpoint-picker-for-inference-routing
 title: Envoy AI Gateway Introduces Endpoint Picker Support
 authors: [missberg, xunzhuo]
 tags: [news, features]
-image: /img/blog/epp-blog-feature.png
+image: /img/blog/og/endpoint-picker-for-inference-routing.png
 description: Envoy AI Gateway introduces Endpoint Picker Provider support for intelligent inference routing based on real-time AI metrics like KV-cache usage and queue depth—moving beyond traditional load balancing to optimize AI workload performance.
 ---
 

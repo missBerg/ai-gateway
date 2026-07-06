@@ -1,0 +1,273 @@
+/* =============================================================
+   OG card styles — values mirror site/src/css/tokens.css.
+   The card is an always-dark navy band (like the site hero), so
+   only dark-surface tokens apply. If tokens.css changes, sync the
+   literals in the :root block below.
+   ============================================================= */
+
+/* Inter — served locally from @fontsource/inter via server.mjs */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/inter-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  src: url('/fonts/inter-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  src: url('/fonts/inter-latin-700-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 800;
+  src: url('/fonts/inter-latin-800-normal.woff2') format('woff2');
+}
+
+:root {
+  /* ---- mirrored from site tokens.css ---- */
+  --brand-navy: #20203a;
+  --brand-navy-deep: #121120;
+  --brand-purple-bright: #9b3df0;
+  --brand-accent: #6d5cf5;
+  --brand-accent-bright: #9d92ff;
+  --text-on-navy: rgba(255, 255, 255, 0.92);
+  --text-on-navy-soft: rgba(255, 255, 255, 0.78);
+  --text-on-navy-muted: rgba(255, 255, 255, 0.6);
+  --tint-white-soft: rgba(255, 255, 255, 0.12);
+  --tint-white-strong: rgba(255, 255, 255, 0.25);
+  --gradient-brand: linear-gradient(120deg, var(--brand-purple-bright) 0%, var(--brand-accent) 100%);
+  --gradient-signature: linear-gradient(110deg, #e85bff 0%, #00ecff 100%);
+  --radius-lg: 16px;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #3a3a3a; /* neutral backdrop so the card edges are visible in preview */
+  font-family: var(--font-sans);
+}
+
+.card {
+  position: relative;
+  width: 1200px;
+  height: 630px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 60px 72px 52px;
+  background: linear-gradient(160deg, var(--brand-navy) 0%, var(--brand-navy-deep) 100%);
+  color: var(--text-on-navy);
+}
+
+/* Top keyline — the site's brand gradient (violet → indigo); ?accent=signature
+   swaps in the magenta → cyan pair (dark-surface-only decoration). */
+.accentBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: var(--gradient-brand);
+}
+.card[data-accent='signature'] .accentBar {
+  background: var(--gradient-signature);
+}
+
+/* ---------- Header ---------- */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.brandMark {
+  width: 52px;
+  height: 52px;
+}
+.brandName {
+  font-size: 27px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-on-navy);
+}
+
+/* ---------- Content ---------- */
+.content {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 22px;
+  padding-bottom: 34px;
+}
+/* Reserve room for the right-side visual when an image is shown */
+.card[data-visual='fade'] .content,
+.card[data-visual='frame'] .content {
+  max-width: 620px;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand-accent-bright);
+}
+.eyebrow .eyebrowIcon {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+}
+.eyebrow .eyebrowIcon svg {
+  width: 100%;
+  height: 100%;
+  stroke-width: 2;
+}
+
+.title {
+  font-size: 72px; /* card.js shrinks this until the text fits */
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  color: var(--text-on-navy);
+  text-wrap: balance;
+}
+
+.subtitle {
+  font-size: 27px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--text-on-navy-soft);
+  max-width: 900px;
+}
+
+/* ---------- Footer ---------- */
+.footer {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+}
+.footerUrl {
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--text-on-navy-muted);
+}
+
+/* ---------- Right-side visual: lucide icon texture ----------
+   Echoes the homepage capability cards: an oversized thin-line lucide
+   icon bleeding past the top-right corner, masked to fade diagonally
+   into the surface — texture, not illustration. */
+.bgIcon {
+  position: absolute;
+  top: -110px;
+  right: -90px;
+  width: 560px;
+  height: 560px;
+  color: var(--brand-accent-bright);
+  opacity: 0.3;
+  z-index: 1;
+  -webkit-mask-image: linear-gradient(225deg, #000 10%, transparent 74%);
+  mask-image: linear-gradient(225deg, #000 10%, transparent 74%);
+}
+.bgIcon svg {
+  width: 100%;
+  height: 100%;
+  stroke-width: 1.4; /* thinner at this scale — line texture, not a logo */
+}
+
+/* ---------- Right-side visual: faded image ----------
+   A ghosted tease, not a document: the image bleeds off the right edge,
+   cropped (never shown whole), translucent, and masked to dissolve
+   diagonally into the navy — same fade language as the icon texture. */
+.fadeImage {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 56%;
+  height: 100%;
+  z-index: 1;
+  opacity: 0.45;
+  /* Duotone: the grayscaled image multiplies over a radial brand glow
+     centered on the right edge's midpoint, so white backgrounds tint
+     indigo→violet and linework stays dark — the ghost reads as a
+     half-circle of brand light with the diagram inside it. */
+  isolation: isolate;
+  background: radial-gradient(
+    circle 720px at 100% 50%,
+    var(--brand-accent) 0%,
+    var(--brand-purple-bright) 60%,
+    var(--brand-navy) 100%
+  );
+  /* Matching half-circle fade: fully visible at the right edge, dissolving
+     radially into the navy before it reaches the headline. */
+  -webkit-mask-image: radial-gradient(circle 720px at 100% 50%, #000 35%, transparent 82%);
+  mask-image: radial-gradient(circle 720px at 100% 50%, #000 35%, transparent 82%);
+}
+.fadeImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* crops — the point is a glimpse, not the full figure */
+  filter: grayscale(1) contrast(1.1) brightness(1.05);
+  mix-blend-mode: multiply;
+}
+
+/* ---------- Right-side visual: framed image ----------
+   Flat browser-style frame — 1px border, subtle chrome dots, sharp look. */
+.frameImage {
+  position: absolute;
+  top: 50%;
+  right: 64px;
+  transform: translateY(-50%);
+  width: 440px;
+  z-index: 1;
+  border: 1px solid var(--tint-white-strong);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--brand-navy);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+.frameChrome {
+  display: flex;
+  gap: 7px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--tint-white-soft);
+  background: rgba(255, 255, 255, 0.04);
+}
+.frameChrome span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tint-white-strong);
+}
+.frameImage img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+  object-position: top;
+  background: #fff; /* white plate so transparent diagram PNGs stay legible */
+  padding: 12px;
+}
+
+[hidden] {
+  display: none !important;
+}

@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OG Image Generator — Envoy AI Gateway</title>
+<style>
+  /* Palette mirrors site/src/css/tokens.css */
+  :root {
+    --navy: #20203a;
+    --accent: #6d5cf5;
+    --accent-dark: #4a3cd4;
+    --accent-bright: #9d92ff;
+    --page: #faf9fb;
+    --card: #fdfdfe;
+    --text: #18181b;
+    --text-2: #3f3f46;
+    --muted: #71717a;
+    --border: #ededf0;
+    --gradient: linear-gradient(120deg, #9b3df0 0%, #6d5cf5 100%);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--page);
+    color: var(--text);
+  }
+  header.top {
+    background: var(--navy);
+    color: rgba(255, 255, 255, 0.92);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 4px solid transparent;
+    border-image: var(--gradient) 1;
+  }
+  header.top img { width: 28px; height: 28px; }
+  header.top h1 { font-size: 16px; font-weight: 600; }
+  header.top span { color: rgba(255, 255, 255, 0.6); font-size: 13px; margin-left: auto; }
+  .layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 24px;
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  form.controls {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-self: start;
+  }
+  label { font-size: 12px; font-weight: 600; color: var(--text-2); display: flex; flex-direction: column; gap: 5px; }
+  input[type='text'], textarea, select {
+    font: inherit;
+    font-size: 13px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text);
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(109, 92, 245, 0.2); }
+  textarea { resize: vertical; min-height: 54px; }
+  .row { display: flex; gap: 10px; }
+  .row > label { flex: 1; }
+  .hint { font-weight: 400; color: var(--muted); font-size: 11px; }
+  button.export {
+    font: inherit;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+  button.export:hover { background: var(--accent-dark); }
+  button.export:disabled { opacity: 0.6; cursor: wait; }
+  .status { font-size: 12px; color: var(--muted); min-height: 16px; }
+  .status.ok { color: #15803d; }
+  .status.err { color: #dc2626; }
+  .previewPane { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .frameWrap {
+    width: 100%;
+    max-width: 1200px;
+    aspect-ratio: 1200 / 630;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--navy);
+    box-shadow: 0 6px 16px rgba(15, 10, 30, 0.05);
+  }
+  .frameWrap iframe {
+    width: 1200px;
+    height: 630px;
+    border: 0;
+    transform-origin: top left;
+  }
+  .cliBox {
+    background: var(--navy);
+    color: rgba(255, 255, 255, 0.85);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    padding: 14px 16px;
+    border-radius: 10px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .cliBox b { color: var(--accent-bright); font-weight: 600; }
+</style>
+</head>
+<body>
+<header class="top">
+  <img src="/site-img/logo-white.svg" alt="" />
+  <h1>OG Image Generator</h1>
+  <span>1200 × 630 · exports @2x PNG</span>
+</header>
+
+<div class="layout">
+  <form class="controls" onsubmit="return false">
+    <label>Title
+      <textarea id="f-title">Announcing Envoy AI Gateway 1.0 — A Stable, Production-Ready AI Gateway</textarea>
+    </label>
+    <label>Eyebrow <span class="hint">small uppercase label above the title</span>
+      <input type="text" id="f-eyebrow" value="Release v1.0" />
+    </label>
+    <label>Subtitle <span class="hint">optional one-liner under the title</span>
+      <input type="text" id="f-subtitle" value="" />
+    </label>
+    <label>Lucide icon <span class="hint">eyebrow badge + corner texture — lucide.dev/icons</span>
+      <input type="text" id="f-icon" value="shield-check" list="lucide-icons" />
+      <datalist id="lucide-icons"></datalist>
+    </label>
+    <div class="row">
+      <label>Visual
+        <select id="f-visual">
+          <option value="icon">Lucide icon texture</option>
+          <option value="fade">Image, faded in from right</option>
+          <option value="frame">Image, framed on right</option>
+          <option value="none">Text only</option>
+        </select>
+      </label>
+      <label>Accent
+        <select id="f-accent">
+          <option value="brand">Brand (violet→indigo)</option>
+          <option value="signature">Signature (magenta→cyan)</option>
+        </select>
+      </label>
+    </div>
+    <label>Side image <span class="hint">for fade/frame — e.g. /site-img/blog/v1.0-hero.png</span>
+      <input type="text" id="f-image" value="" />
+    </label>
+    <label>Footer
+      <input type="text" id="f-footer" value="aigateway.envoyproxy.io" />
+    </label>
+    <label>Output path <span class="hint">repo-relative, .png</span>
+      <input type="text" id="f-out" value="site/static/img/blog/og/my-post.png" />
+    </label>
+    <button class="export" id="export">Export PNG</button>
+    <div class="status" id="status"></div>
+  </form>
+
+  <div class="previewPane">
+    <div class="frameWrap"><iframe id="preview" src="/card"></iframe></div>
+    <div class="cliBox" id="cli"></div>
+  </div>
+</div>
+
+<script>
+  const fields = ['title', 'eyebrow', 'subtitle', 'icon', 'visual', 'image', 'accent', 'footer'];
+  const el = (id) => document.getElementById(id);
+
+  function currentConfig() {
+    const config = {};
+    for (const f of fields) {
+      const v = el('f-' + f).value.trim();
+      if (v) config[f] = v;
+    }
+    return config;
+  }
+
+  function refresh() {
+    const params = new URLSearchParams(currentConfig());
+    el('preview').src = '/card?' + params.toString();
+    renderCli();
+  }
+
+  function renderCli() {
+    const config = currentConfig();
+    const parts = ['node cli.mjs'];
+    for (const [k, v] of Object.entries(config)) {
+      parts.push(`--${k} ${JSON.stringify(v)}`);
+    }
+    const out = el('f-out').value.trim();
+    parts.push(`--out ${JSON.stringify('../../../' + out)}`);
+    el('cli').innerHTML =
+      '<b># same card from the terminal (in site/tools/og-generator)</b>\n' +
+      parts.join(' \\\n  ');
+  }
+
+  function scalePreview() {
+    const wrap = document.querySelector('.frameWrap');
+    el('preview').style.transform = `scale(${wrap.clientWidth / 1200})`;
+  }
+
+  let debounce;
+  for (const f of fields) {
+    el('f-' + f).addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(refresh, 250);
+    });
+  }
+  el('f-out').addEventListener('input', renderCli);
+  window.addEventListener('resize', scalePreview);
+
+  el('export').addEventListener('click', async () => {
+    const button = el('export');
+    const status = el('status');
+    button.disabled = true;
+    status.className = 'status';
+    status.textContent = 'Rendering…';
+    try {
+      const res = await fetch('/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: currentConfig(), out: el('f-out').value.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      status.className = 'status ok';
+      status.textContent = 'Saved: ' + data.path;
+    } catch (err) {
+      status.className = 'status err';
+      status.textContent = 'Failed: ' + err.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  fetch('/lucide-index.json')
+    .then((r) => r.json())
+    .then((names) => {
+      el('lucide-icons').innerHTML = names.map((n) => `<option value="${n}">`).join('');
+    });
+
+  refresh();
+  scalePreview();
+</script>
+</body>
+</html>

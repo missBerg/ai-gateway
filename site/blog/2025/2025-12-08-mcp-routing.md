@@ -4,7 +4,7 @@ title: The Reality and Performance of MCP Traffic Routing with Envoy AI Gateway
 authors: [nacx, missberg]
 tags: [features]
 description: In this article explore how Envoy AI Gateway handles stateful MCP sessions, keeps performance competitive, and stays aligned with the broader Envoy ecosystem.
-image: /img/blog/mcp-routing-feature.png
+image: /img/blog/og/mcp-in-envoy-ai-gateway.png
 ---
 
 ![](/img/blog/mcp-routing-feature.png)
