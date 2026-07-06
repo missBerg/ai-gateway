@@ -37,17 +37,17 @@ node cli.mjs \
 
 Options:
 
-| Flag         | Values                                | Notes                                                        |
-| ------------ | ------------------------------------- | ------------------------------------------------------------ |
-| `--title`    | text (required)                       | auto-shrinks to fit                                           |
-| `--eyebrow`  | text                                  | small uppercase label, indigo accent                          |
-| `--subtitle` | text                                  | optional one-liner under the title                            |
-| `--icon`     | any [lucide](https://lucide.dev/icons) name | eyebrow badge + corner texture                          |
-| `--visual`   | `icon` \| `fade` \| `frame` \| `none` | right-side treatment (default `icon`)                         |
-| `--image`    | `/site-img/...` or repo file path     | required for `fade`/`frame`                                   |
-| `--accent`   | `brand` \| `signature`                | top keyline: violet→indigo, or magenta→cyan for big releases  |
-| `--footer`   | text                                  | defaults to `aigateway.envoyproxy.io`                         |
-| `--out`      | path ending in `.png` (required)      |                                                               |
+| Flag         | Values                                      | Notes                                                        |
+| ------------ | ------------------------------------------- | ------------------------------------------------------------ |
+| `--title`    | text (required)                             | auto-shrinks to fit                                          |
+| `--eyebrow`  | text                                        | small uppercase label, indigo accent                         |
+| `--subtitle` | text                                        | optional one-liner under the title                           |
+| `--icon`     | any [lucide](https://lucide.dev/icons) name | eyebrow badge + corner texture                               |
+| `--visual`   | `icon` \| `fade` \| `frame` \| `none`       | right-side treatment (default `icon`)                        |
+| `--image`    | `/site-img/...` or repo file path           | required for `fade`/`frame`                                  |
+| `--accent`   | `brand` \| `signature`                      | top keyline: violet→indigo, or magenta→cyan for big releases |
+| `--footer`   | text                                        | defaults to `aigateway.envoyproxy.io`                        |
+| `--out`      | path ending in `.png` (required)            |                                                              |
 
 ### Visual treatments
 
