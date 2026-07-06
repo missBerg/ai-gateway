@@ -10,7 +10,7 @@ type Capability = {
 
 const CAPABILITIES: Capability[] = [
   {
-    title: 'Any LLM, one API.',
+    title: 'Any LLM, one API',
     description:
       'Route to OpenAI, Anthropic, AWS Bedrock, Azure OpenAI, Google Gemini, Mistral, Cohere, and more — all behind a single OpenAI-compatible interface.',
     icon: (
@@ -28,7 +28,7 @@ const CAPABILITIES: Capability[] = [
     ),
   },
   {
-    title: 'Token-aware governance.',
+    title: 'Token-aware governance',
     description:
       'Enforce token-based rate limits, per-team quotas, and cost controls. Keep spend predictable across providers and stop noisy tenants from starving production traffic.',
     icon: (
@@ -40,7 +40,7 @@ const CAPABILITIES: Capability[] = [
     ),
   },
   {
-    title: 'Production observability.',
+    title: 'Production observability',
     description:
       'OpenTelemetry metrics, access logs, and distributed traces for every LLM call — out of the box. Debug request flows and attribute cost without bolting on extra tooling.',
     icon: (

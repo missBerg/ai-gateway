@@ -122,6 +122,9 @@
 .code {
   margin: 0;
 }
+.code :global(pre) {
+  overflow-x: auto;
+}
 
 .panelFoot {
   display: flex;

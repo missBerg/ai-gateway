@@ -44,7 +44,7 @@ This OpenTelemetry approach uses spans and works well with common tracing system
 
 ## How it All Fits Together: Envoy AI Gateway OpenTelemetry Tracing Architecture
 
-![Diagram showing how it all fits together](/img/blog/Envoy%20AI%20gateway%20+%20Phoenix.drawio.png)
+![Diagram showing how it all fits together](/img/blog/envoy-ai-gateway-phoenix.drawio.png)
 
 Here's an example of a simple trace that includes both application and gateway spans, shown in Arize Phoenix:
 

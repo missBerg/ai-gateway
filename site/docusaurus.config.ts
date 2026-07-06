@@ -177,6 +177,7 @@ const config: Config = {
       logo: {
         alt: 'Envoy',
         src: 'img/logo-white.svg',
+        srcDark: 'img/logo-white.svg',
       },
       items: [
         {
