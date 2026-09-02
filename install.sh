@@ -152,6 +152,14 @@ fi
 
 DOWNLOAD_BASE="https://github.com/${REPO}/releases/download/${TAG}"
 
+# ---- Install directory --------------------------------------------------------------------------
+
+# Validate the destination before downloading so a bad AIGW_INSTALL_DIR fails fast instead of after
+# pulling a ~300 MB binary.
+INSTALL_DIR="${AIGW_INSTALL_DIR:-${HOME}/.local/bin}"
+mkdir -p "$INSTALL_DIR" || fail "cannot create ${INSTALL_DIR}. Set AIGW_INSTALL_DIR to a writable directory."
+[ -w "$INSTALL_DIR" ] || fail "${INSTALL_DIR} is not writable. Set AIGW_INSTALL_DIR to a writable directory."
+
 # ---- Download -----------------------------------------------------------------------------------
 
 TMP_DIR=$(mktemp -d)
@@ -205,10 +213,6 @@ fi
 
 # ---- Install ------------------------------------------------------------------------------------
 
-INSTALL_DIR="${AIGW_INSTALL_DIR:-${HOME}/.local/bin}"
-mkdir -p "$INSTALL_DIR" || fail "cannot create ${INSTALL_DIR}. Set AIGW_INSTALL_DIR to a writable directory."
-[ -w "$INSTALL_DIR" ] || fail "${INSTALL_DIR} is not writable. Set AIGW_INSTALL_DIR to a writable directory."
-
 if [ -e "${INSTALL_DIR}/${BINARY}" ]; then
   PREVIOUS=$("${INSTALL_DIR}/${BINARY}" version 2>/dev/null || true)
   info "Replacing the existing ${INSTALL_DIR}/${BINARY}${PREVIOUS:+ (${PREVIOUS})}."
@@ -223,7 +227,16 @@ info "Installed ${INSTALL_DIR}/${BINARY}: $("${INSTALL_DIR}/${BINARY}" version)"
 # ---- PATH hint ----------------------------------------------------------------------------------
 
 case ":${PATH}:" in
-  *":${INSTALL_DIR}:"*) ;;
+  *":${INSTALL_DIR}:"*)
+    # The install directory is on PATH, but another aigw earlier on PATH (a Go build in ~/go/bin, an
+    # old copy in /usr/local/bin, ...) would still win. Say so, or "aigw" silently runs the wrong thing.
+    RESOLVED=$(command -v "$BINARY" 2>/dev/null || true)
+    if [ -n "$RESOLVED" ] && [ "$RESOLVED" != "${INSTALL_DIR}/${BINARY}" ]; then
+      RESOLVED_VERSION=$("$RESOLVED" version 2>/dev/null || true)
+      warn "${RESOLVED}${RESOLVED_VERSION:+ (${RESOLVED_VERSION})} comes before ${INSTALL_DIR} on your PATH and will shadow the new ${BINARY}.
+Remove it, or run the new binary by its full path: ${INSTALL_DIR}/${BINARY}"
+    fi
+    ;;
   *)
     SHELL_NAME=$(basename "${SHELL:-sh}")
     PATH_LINE="export PATH=\"${INSTALL_DIR}:\$PATH\""
