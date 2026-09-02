@@ -54,7 +54,7 @@ mathetake:
     linkedin: https://www.linkedin.com/in/mathetake/
 xunzhuo:
   name: Xunzhuo (Bit) Liu
-  title: Envoy AI Gateway Maintainer - Tencent
+  title: Envoy AI Gateway Maintainer - AMD
   url: https://github.com/Xunzhuo
   image_url: https://github.com/Xunzhuo.png
   page: true
@@ -88,3 +88,30 @@ hrushikeshpatil:
   socials:
     github: PatilHrushikesh
     linkedin: https://www.linkedin.com/in/hrushikesh-patil-345a1219a/
+johnugeorge:
+  name: Johnu George
+  title: Envoy AI Gateway Maintainer - Nutanix
+  url: https://github.com/johnugeorge
+  image_url: https://github.com/johnugeorge.png
+  page: true
+  socials:
+    github: johnugeorge
+    linkedin: https://www.linkedin.com/in/johnu-george
+gavrissh:
+  name: Gavrish Prabhu
+  title: Envoy AI Gateway Maintainer - Nutanix
+  url: https://github.com/gavrissh
+  image_url: https://github.com/gavrissh.png
+  page: true
+  socials:
+    github: gavrissh
+    linkedin: https://www.linkedin.com/in/gavrish-prabhu
+mohitgurnani:
+  name: Mohit Gurnani
+  title: Member of Technical Staff 4 - Nutanix
+  url: https://github.com/mohitgurnani
+  image_url: https://github.com/mohitgurnani.png
+  page: true
+  socials:
+    github: mohitgurnani
+    linkedin: https://www.linkedin.com/in/mohitgurnani94/

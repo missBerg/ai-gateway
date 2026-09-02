@@ -38,7 +38,10 @@ import (
 )
 
 type flags struct {
+	envoyGatewayNamespace          string
 	extProcLogLevel                string
+	extProcLogFormat               string
+	logFormat                      string
 	extProcEnableRedaction         bool
 	extProcImage                   string
 	extProcImagePullPolicy         corev1.PullPolicy
@@ -108,10 +111,20 @@ func parseWatchNamespaces(s string) []string {
 func parseAndValidateFlags(args []string) (*flags, error) {
 	fs := flag.NewFlagSet("AI Gateway Controller", flag.ContinueOnError)
 
+	envoyGatewayNamespace := fs.String(
+		"envoyGatewayNamespace",
+		"envoy-gateway-system",
+		"The namespace where Envoy Gateway is deployed.",
+	)
 	extProcLogLevelPtr := fs.String(
 		"extProcLogLevel",
 		"info",
 		"The log level for the external processor. One of 'debug', 'info', 'warn', or 'error'.",
+	)
+	extProcLogFormatPtr := fs.String(
+		"extProcLogFormat",
+		internalapi.LogFormatText,
+		"The log output format for the external processor. One of 'text' or 'json'.",
 	)
 	extProcEnableRedactionPtr := fs.Bool(
 		"extProcEnableRedaction",
@@ -137,6 +150,11 @@ func parseAndValidateFlags(args []string) (*flags, error) {
 		"logLevel",
 		"info",
 		"The log level for the controller manager. One of 'debug', 'info', 'warn', or 'error'.",
+	)
+	logFormatPtr := fs.String(
+		"logFormat",
+		internalapi.LogFormatText,
+		"The log output format for the controller manager. One of 'text' or 'json'.",
 	)
 	extensionServerPortPtr := fs.String(
 		"port",
@@ -260,6 +278,13 @@ func parseAndValidateFlags(args []string) (*flags, error) {
 		return nil, err
 	}
 
+	if err := internalapi.ValidateLogFormat(*logFormatPtr); err != nil {
+		return nil, err
+	}
+	if err := internalapi.ValidateLogFormat(*extProcLogFormatPtr); err != nil {
+		return nil, fmt.Errorf("external processor: %w", err)
+	}
+
 	extProcPullPolicy, err := parsePullPolicy(*extProcImagePullPolicyPtr)
 	if err != nil {
 		return nil, err
@@ -328,7 +353,10 @@ func parseAndValidateFlags(args []string) (*flags, error) {
 	}
 
 	return &flags{
+		envoyGatewayNamespace:                  *envoyGatewayNamespace,
 		extProcLogLevel:                        *extProcLogLevelPtr,
+		extProcLogFormat:                       *extProcLogFormatPtr,
+		logFormat:                              *logFormatPtr,
 		extProcEnableRedaction:                 *extProcEnableRedactionPtr,
 		extProcImage:                           *extProcImagePtr,
 		extProcImagePullPolicy:                 extProcPullPolicy,
@@ -362,6 +390,24 @@ func parseAndValidateFlags(args []string) (*flags, error) {
 	}, nil
 }
 
+// newZapOpts builds the controller-runtime logger options for the requested log output format.
+//
+// zap.UseFlagOptions assigns the whole Options struct, so it has to stay first: an encoder chosen
+// before it would be silently discarded and the logger would fall back to console output.
+func newZapOpts(logFormat string, level zapcore.LevelEnabler) []zap.Opts {
+	opts := []zap.Opts{zap.UseFlagOptions(&zap.Options{Development: true, Level: level})}
+	if logFormat == internalapi.LogFormatJSON {
+		// Development defaults the encoder to console; override it so structured log pipelines get JSON.
+		// zap.JSONEncoder builds the encoder eagerly, which skips the RFC3339 time encoder that
+		// controller-runtime would otherwise apply, so pass it explicitly to keep timestamps in the
+		// same format the console encoder prints instead of zap's production epoch float.
+		opts = append(opts, zap.JSONEncoder(func(ec *zapcore.EncoderConfig) {
+			ec.EncodeTime = zapcore.RFC3339TimeEncoder
+		}))
+	}
+	return opts
+}
+
 func main() {
 	setupLog := ctrl.Log.WithName("setup")
 
@@ -371,7 +417,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{Development: true, Level: parsedFlags.logLevel})))
+	ctrl.SetLogger(zap.New(newZapOpts(parsedFlags.logFormat, parsedFlags.logLevel)...))
 	k8sConfig := ctrl.GetConfigOrDie()
 
 	lis, err := net.Listen("tcp", parsedFlags.extensionServerPort)
@@ -444,9 +490,11 @@ func main() {
 
 	// Start the controller.
 	if err := controller.StartControllers(ctx, mgr, k8sConfig, ctrl.Log.WithName("controller"), &controller.Options{
+		EnvoyGatewayNamespace:                  parsedFlags.envoyGatewayNamespace,
 		ExtProcImage:                           parsedFlags.extProcImage,
 		ExtProcImagePullPolicy:                 parsedFlags.extProcImagePullPolicy,
 		ExtProcLogLevel:                        parsedFlags.extProcLogLevel,
+		ExtProcLogFormat:                       parsedFlags.extProcLogFormat,
 		ExtProcEnableRedaction:                 parsedFlags.extProcEnableRedaction,
 		EnableLeaderElection:                   parsedFlags.enableLeaderElection,
 		UDSPath:                                extProcUDSPath,

@@ -8,7 +8,9 @@ package controller
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -38,49 +40,46 @@ import (
 )
 
 const (
-	// FilterConfigKeyInSecret is the key to store the filter config in the secret.
-	FilterConfigKeyInSecret = "filter-config.yaml" //nolint: gosec
 	// defaultOwnedBy is the default value for the ModelsOwnedBy field in the filter config.
 	defaultOwnedBy = "Envoy AI Gateway"
 )
 
 // NewGatewayController creates a new reconcile.TypedReconciler for gwapiv1.Gateway.
 //
-// extProcImage is the image of the external processor sidecar container which will be used
-// to check if the pods of the gateway deployment need to be rolled out.
+// The extproc builder is derived from options + extProcAsSideCar via the same
+// newExtProcBuilder the mutating webhook uses (StartControllers passes the same
+// options to both), so the workload template hash matches webhook injection.
 func NewGatewayController(
-	client client.Client, kube kubernetes.Interface, logger logr.Logger,
-	extProcImage string, extProcLogLevel string, standAlone bool, uuidFn func() string, extProcAsSideCar bool,
+	client client.Client, kube kubernetes.Interface, logger logr.Logger, envoyGatewayNamespace string,
+	standAlone bool, uuidFn func() string, options *Options, extProcAsSideCar bool,
 ) *GatewayController {
 	uf := uuidFn
 	if uf == nil {
 		uf = uuid.NewString
 	}
 	return &GatewayController{
-		client:           client,
-		kube:             kube,
-		logger:           logger,
-		extProcImage:     extProcImage,
-		extProcLogLevel:  extProcLogLevel,
-		standAlone:       standAlone,
-		uuidFn:           uf,
-		extProcAsSideCar: extProcAsSideCar,
+		client:                client,
+		kube:                  kube,
+		logger:                logger,
+		envoyGatewayNamespace: envoyGatewayNamespace,
+		standAlone:            standAlone,
+		uuidFn:                uf,
+		extProcBuilder:        newExtProcBuilder(options, extProcAsSideCar, logger),
 	}
 }
 
 // GatewayController implements reconcile.TypedReconciler for gwapiv1.Gateway.
 type GatewayController struct {
-	client          client.Client
-	kube            kubernetes.Interface
-	logger          logr.Logger
-	extProcImage    string // The image of the external processor sidecar container.
-	extProcLogLevel string // The log level for the extproc container.
+	client                client.Client
+	kube                  kubernetes.Interface
+	logger                logr.Logger
+	envoyGatewayNamespace string // The namespace where Envoy Gateway is deployed.
 	// standAlone indicates whether the controller is running in standalone mode.
 	standAlone bool
 	uuidFn     func() string // Function to generate a new UUID for the filter config.
-	// Whether to run the extProc container as a sidecar (true) as a normal container (false).
-	// This is essentially a workaround for old k8s versions, and we can remove this in the future.
-	extProcAsSideCar bool
+	// extProcBuilder is shared with the mutating webhook so the template hash
+	// computed here matches the extproc container injected by the webhook.
+	*extProcBuilder
 }
 
 // Reconcile implements the reconcile.Reconciler for gwapiv1.Gateway.
@@ -93,18 +92,12 @@ func (c *GatewayController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	var aiRoutes aigv1b1.AIGatewayRouteList
-	err := c.client.List(ctx, &aiRoutes, client.MatchingFields{
-		k8sClientIndexAIGatewayRouteToAttachedGateway: fmt.Sprintf("%s.%s", req.Name, req.Namespace),
-	})
+	aiRoutes, err := listAIGatewayRoutesForGateway(ctx, c.client, nil, req.Name, req.Namespace)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	var mcpRoutes aigv1b1.MCPRouteList
-	err = c.client.List(ctx, &mcpRoutes, client.MatchingFields{
-		k8sClientIndexMCPRouteToAttachedGateway: fmt.Sprintf("%s.%s", req.Name, req.Namespace),
-	})
+	mcpRoutes, err := listMCPRoutesForGateway(ctx, c.client, nil, req.Name, req.Namespace)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -145,15 +138,14 @@ func (c *GatewayController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// We need to create the filter config in Envoy Gateway system namespace because the sidecar extproc need
 	// to access it.
 	var hasEffectiveRoutes bool // indicates whether the filter config is effective (i.e., there is at least one active route).
-	hasEffectiveRoutes, err = c.reconcileFilterConfigSecret(ctx, FilterConfigSecretPerGatewayName(gw.Name, gw.Namespace), namespace, aiRoutes.Items, mcpRoutes.Items, uid, defaultLLMCosts)
+	hasEffectiveRoutes, err = c.reconcileFilterConfigSecret(ctx, gw.Name, gw.Namespace, namespace, aiRoutes.Items, mcpRoutes.Items, uid, defaultLLMCosts)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Finally, we need to annotate the pods of the gateway deployment with the new uuid to propagate the filter config Secret update faster.
-	// If the pod doesn't have the extproc container, it will roll out the deployment altogether which eventually ends up
-	// the mutation hook invoked.
-	result, err := c.annotateGatewayPods(ctx, pods, deployments, daemonSets, uid, hasEffectiveRoutes, len(mcpRoutes.Items) > 0)
+	input := extProcContainerInput{gatewayConfig: gwConfig, needMCP: len(mcpRoutes.Items) > 0}
+	result, err := c.annotateGatewayPods(ctx, pods, deployments, daemonSets, uid,
+		hasEffectiveRoutes, input.needMCP, c.extProcImage(input), c.extProcContainerHash(input))
 	if err != nil {
 		c.logger.Error(err, "Failed to annotate gateway pods", "namespace", gw.Namespace, "name", gw.Name)
 		return ctrl.Result{}, err
@@ -185,6 +177,28 @@ func headerMutationToFilterAPI(m *aigv1b1.HTTPHeaderMutation) *filterapi.HTTPHea
 	}
 	for _, h := range m.Set {
 		ret.Set = append(ret.Set, filterapi.HTTPHeader{Name: strings.ToLower(string(h.Name)), Value: h.Value})
+	}
+	return ret
+}
+
+// headerValueFiltersToFilterAPI converts aigv1b1.HTTPHeaderValueFilter to filterapi.HTTPHeaderValueFilter.
+func headerValueFiltersToFilterAPI(filters []aigv1b1.HTTPHeaderValueFilter) []filterapi.HTTPHeaderValueFilter {
+	if len(filters) == 0 {
+		return nil
+	}
+	ret := make([]filterapi.HTTPHeaderValueFilter, 0, len(filters))
+	for _, f := range filters {
+		mode := f.Mode
+		if mode == "" {
+			// The CRD defaults this, but objects persisted before the default was added still reach us
+			// without it. Fall back to the same value rather than silently disabling the filter.
+			mode = aigv1b1.HTTPHeaderValueFilterModeDenylist
+		}
+		ret = append(ret, filterapi.HTTPHeaderValueFilter{
+			Name:   strings.ToLower(string(f.Name)),
+			Mode:   string(mode),
+			Values: f.Values,
+		})
 	}
 	return ret
 }
@@ -342,10 +356,24 @@ func mergeHeaderMutations(routeLevel, backendLevel *aigv1b1.HTTPHeaderMutation) 
 	return result
 }
 
+// isCtxErr reports whether err is the reconcile's context being cancelled or timing out, rather than
+// a problem with the object being read.
+//
+// The distinction matters everywhere reconcileFilterConfigSecret skips a backend on error. Skipping
+// is right when the backend or its policy cannot be resolved — a missing object, a bad ref — because
+// the resulting config reflects the cluster. It is wrong when the read was interrupted, because then
+// the reconcile carries on and publishes a config in which the backend is missing, or present without
+// its credentials, until something triggers another reconcile. Returning instead lets
+// controller-runtime requeue with a fresh context.
+func isCtxErr(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
 // reconcileFilterConfigSecret updates the filter config secret for the external processor.
 func (c *GatewayController) reconcileFilterConfigSecret(
 	ctx context.Context,
-	configSecretName,
+	gatewayName,
+	gatewayNamespace,
 	configSecretNamespace string,
 	aiGatewayRoutes []aigv1b1.AIGatewayRoute,
 	mcpRoutes []aigv1b1.MCPRoute,
@@ -437,6 +465,9 @@ func (c *GatewayController) reconcileFilterConfigSecret(
 
 					bsp, err = c.getBSPForInferencePool(ctx, backendNamespace, backendRef.Name)
 					if err != nil {
+						if isCtxErr(err) {
+							return false, fmt.Errorf("reconcile interrupted while reading backend security policy for inference pool %s: %w", backendRef.Name, err)
+						}
 						c.logger.Error(err, "failed to get backend security policy for inference pool",
 							"backend_name", backendRef.Name, "aigatewayroute", aiGatewayRoute.Name,
 							"namespace", backendNamespace)
@@ -446,6 +477,9 @@ func (c *GatewayController) reconcileFilterConfigSecret(
 					var backendObj *aigv1b1.AIServiceBackend
 					backendObj, bsp, err = c.backendWithMaybeBSP(ctx, backendNamespace, backendRef.Name)
 					if err != nil {
+						if isCtxErr(err) {
+							return false, fmt.Errorf("reconcile interrupted while reading backend %s: %w", backendRef.Name, err)
+						}
 						c.logger.Error(err, "failed to get backend or backend security policy. Skipping this backend.",
 							"backend_name", backendRef.Name, "aigatewayroute", aiGatewayRoute.Name,
 							"namespace", backendNamespace)
@@ -469,16 +503,21 @@ func (c *GatewayController) reconcileFilterConfigSecret(
 					b.BodyMutation = bodyMutationToFilterAPI(mergedBodyMutation)
 
 					b.Schema = schemaToFilterAPI(backendObj.Spec.APISchema)
+					b.HeaderValueFilters = headerValueFiltersToFilterAPI(backendObj.Spec.HeaderValueFilters)
 				}
 
 				if bsp != nil {
 					b.Auth, err = c.bspToFilterAPIBackendAuth(ctx, bsp)
 					if err != nil {
+						if isCtxErr(err) {
+							return false, fmt.Errorf("reconcile interrupted while reading auth for backend security policy %s: %w", bsp.Name, err)
+						}
 						c.logger.Error(err, "failed to get backend auth from backend security policy. Skipping this backend.",
 							"backend_name", backendRef.Name, "backend_security_policy", bsp.Name,
 							"aigatewayroute", aiGatewayRoute.Name, "namespace", aiGatewayRoute.Namespace)
 						continue
 					}
+					stripCredentialOverrideInputHeaders(&b)
 				}
 
 				ec.Backends = append(ec.Backends, b)
@@ -530,27 +569,8 @@ func (c *GatewayController) reconcileFilterConfigSecret(
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal extproc config: %w", err)
 	}
-	// We need to create the filter config in Envoy Gateway system namespace because the sidecar extproc need
-	// to access it.
-	data := map[string]string{FilterConfigKeyInSecret: string(marshaled)}
-	secret, err := c.kube.CoreV1().Secrets(configSecretNamespace).Get(ctx, configSecretName, metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			secret = &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: configSecretName, Namespace: configSecretNamespace},
-				StringData: data,
-			}
-			if _, err = c.kube.CoreV1().Secrets(configSecretNamespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
-				return false, fmt.Errorf("failed to create secret %s: %w", configSecretName, err)
-			}
-			return hasEffectiveRoute, nil
-		}
-		return false, fmt.Errorf("failed to get secret %s: %w", configSecretName, err)
-	}
-
-	secret.StringData = data
-	if _, err := c.kube.CoreV1().Secrets(configSecretNamespace).Update(ctx, secret, metav1.UpdateOptions{}); err != nil {
-		return false, fmt.Errorf("failed to update secret %s: %w", secret.Name, err)
+	if err = c.writeFilterConfigBundle(ctx, gatewayName, gatewayNamespace, configSecretNamespace, marshaled, uuid); err != nil {
+		return false, err
 	}
 	return hasEffectiveRoute, nil
 }
@@ -657,10 +677,46 @@ func mcpConfig(mcpRoutes []aigv1b1.MCPRoute) (_ *filterapi.MCPConfig, hasEffecti
 				mcpRoute.Authorization.Rules = append(mcpRoute.Authorization.Rules, mcpRule)
 			}
 		}
+		// BackendSelector reuses the same filterapi.MCPRouteAuthorization struct and CEL
+		// engine as Authorization above, evaluated once per candidate backend before a
+		// session is opened. Source/Target aren't set here since MCPBackendSelectorRule
+		// only has cel and action.
+		if route.Spec.BackendSelector != nil {
+			selector := route.Spec.BackendSelector
+			mcpRoute.BackendSelector = &filterapi.MCPRouteAuthorization{
+				DefaultAction: filterapi.AuthorizationAction(ptr.Deref(selector.DefaultAction, egv1a1.AuthorizationActionDeny)),
+			}
+
+			for _, rule := range selector.Rules {
+				action := ptr.Deref(rule.Action, egv1a1.AuthorizationActionAllow)
+				mcpRoute.BackendSelector.Rules = append(mcpRoute.BackendSelector.Rules, filterapi.MCPRouteAuthorizationRule{
+					Action: filterapi.AuthorizationAction(action),
+					CEL:    rule.CEL,
+				})
+			}
+		}
 		// Forward OAuth claim-to-header mappings to all backends in this route.
 		if route.Spec.SecurityPolicy != nil && route.Spec.SecurityPolicy.OAuth != nil {
 			for _, ctoh := range route.Spec.SecurityPolicy.OAuth.ClaimToHeaders {
-				mcpRoute.ForwardHeaders = append(mcpRoute.ForwardHeaders, ctoh.Header)
+				if !slices.Contains(mcpRoute.ForwardHeaders, ctoh.Header) {
+					mcpRoute.ForwardHeaders = append(mcpRoute.ForwardHeaders, ctoh.Header)
+				}
+			}
+		}
+		// Forward the api-key-auth client-identity header to all backends in this
+		// route, mirroring the OAuth claim-to-header bridge above. Without this the
+		// caller id injected by apiKeyAuth.forwardClientIDHeader has no path to the
+		// MCP proxy request, so it never reaches the backends nor the MCP
+		// request-attribute plumbing (metrics/spans/logs). See #2422.
+		//
+		// Dedup against ForwardHeaders: OAuth and API-key auth can both be configured on
+		// the same route, and pointing both at the same header name is how you get a
+		// single unified caller-attribution label regardless of which method authenticated.
+		if route.Spec.SecurityPolicy != nil && route.Spec.SecurityPolicy.APIKeyAuth != nil {
+			if h := route.Spec.SecurityPolicy.APIKeyAuth.ForwardClientIDHeader; h != nil && *h != "" {
+				if !slices.Contains(mcpRoute.ForwardHeaders, *h) {
+					mcpRoute.ForwardHeaders = append(mcpRoute.ForwardHeaders, *h)
+				}
 			}
 		}
 		mc.Routes = append(mc.Routes, mcpRoute)
@@ -668,104 +724,222 @@ func mcpConfig(mcpRoutes []aigv1b1.MCPRoute) (_ *filterapi.MCPConfig, hasEffecti
 	return mc, hasEffectiveRoute
 }
 
+// stripCredentialOverrideInputHeaders puts the credential input header(s) on the backend's remove
+// list so Envoy drops them before the backend sees them. HeaderMutator.Mutate keeps them in the
+// extproc's local map, so the handler can still read them in Do().
+//
+// This is what keeps the credential off the wire. Deleting it from the requestHeaders map would
+// not: only headers a handler returns become Envoy mutations. AWS has three, others one. No-op for
+// the metadata source, where the credential never touches the request.
+func stripCredentialOverrideInputHeaders(b *filterapi.Backend) {
+	if b.Auth == nil || b.Auth.CredentialOverride == nil || len(b.Auth.CredentialOverride.InputHeadersToRemove) == 0 {
+		return
+	}
+	if b.HeaderMutation == nil {
+		b.HeaderMutation = &filterapi.HTTPHeaderMutation{}
+	}
+	b.HeaderMutation.Remove = append(b.HeaderMutation.Remove, b.Auth.CredentialOverride.InputHeadersToRemove...)
+}
+
+// defaultOverrideHeaderName returns the default x-aigw-* header name for the given auth type.
+// These headers carry the per-request credential injected by a trusted ingress filter.
+//
+// For AWSCredentials this is a prefix, not a full header name: three names are derived from it.
+// See internalapi.AWSCredentialOverrideHeaderNames.
+func defaultOverrideHeaderName(t aigv1b1.BackendSecurityPolicyType) string {
+	switch t {
+	case aigv1b1.BackendSecurityPolicyTypeAPIKey:
+		return "x-aigw-api-key"
+	case aigv1b1.BackendSecurityPolicyTypeAnthropicAPIKey:
+		return "x-aigw-anthropic-api-key"
+	case aigv1b1.BackendSecurityPolicyTypeAzureAPIKey:
+		return "x-aigw-azure-api-key"
+	case aigv1b1.BackendSecurityPolicyTypeAzureCredentials:
+		return "x-aigw-azure-access-token"
+	case aigv1b1.BackendSecurityPolicyTypeGCPCredentials:
+		return "x-aigw-gcp-access-token"
+	case aigv1b1.BackendSecurityPolicyTypeAWSCredentials:
+		return internalapi.AWSCredentialOverrideHeaderPrefix
+	default:
+		return ""
+	}
+}
+
+// defaultOverrideMetadataKey returns the default metadata key for the given auth type. Same as the
+// header name except for AWSCredentials, whose metadata value is one struct holding all three inputs.
+func defaultOverrideMetadataKey(t aigv1b1.BackendSecurityPolicyType) string {
+	if t == aigv1b1.BackendSecurityPolicyTypeAWSCredentials {
+		return internalapi.AWSCredentialOverrideMetadataKey
+	}
+	return defaultOverrideHeaderName(t)
+}
+
+// overrideInputHeaders returns the headers a trusted filter injects for this auth type, which are
+// also the ones to strip. Three for AWS, one for the rest.
+func overrideInputHeaders(t aigv1b1.BackendSecurityPolicyType, headerName string) []string {
+	if t == aigv1b1.BackendSecurityPolicyTypeAWSCredentials {
+		accessKeyID, secretAccessKey, sessionToken := internalapi.AWSCredentialOverrideHeaderNames(headerName)
+		return []string{accessKeyID, secretAccessKey, sessionToken}
+	}
+	return []string{headerName}
+}
+
+// resolveCredentialOverride converts the API-level CredentialOverride to the filterapi type,
+// resolving default header/key names and validating the fallback configuration.
+func resolveCredentialOverride(bspType aigv1b1.BackendSecurityPolicyType, override *aigv1b1.BackendSecurityPolicyCredentialOverride, hasStaticCredential bool) (*filterapi.CredentialOverride, error) {
+	if override == nil {
+		return nil, nil
+	}
+
+	result := &filterapi.CredentialOverride{}
+
+	switch {
+	case override.FromRequestHeaders != nil:
+		src := override.FromRequestHeaders
+		headerName := src.Header
+		if headerName == "" {
+			headerName = defaultOverrideHeaderName(bspType)
+		}
+		headerName = strings.ToLower(headerName)
+		result.HeaderName = headerName
+		result.InputHeadersToRemove = overrideInputHeaders(bspType, headerName)
+		result.FallbackToConfigured = src.FallbackToConfigured == nil || *src.FallbackToConfigured
+
+	case override.FromDynamicMetadata != nil:
+		src := override.FromDynamicMetadata
+		key := src.Key
+		if key == "" {
+			key = defaultOverrideMetadataKey(bspType)
+		}
+		result.DynamicMetadataNamespace = src.Namespace
+		result.DynamicMetadataKey = key
+		result.FallbackToConfigured = src.FallbackToConfigured == nil || *src.FallbackToConfigured
+	}
+
+	if result.FallbackToConfigured && !hasStaticCredential {
+		return nil, fmt.Errorf("credentialOverride with fallbackToConfigured=true requires a static credential to be configured")
+	}
+
+	return result, nil
+}
+
 func (c *GatewayController) bspToFilterAPIBackendAuth(ctx context.Context, backendSecurityPolicy *aigv1b1.BackendSecurityPolicy) (*filterapi.BackendAuth, error) {
 	namespace := backendSecurityPolicy.Namespace
-	switch backendSecurityPolicy.Spec.Type {
+	spec := &backendSecurityPolicy.Spec
+	var (
+		auth          *filterapi.BackendAuth
+		hasStaticCred bool
+		err           error
+	)
+
+	switch spec.Type {
 	case aigv1b1.BackendSecurityPolicyTypeAPIKey:
-		secretName := string(backendSecurityPolicy.Spec.APIKey.SecretRef.Name)
-		apiKey, err := c.getSecretData(ctx, namespace, secretName, apiKeyInSecret)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get secret %s: %w", secretName, err)
+		secretName := string(spec.APIKey.SecretRef.Name)
+		apiKey, getErr := c.getSecretData(ctx, namespace, secretName, apiKeyInSecret)
+		if getErr != nil {
+			return nil, getErr
 		}
-		return &filterapi.BackendAuth{APIKey: &filterapi.APIKeyAuth{Key: apiKey}}, nil
+		auth = &filterapi.BackendAuth{APIKey: &filterapi.APIKeyAuth{Key: apiKey}}
+		hasStaticCred = true
 	case aigv1b1.BackendSecurityPolicyTypeAzureAPIKey:
-		secretName := string(backendSecurityPolicy.Spec.AzureAPIKey.SecretRef.Name)
-		apiKey, err := c.getSecretData(ctx, namespace, secretName, apiKeyInSecret)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get secret %s: %w", secretName, err)
+		secretName := string(spec.AzureAPIKey.SecretRef.Name)
+		apiKey, getErr := c.getSecretData(ctx, namespace, secretName, apiKeyInSecret)
+		if getErr != nil {
+			return nil, getErr
 		}
-		return &filterapi.BackendAuth{AzureAPIKey: &filterapi.AzureAPIKeyAuth{Key: apiKey}}, nil
+		auth = &filterapi.BackendAuth{AzureAPIKey: &filterapi.AzureAPIKeyAuth{Key: apiKey}}
+		hasStaticCred = true
 	case aigv1b1.BackendSecurityPolicyTypeAnthropicAPIKey:
-		secretName := string(backendSecurityPolicy.Spec.AnthropicAPIKey.SecretRef.Name)
-		apiKey, err := c.getSecretData(ctx, namespace, secretName, apiKeyInSecret)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get secret %s: %w", secretName, err)
+		secretName := string(spec.AnthropicAPIKey.SecretRef.Name)
+		apiKey, getErr := c.getSecretData(ctx, namespace, secretName, apiKeyInSecret)
+		if getErr != nil {
+			return nil, getErr
 		}
-		return &filterapi.BackendAuth{AnthropicAPIKey: &filterapi.AnthropicAPIKeyAuth{Key: apiKey}}, nil
+		auth = &filterapi.BackendAuth{AnthropicAPIKey: &filterapi.AnthropicAPIKeyAuth{Key: apiKey}}
+		hasStaticCred = true
 	case aigv1b1.BackendSecurityPolicyTypeAWSCredentials:
-		awsCred := backendSecurityPolicy.Spec.AWSCredentials
+		awsCred := spec.AWSCredentials
 
-		// If no credentials file or OIDC token is configured, use default credential chain
-		// This allows IRSA/Pod Identity to work automatically
 		if awsCred.CredentialsFile == nil && awsCred.OIDCExchangeToken == nil {
-			return &filterapi.BackendAuth{
-				AWSAuth: &filterapi.AWSAuth{
-					Region: awsCred.Region,
-				},
-			}, nil
-		}
-
-		// Otherwise, fetch credentials from secret
-		var secretName string
-		if awsCred.CredentialsFile != nil {
-			secretName = string(awsCred.CredentialsFile.SecretRef.Name)
+			// If no credentials file or OIDC token is configured, use default credential chain
+			// This allows IRSA/Pod Identity to work automatically
+			auth = &filterapi.BackendAuth{AWSAuth: &filterapi.AWSAuth{Region: awsCred.Region}}
 		} else {
-			secretName = rotators.GetBSPSecretName(backendSecurityPolicy.Name)
-		}
-		credentialsLiteral, err := c.getSecretData(ctx, namespace, secretName, rotators.AwsCredentialsKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get secret %s: %w", secretName, err)
-		}
-		return &filterapi.BackendAuth{
-			AWSAuth: &filterapi.AWSAuth{
+			// Otherwise, fetch credentials from secret
+			var secretName string
+			if awsCred.CredentialsFile != nil {
+				secretName = string(awsCred.CredentialsFile.SecretRef.Name)
+			} else {
+				secretName = rotators.GetBSPSecretName(backendSecurityPolicy.Name)
+			}
+			credentialsLiteral, getErr := c.getSecretData(ctx, namespace, secretName, rotators.AwsCredentialsKey)
+			if getErr != nil {
+				return nil, getErr
+			}
+			auth = &filterapi.BackendAuth{AWSAuth: &filterapi.AWSAuth{
 				CredentialFileLiteral: credentialsLiteral,
 				Region:                awsCred.Region,
-			},
-		}, nil
+			}}
+		}
+		// True for both branches: the handler can sign without the per-request source. The default
+		// chain may still fail at request time, but rejecting fallbackToConfigured here would break
+		// IRSA, where there is deliberately no secret for the controller to see.
+		hasStaticCred = true
 	case aigv1b1.BackendSecurityPolicyTypeAzureCredentials:
 		secretName := rotators.GetBSPSecretName(backendSecurityPolicy.Name)
-		azureAccessToken, err := c.getSecretData(ctx, namespace, secretName, rotators.AzureAccessTokenKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get secret %s: %w", secretName, err)
+		azureAccessToken, getErr := c.getSecretData(ctx, namespace, secretName, rotators.AzureAccessTokenKey)
+		if getErr != nil {
+			return nil, getErr
 		}
-		return &filterapi.BackendAuth{
-			AzureAuth: &filterapi.AzureAuth{AccessToken: azureAccessToken},
-		}, nil
+		auth = &filterapi.BackendAuth{AzureAuth: &filterapi.AzureAuth{AccessToken: azureAccessToken}}
+		hasStaticCred = true
 	case aigv1b1.BackendSecurityPolicyTypeGCPCredentials:
-		gcpCreds := backendSecurityPolicy.Spec.GCPCredentials
+		gcpCreds := spec.GCPCredentials
 
 		// If no credentials file or WIF is configured, use ADC (handled by extproc)
 		if gcpCreds.CredentialsFile == nil && gcpCreds.WorkloadIdentityFederationConfig == nil {
-			return &filterapi.BackendAuth{
+			auth = &filterapi.BackendAuth{
 				GCPAuth: &filterapi.GCPAuth{
 					Region:      gcpCreds.Region,
 					ProjectName: gcpCreds.ProjectName,
 				},
-			}, nil
+			}
+			// No static access token, but ADC is used — the per-request override replaces the token only.
+			hasStaticCred = false
+		} else {
+			// Otherwise, fetch token from rotated secret
+			secretName := rotators.GetBSPSecretName(backendSecurityPolicy.Name)
+			gcpAccessToken, getErr := c.getSecretData(ctx, namespace, secretName, rotators.GCPAccessTokenKey)
+			if getErr != nil {
+				return nil, getErr
+			}
+			auth = &filterapi.BackendAuth{
+				GCPAuth: &filterapi.GCPAuth{
+					AccessToken: gcpAccessToken,
+					Region:      gcpCreds.Region,
+					ProjectName: gcpCreds.ProjectName,
+				},
+			}
+			hasStaticCred = true
 		}
-
-		// Otherwise, fetch token from rotated secret
-		secretName := rotators.GetBSPSecretName(backendSecurityPolicy.Name)
-		gcpAccessToken, err := c.getSecretData(ctx, namespace, secretName, rotators.GCPAccessTokenKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get secret %s: %w", secretName, err)
-		}
-		return &filterapi.BackendAuth{
-			GCPAuth: &filterapi.GCPAuth{
-				AccessToken: gcpAccessToken,
-				Region:      gcpCreds.Region,
-				ProjectName: gcpCreds.ProjectName,
-			},
-		}, nil
 	default:
-		return nil, fmt.Errorf("invalid backend security type %s for policy %s", backendSecurityPolicy.Spec.Type,
-			backendSecurityPolicy.Name)
+		return nil, fmt.Errorf("invalid backend security type %s for policy %s", spec.Type, backendSecurityPolicy.Name)
 	}
+
+	// Project CredentialOverride when configured.
+	if spec.CredentialOverride != nil {
+		auth.CredentialOverride, err = resolveCredentialOverride(spec.Type, spec.CredentialOverride, hasStaticCred)
+		if err != nil {
+			return nil, fmt.Errorf("invalid credentialOverride for policy %s: %w", backendSecurityPolicy.Name, err)
+		}
+	}
+
+	return auth, nil
 }
 
 func (c *GatewayController) getSecretData(ctx context.Context, namespace, name, dataKey string) (string, error) {
-	secret, err := c.kube.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
+	secret := &corev1.Secret{}
+	if err := c.client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, secret); err != nil {
 		return "", fmt.Errorf("failed to get secret %s: %w", name, err)
 	}
 	if secret.Data != nil {
@@ -943,29 +1117,24 @@ func (c *GatewayController) getBSPForInferencePool(ctx context.Context, namespac
 	return matchingBSPs[0], nil
 }
 
-// checkPodHasSideCar checks if a pod has the extproc sidecar container with correct configuration.
-func (c *GatewayController) checkPodHasSideCar(pod *corev1.Pod, needMCP bool) bool {
+// checkPodHasSideCar returns whether the extproc container is current.
+func (c *GatewayController) checkPodHasSideCar(pod *corev1.Pod, needMCP bool, desiredImage string) (hasSideCar bool) {
 	podSpec := pod.Spec
-	hasSideCar := false
 
 	if c.extProcAsSideCar {
 		for i := range podSpec.InitContainers {
-			// If there's an extproc sidecar container with the current target image, we don't need to roll out the deployment.
-			if podSpec.InitContainers[i].Name == extProcContainerName && podSpec.InitContainers[i].Image == c.extProcImage {
+			if podSpec.InitContainers[i].Name == extProcContainerName && podSpec.InitContainers[i].Image == desiredImage {
 				hasSideCar = true
 				hasMCPAddr := false
 				for j := range podSpec.InitContainers[i].Args {
-					// logLevel arg should be indexed 2 based on gateway_mutator.go, but we check all args to be safe.
-					if j > 0 && podSpec.InitContainers[i].Args[j-1] == "-logLevel" && podSpec.InitContainers[i].Args[j] != c.extProcLogLevel {
+					if j > 0 && podSpec.InitContainers[i].Args[j-1] == "-logLevel" && podSpec.InitContainers[i].Args[j] != c.logLevel {
 						hasSideCar = false
 						break
 					}
-					// Check if the -mcpAddr argument is present
 					if j > 0 && podSpec.InitContainers[i].Args[j-1] == "-mcpAddr" {
 						hasMCPAddr = true
 					}
 				}
-				// If MCPRoutes exist but the sidecar doesn't have -mcpAddr, we need to roll out
 				if needMCP && !hasMCPAddr {
 					c.logger.Info("MCPRoutes exist but sidecar is missing -mcpAddr argument, triggering rollout",
 						"pod", pod.Name, "namespace", pod.Namespace)
@@ -976,21 +1145,18 @@ func (c *GatewayController) checkPodHasSideCar(pod *corev1.Pod, needMCP bool) bo
 		}
 	} else {
 		for i := range podSpec.Containers {
-			// If there's an extproc container with the current target image, we don't need to roll out the deployment.
-			if podSpec.Containers[i].Name == extProcContainerName && podSpec.Containers[i].Image == c.extProcImage {
+			if podSpec.Containers[i].Name == extProcContainerName && podSpec.Containers[i].Image == desiredImage {
 				hasSideCar = true
 				hasMCPAddr := false
 				for j := range podSpec.Containers[i].Args {
-					if j > 0 && podSpec.Containers[i].Args[j-1] == "-logLevel" && podSpec.Containers[i].Args[j] != c.extProcLogLevel {
+					if j > 0 && podSpec.Containers[i].Args[j-1] == "-logLevel" && podSpec.Containers[i].Args[j] != c.logLevel {
 						hasSideCar = false
 						break
 					}
-					// Check if the -mcpAddr argument is present
 					if j > 0 && podSpec.Containers[i].Args[j-1] == "-mcpAddr" {
 						hasMCPAddr = true
 					}
 				}
-				// If MCPRoutes exist but the sidecar doesn't have -mcpAddr, we need to roll out
 				if needMCP && !hasMCPAddr {
 					c.logger.Info("MCPRoutes exist but sidecar is missing -mcpAddr argument, triggering rollout",
 						"pod", pod.Name, "namespace", pod.Namespace)
@@ -1035,12 +1201,8 @@ func isRolloutInProgress(deployments []appsv1.Deployment, daemonSets []appsv1.Da
 	return false
 }
 
-// annotateGatewayPods annotates the pods of GW with the new uuid to propagate the filter config Secret update faster.
-// If the pod doesn't have the extproc container, it will roll out the deployment altogether, which eventually ends up
-// the mutation hook invoked.
-//
-// Returns a ctrl.Result that may indicate requeue is needed (e.g., when rollout is in progress).
-//
+// annotateGatewayPods annotates pods to speed filter config Secret refresh and
+// rolls workload templates only when pod template state must change.
 // See https://neonmirrors.net/post/2022-12/reducing-pod-volume-update-times/ for explanation.
 func (c *GatewayController) annotateGatewayPods(ctx context.Context,
 	pods []corev1.Pod,
@@ -1049,6 +1211,8 @@ func (c *GatewayController) annotateGatewayPods(ctx context.Context,
 	uuid string,
 	hasEffectiveRoute bool,
 	needMCP bool,
+	desiredImage string,
+	desiredHash string,
 ) (ctrl.Result, error) {
 	if isRolloutInProgress(deployments, daemonSets) {
 		const requeueAfter = 5 * time.Second
@@ -1056,15 +1220,14 @@ func (c *GatewayController) annotateGatewayPods(ctx context.Context,
 		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
-	// Detect sidecar state in one pass with early exit on inconsistent state (e.g., some pods have sidecar, some don't).
-	// If inconsistent state exists while rollout is not in progress, force rollout to self-heal.
 	seenWithSidecar := false
 	seenWithoutSidecar := false
 	for i := range pods {
 		if !pods[i].GetDeletionTimestamp().IsZero() {
 			continue
 		}
-		if c.checkPodHasSideCar(&pods[i], needMCP) {
+		hasSideCar := c.checkPodHasSideCar(&pods[i], needMCP, desiredImage)
+		if hasSideCar {
 			seenWithSidecar = true
 		} else {
 			seenWithoutSidecar = true
@@ -1075,11 +1238,9 @@ func (c *GatewayController) annotateGatewayPods(ctx context.Context,
 	}
 	forceRollout := seenWithSidecar && seenWithoutSidecar
 	if forceRollout {
-		c.logger.Info("pods are inconsistent while rollout is stable, forcing rollout",
+		c.logger.Info("forcing rollout",
 			"podsWithSidecarSeen", seenWithSidecar, "podsWithoutSidecarSeen", seenWithoutSidecar)
 	}
-	// When not mixed, "all have sidecar" is equivalent to seeing at least one pod with sidecar
-	// and none without sidecar. For zero pods this remains false.
 	hasSideCar := seenWithSidecar && !seenWithoutSidecar
 
 	for i := range pods {
@@ -1098,37 +1259,55 @@ func (c *GatewayController) annotateGatewayPods(ctx context.Context,
 		}
 	}
 
-	// We annotate the deployments and daemonsets under three scenarios:
+	// For sidecar state changes, annotate the workloads under three scenarios:
 	// 1. If there's an effective route but no sidecar container, we need to add the sidecar container.
 	// 2. If there's no effective route but has sidecar container,
 	//    we need to roll out the deployment to trigger the mutation webhook to remove the sidecar container.
 	// 3. If pods are inconsistent even when rollout isn't in progress, force rollout to self-heal.
-	if hasEffectiveRoute != hasSideCar || forceRollout {
-		for i := range deployments {
-			dep := &deployments[i]
-			c.logger.Info("rolling out deployment", "namespace", dep.Namespace, "name", dep.Name)
-			_, err := c.kube.AppsV1().Deployments(dep.Namespace).Patch(ctx, dep.Name, types.MergePatchType,
-				fmt.Appendf(nil,
-					`{"spec":{"template":{"metadata":{"annotations":{"%s":"%s"}}}}}`, aigatewayUUIDAnnotationKey, uuid),
-				metav1.PatchOptions{})
-			if err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to patch deployment %s: %w", dep.Name, err)
-			}
+	needsStateRollout := hasEffectiveRoute != hasSideCar || forceRollout
+	for i := range deployments {
+		dep := &deployments[i]
+		// Hash changes are written to the pod template so Kubernetes owns the rollout.
+		needsHashRollout := hasEffectiveRoute && desiredHash != "" && dep.Spec.Template.Annotations[extProcConfigHashAnnotationKey] != desiredHash
+		if !needsStateRollout && !needsHashRollout {
+			continue
 		}
+		c.logger.Info("rolling out deployment", "namespace", dep.Namespace, "name", dep.Name, "desiredHash", desiredHash)
+		_, err := c.kube.AppsV1().Deployments(dep.Namespace).Patch(ctx, dep.Name, types.MergePatchType,
+			workloadTemplateAnnotationPatch(uuid, desiredHash, needsStateRollout, needsHashRollout),
+			metav1.PatchOptions{})
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch deployment %s: %w", dep.Name, err)
+		}
+	}
 
-		for i := range daemonSets {
-			daemonSet := &daemonSets[i]
-			c.logger.Info("rolling out daemonSet", "namespace", daemonSet.Namespace, "name", daemonSet.Name)
-			_, err := c.kube.AppsV1().DaemonSets(daemonSet.Namespace).Patch(ctx, daemonSet.Name, types.MergePatchType,
-				fmt.Appendf(nil,
-					`{"spec":{"template":{"metadata":{"annotations":{"%s":"%s"}}}}}`, aigatewayUUIDAnnotationKey, uuid),
-				metav1.PatchOptions{})
-			if err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to patch daemonset %s: %w", daemonSet.Name, err)
-			}
+	for i := range daemonSets {
+		daemonSet := &daemonSets[i]
+		// Hash changes are written to the pod template so Kubernetes owns the rollout.
+		needsHashRollout := hasEffectiveRoute && desiredHash != "" && daemonSet.Spec.Template.Annotations[extProcConfigHashAnnotationKey] != desiredHash
+		if !needsStateRollout && !needsHashRollout {
+			continue
+		}
+		c.logger.Info("rolling out daemonSet", "namespace", daemonSet.Namespace, "name", daemonSet.Name, "desiredHash", desiredHash)
+		_, err := c.kube.AppsV1().DaemonSets(daemonSet.Namespace).Patch(ctx, daemonSet.Name, types.MergePatchType,
+			workloadTemplateAnnotationPatch(uuid, desiredHash, needsStateRollout, needsHashRollout),
+			metav1.PatchOptions{})
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch daemonset %s: %w", daemonSet.Name, err)
 		}
 	}
 	return ctrl.Result{}, nil
+}
+
+func workloadTemplateAnnotationPatch(uuid, desiredHash string, includeUUID, includeHash bool) []byte {
+	annotations := make([]string, 0, 2)
+	if includeUUID {
+		annotations = append(annotations, fmt.Sprintf(`"%s":"%s"`, aigatewayUUIDAnnotationKey, uuid))
+	}
+	if includeHash {
+		annotations = append(annotations, fmt.Sprintf(`"%s":"%s"`, extProcConfigHashAnnotationKey, desiredHash))
+	}
+	return []byte(fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{%s}}}}}`, strings.Join(annotations, ",")))
 }
 
 // getObjectsForGateway retrieves the pods, deployments, and daemonsets for a given Gateway.
@@ -1145,32 +1324,51 @@ func (c *GatewayController) getObjectsForGateway(ctx context.Context, gw *gwapiv
 	listOption := metav1.ListOptions{LabelSelector: fmt.Sprintf(
 		"%s=%s,%s=%s", egOwningGatewayNameLabel, gw.Name, egOwningGatewayNamespaceLabel, gw.Namespace,
 	)}
-	var ps *corev1.PodList
-	ps, err = c.kube.CoreV1().Pods("").List(ctx, listOption)
-	if err != nil {
-		err = fmt.Errorf("failed to list pods: %w", err)
+
+	candidateNamespaces := make([]string, 1, 2)
+	candidateNamespaces[0] = gw.Namespace
+	if c.envoyGatewayNamespace != gw.Namespace {
+		candidateNamespaces = append(candidateNamespaces, c.envoyGatewayNamespace)
+	}
+
+	var distinctNamespaces []string
+	for _, ns := range candidateNamespaces {
+		var ps *corev1.PodList
+		ps, err = c.kube.CoreV1().Pods(ns).List(ctx, listOption)
+		if err != nil {
+			err = fmt.Errorf("failed to list pods in namespace %s: %w", ns, err)
+			return
+		}
+		pods = append(pods, ps.Items...)
+
+		var ds *appsv1.DeploymentList
+		ds, err = c.kube.AppsV1().Deployments(ns).List(ctx, listOption)
+		if err != nil {
+			err = fmt.Errorf("failed to list deployments in namespace %s: %w", ns, err)
+			return
+		}
+		deployments = append(deployments, ds.Items...)
+
+		var dss *appsv1.DaemonSetList
+		dss, err = c.kube.AppsV1().DaemonSets(ns).List(ctx, listOption)
+		if err != nil {
+			err = fmt.Errorf("failed to list daemonsets in namespace %s: %w", ns, err)
+			return
+		}
+		daemonSets = append(daemonSets, dss.Items...)
+
+		if len(ps.Items) > 0 || len(ds.Items) > 0 || len(dss.Items) > 0 {
+			distinctNamespaces = append(distinctNamespaces, ns)
+		}
+	}
+
+	// All pods, deployments, and daemonsets should be in the same namespace.
+	// Otherwise, it would be a bug in the EG or the disruptive configuration change of EG.
+	if len(distinctNamespaces) > 1 {
+		err = fmt.Errorf("found gateway-labeled objects in multiple namespaces: %v", distinctNamespaces)
 		return
 	}
-	pods = ps.Items
 
-	var ds *appsv1.DeploymentList
-	ds, err = c.kube.AppsV1().Deployments("").List(ctx, listOption)
-	if err != nil {
-		err = fmt.Errorf("failed to list deployments: %w", err)
-		return
-	}
-	deployments = ds.Items
-
-	var dss *appsv1.DaemonSetList
-	dss, err = c.kube.AppsV1().DaemonSets("").List(ctx, listOption)
-	if err != nil {
-		err = fmt.Errorf("failed to list daemonsets: %w", err)
-		return
-	}
-	daemonSets = dss.Items
-
-	// We assume that all pods, deployments, and daemonsets are in the same namespace. Otherwise, it would be a bug in the EG
-	// or the disruptive configuration change of EG.
 	if len(pods) > 0 {
 		namespace = pods[0].Namespace
 	}

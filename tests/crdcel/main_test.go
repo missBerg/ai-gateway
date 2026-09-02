@@ -29,6 +29,15 @@ func TestAIGatewayRoutes(t *testing.T) {
 		expErr string
 	}{
 		{name: "basic.yaml"},
+		{name: "rule_name.yaml"},
+		{
+			name:   "duplicate_rule_names.yaml",
+			expErr: "spec.rules: Invalid value: \"array\": rule name must be unique within the route",
+		},
+		{
+			name:   "reserved_rule_name.yaml",
+			expErr: "spec.rules[0]: Invalid value: \"object\": rule name route-not-found is reserved",
+		},
 		{name: "llmcosts.yaml"},
 		{name: "parent_refs.yaml"},
 		{name: "parent_refs_default_kind.yaml"},
@@ -87,12 +96,19 @@ func TestAIServiceBackends(t *testing.T) {
 		{name: "basic.yaml"},
 		{name: "anthropic-schema.yaml"},
 		{name: "basic-eg-backend-aws.yaml"},
+		{name: "aws-openai-schema.yaml"},
 		{name: "basic-eg-backend-azure.yaml"},
 		{
 			name:   "unknown_schema.yaml",
 			expErr: "spec.schema.name: Unsupported value: \"SomeRandomVendor\": supported values: \"OpenAI\", \"Cohere\", \"AWSBedrock\", \"AzureOpenAI\", \"GCPVertexAI\", \"GCPAnthropic\", \"Anthropic\"",
 		},
 		{name: "k8s-svc.yaml", expErr: "BackendRef must be a Backend resource of Envoy Gateway"},
+		{name: "header-value-filters-gcpanthropic.yaml"},
+		{name: "header-value-filters-awsanthropic.yaml"},
+		{
+			name:   "header-value-filters-unsupported-schema.yaml",
+			expErr: "headerValueFilters is only honored by GCPAnthropic and AWSAnthropic backends",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			data, err := testdata.ReadFile(path.Join("testdata/aiservicebackends", tc.name))
@@ -182,6 +198,9 @@ func TestBackendSecurityPolicies(t *testing.T) {
 		{name: "azure_valid_credentials.yaml"},
 		{name: "aws_credential_file.yaml"},
 		{name: "aws_oidc.yaml"},
+		// AWSCredentials used to be rejected outright by a CEL rule, because SigV4 needs three
+		// inputs and the override plumbing carried one string.
+		{name: "aws_credential_override.yaml"},
 		{name: "gcp_oidc.yaml"},
 		{name: "anthropic-apikey.yaml"},
 		{name: "targetrefs_basic.yaml"},
